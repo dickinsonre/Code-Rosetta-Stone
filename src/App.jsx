@@ -834,7 +834,7 @@ function highlightCode(code, langId) {
 
 // ─── Components ──────────────────────────────────────────────────────
 
-function CodePanel({ code, langId, label, color }) {
+function CodePanel({ code, langId, label, color, t }) {
   const ref = useRef(null);
   const lines = code.split("\n");
 
@@ -846,16 +846,16 @@ function CodePanel({ code, langId, label, color }) {
       flexDirection: "column",
       borderRadius: 8,
       overflow: "hidden",
-      border: "1px solid #2a2e3a",
-      background: "#12141c",
+      border: `1px solid ${t.border}`,
+      background: t.panelBg,
     }}>
       <div style={{
         display: "flex",
         alignItems: "center",
         gap: 8,
         padding: "8px 14px",
-        background: "#1a1d28",
-        borderBottom: "1px solid #2a2e3a",
+        background: t.panelHeader,
+        borderBottom: `1px solid ${t.border}`,
         flexShrink: 0,
       }}>
         <div style={{
@@ -863,7 +863,7 @@ function CodePanel({ code, langId, label, color }) {
           background: color, boxShadow: `0 0 6px ${color}55`,
         }} />
         <span style={{
-          fontSize: 13, fontWeight: 600, color: "#c8ccd8",
+          fontSize: 13, fontWeight: 600, color: t.text,
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
           letterSpacing: 0.5,
         }}>{label}</span>
@@ -887,12 +887,12 @@ function CodePanel({ code, langId, label, color }) {
               flexShrink: 0,
               textAlign: "right",
               paddingRight: 14,
-              color: "#3a3f52",
+              color: t.lineNum,
               userSelect: "none",
               fontSize: 11,
             }}>{i + 1}</span>
             <span
-              style={{ color: "#c8ccd8", whiteSpace: "pre" }}
+              style={{ color: t.text, whiteSpace: "pre" }}
               dangerouslySetInnerHTML={{
                 __html: highlightCode(line, langId),
               }}
@@ -904,6 +904,67 @@ function CodePanel({ code, langId, label, color }) {
   );
 }
 
+// ─── Themes ──────────────────────────────────────────────────────────
+
+const themes = {
+  dark: {
+    bg: "#0d0f17",
+    text: "#c8ccd8",
+    textBright: "#e8ecf4",
+    textMuted: "#6b7185",
+    textDim: "#5c6370",
+    textFaint: "#3a3f52",
+    panelBg: "#12141c",
+    panelHeader: "#1a1d28",
+    border: "#2a2e3a",
+    borderLight: "#1e2130",
+    borderSubtle: "#1a1d28",
+    activeBg: "#1e2130",
+    activeBorder: "#3a3f55",
+    hoverBg: "#1a1d28",
+    modActiveBg: "#1a1d2e",
+    notesBg: "#141620",
+    accent: "#61afef",
+    accentAlt: "#c678dd",
+    scrollThumb: "#2a2e3a",
+    scrollThumbHover: "#3a3f55",
+    lineNum: "#3a3f52",
+    cm: "#5c6370",
+    kw: "#c678dd",
+    st: "#98c379",
+    nu: "#d19a66",
+    fn: "#61afef",
+  },
+  light: {
+    bg: "#f5f6f8",
+    text: "#383a42",
+    textBright: "#1a1c23",
+    textMuted: "#696d80",
+    textDim: "#8a8e9c",
+    textFaint: "#b0b4c0",
+    panelBg: "#ffffff",
+    panelHeader: "#f0f1f4",
+    border: "#d5d8e0",
+    borderLight: "#e4e6eb",
+    borderSubtle: "#ecedf0",
+    activeBg: "#e8eaf0",
+    activeBorder: "#b0b4c8",
+    hoverBg: "#ecedf2",
+    modActiveBg: "#e6ecf8",
+    notesBg: "#f0f4fc",
+    accent: "#4078c0",
+    accentAlt: "#a626a4",
+    scrollThumb: "#c8ccd5",
+    scrollThumbHover: "#a0a4b0",
+    lineNum: "#b0b4c0",
+    cm: "#8a8e9c",
+    kw: "#a626a4",
+    st: "#50a14f",
+    nu: "#c18401",
+    fn: "#4078c0",
+  },
+};
+
 // ─── Main App ────────────────────────────────────────────────────────
 
 export default function SWMM5CodeViewer() {
@@ -912,7 +973,9 @@ export default function SWMM5CodeViewer() {
   const [leftLang, setLeftLang] = useState("c");
   const [rightLang, setRightLang] = useState("rust");
   const [showNotes, setShowNotes] = useState(true);
+  const [theme, setTheme] = useState("dark");
 
+  const t = themes[theme];
   const mod = modules[selectedModule];
   const leftInfo = languages.find((l) => l.id === leftLang);
   const rightInfo = languages.find((l) => l.id === rightLang);
@@ -931,62 +994,71 @@ export default function SWMM5CodeViewer() {
     <div style={{
       width: "100%",
       minHeight: "100vh",
-      background: "#0d0f17",
-      color: "#c8ccd8",
+      background: t.bg,
+      color: t.text,
       fontFamily: "'IBM Plex Sans', 'Segoe UI', system-ui, sans-serif",
+      transition: "background 0.3s, color 0.3s",
     }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
-        .cm { color: #5c6370 !important; font-style: italic; }
-        .kw { color: #c678dd !important; }
-        .st { color: #98c379 !important; }
-        .nu { color: #d19a66 !important; }
-        .fn { color: #61afef !important; }
+        .cm { color: ${t.cm} !important; font-style: italic; }
+        .kw { color: ${t.kw} !important; }
+        .st { color: ${t.st} !important; }
+        .nu { color: ${t.nu} !important; }
+        .fn { color: ${t.fn} !important; }
         .lang-tab { 
           padding: 7px 14px; border-radius: 6px; border: 1px solid transparent;
-          background: transparent; color: #6b7185; cursor: pointer;
+          background: transparent; color: ${t.textMuted}; cursor: pointer;
           font-size: 13px; font-weight: 500; transition: all 0.2s;
           font-family: 'JetBrains Mono', monospace;
           display: flex; align-items: center; gap: 6px;
         }
-        .lang-tab:hover { color: #c8ccd8; background: #1a1d28; }
+        .lang-tab:hover { color: ${t.text}; background: ${t.hoverBg}; }
         .lang-tab.active { 
-          background: #1e2130; color: #e8ecf4; 
-          border-color: #3a3f55; 
+          background: ${t.activeBg}; color: ${t.textBright}; 
+          border-color: ${t.activeBorder}; 
         }
         .mod-btn {
-          padding: 10px 16px; border-radius: 8px; border: 1px solid #2a2e3a;
-          background: #14162000; color: #8b90a4; cursor: pointer;
+          padding: 10px 16px; border-radius: 8px; border: 1px solid ${t.border};
+          background: transparent; color: ${t.textMuted}; cursor: pointer;
           font-size: 13px; text-align: left; transition: all 0.2s;
           font-family: 'JetBrains Mono', monospace; width: 100%;
         }
-        .mod-btn:hover { background: #1a1d28; color: #c8ccd8; }
+        .mod-btn:hover { background: ${t.hoverBg}; color: ${t.text}; }
         .mod-btn.active {
-          background: #1a1d2e; color: #61afef;
-          border-color: #61afef44;
+          background: ${t.modActiveBg}; color: ${t.accent};
+          border-color: ${t.accent}44;
         }
         .notes-box {
           margin: 0 20px 20px;
           padding: 16px 20px;
-          background: #141620;
-          border: 1px solid #2a2e3a;
+          background: ${t.notesBg};
+          border: 1px solid ${t.border};
           border-radius: 8px;
           font-size: 13px;
           line-height: 1.7;
-          color: #8b90a4;
-          border-left: 3px solid #61afef44;
+          color: ${t.textMuted};
+          border-left: 3px solid ${t.accent}44;
         }
+        .theme-toggle {
+          width: 36px; height: 36px; border-radius: 8px;
+          border: 1px solid ${t.border}; background: ${t.panelHeader};
+          color: ${t.textMuted}; cursor: pointer; font-size: 18;
+          display: flex; align-items: center; justify-content: center;
+          transition: all 0.2s;
+        }
+        .theme-toggle:hover { background: ${t.hoverBg}; color: ${t.text}; }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #2a2e3a; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3a3f55; }
+        ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: ${t.scrollThumbHover}; }
       `}</style>
 
       {/* Header */}
       <div style={{
         padding: "20px 24px 16px",
-        borderBottom: "1px solid #1e2130",
+        borderBottom: `1px solid ${t.borderLight}`,
         display: "flex",
         alignItems: "center",
         gap: 16,
@@ -995,26 +1067,26 @@ export default function SWMM5CodeViewer() {
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <div style={{
             width: 36, height: 36, borderRadius: 8,
-            background: "linear-gradient(135deg, #61afef 0%, #c678dd 100%)",
+            background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt} 100%)`,
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, fontWeight: 700, color: "#fff",
             fontFamily: "'JetBrains Mono', monospace",
           }}>S5</div>
           <div>
             <div style={{
-              fontSize: 17, fontWeight: 700, color: "#e8ecf4",
+              fontSize: 17, fontWeight: 700, color: t.textBright,
               letterSpacing: -0.3,
             }}>
               SWMM5 Rosetta Stone
             </div>
-            <div style={{ fontSize: 11.5, color: "#5c6370", marginTop: 1 }}>
+            <div style={{ fontSize: 11.5, color: t.textDim, marginTop: 1 }}>
               EPA SWMM5 Engine Code — Multi-Language Translation Viewer
             </div>
           </div>
         </div>
 
         <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: "#5c6370", marginRight: 4 }}>MODULE:</span>
+          <span style={{ fontSize: 11, color: t.textDim, marginRight: 4 }}>MODULE:</span>
           {moduleKeys.map((key) => (
             <button
               key={key}
@@ -1025,6 +1097,13 @@ export default function SWMM5CodeViewer() {
               {key.split("—")[0].trim()}
             </button>
           ))}
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+          >
+            {theme === "dark" ? "\u2600" : "\u263E"}
+          </button>
         </div>
       </div>
 
@@ -1032,11 +1111,11 @@ export default function SWMM5CodeViewer() {
       <div style={{
         padding: "12px 24px",
         fontSize: 13,
-        color: "#6b7185",
-        borderBottom: "1px solid #1a1d28",
+        color: t.textMuted,
+        borderBottom: `1px solid ${t.borderSubtle}`,
         lineHeight: 1.5,
       }}>
-        <span style={{ color: "#61afef", fontWeight: 600, marginRight: 8 }}>▸</span>
+        <span style={{ color: t.accent, fontWeight: 600, marginRight: 8 }}>▸</span>
         {mod.description}
       </div>
 
@@ -1045,13 +1124,13 @@ export default function SWMM5CodeViewer() {
         padding: "12px 24px",
         display: "flex",
         gap: 24,
-        borderBottom: "1px solid #1e2130",
+        borderBottom: `1px solid ${t.borderLight}`,
         flexWrap: "wrap",
         alignItems: "center",
       }}>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
-            fontSize: 10, color: "#5c6370", textTransform: "uppercase",
+            fontSize: 10, color: t.textDim, textTransform: "uppercase",
             letterSpacing: 1.5, fontWeight: 600,
           }}>LEFT</span>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -1071,11 +1150,11 @@ export default function SWMM5CodeViewer() {
           </div>
         </div>
 
-        <div style={{ width: 1, height: 24, background: "#2a2e3a" }} />
+        <div style={{ width: 1, height: 24, background: t.border }} />
 
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
           <span style={{
-            fontSize: 10, color: "#5c6370", textTransform: "uppercase",
+            fontSize: 10, color: t.textDim, textTransform: "uppercase",
             letterSpacing: 1.5, fontWeight: 600,
           }}>RIGHT</span>
           <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
@@ -1100,9 +1179,9 @@ export default function SWMM5CodeViewer() {
             marginLeft: "auto",
             padding: "6px 12px",
             borderRadius: 6,
-            border: `1px solid ${showNotes ? "#61afef44" : "#2a2e3a"}`,
-            background: showNotes ? "#1a1d2e" : "transparent",
-            color: showNotes ? "#61afef" : "#6b7185",
+            border: `1px solid ${showNotes ? t.accent + "44" : t.border}`,
+            background: showNotes ? t.modActiveBg : "transparent",
+            color: showNotes ? t.accent : t.textMuted,
             cursor: "pointer",
             fontSize: 12,
             fontFamily: "'IBM Plex Sans', sans-serif",
@@ -1116,7 +1195,7 @@ export default function SWMM5CodeViewer() {
       {/* Translation Notes */}
       {showNotes && rightLang !== leftLang && (
         <div className="notes-box" style={{ margin: "16px 20px 0" }}>
-          <strong style={{ color: "#c678dd" }}>
+          <strong style={{ color: t.accentAlt }}>
             {leftInfo.label} → {rightInfo.label}:
           </strong>{" "}
           {translationNotes[rightLang]}
@@ -1136,6 +1215,7 @@ export default function SWMM5CodeViewer() {
           langId={leftLang}
           label={`${leftInfo.label} ${leftInfo.ext}`}
           color={leftInfo.color}
+          t={t}
         />
         <div style={{
           display: "flex",
@@ -1146,26 +1226,27 @@ export default function SWMM5CodeViewer() {
           flexShrink: 0,
           padding: "0 4px",
         }}>
-          <div style={{ color: "#3a3f52", fontSize: 18 }}>⇄</div>
+          <div style={{ color: t.textFaint, fontSize: 18 }}>⇄</div>
         </div>
         <CodePanel
           code={mod[rightLang]}
           langId={rightLang}
           label={`${rightInfo.label} ${rightInfo.ext}`}
           color={rightInfo.color}
+          t={t}
         />
       </div>
 
       {/* Footer */}
       <div style={{
         padding: "12px 24px",
-        borderTop: "1px solid #1a1d28",
+        borderTop: `1px solid ${t.borderSubtle}`,
         fontSize: 11,
-        color: "#3a3f52",
+        color: t.textFaint,
         textAlign: "center",
       }}>
         SWMM5 Rosetta Stone • EPA Storm Water Management Model • Engine Code Translations •{" "}
-        <span style={{ color: "#5c6370" }}>swmm5.org</span>
+        <span style={{ color: t.textDim }}>swmm5.org</span>
       </div>
     </div>
   );
