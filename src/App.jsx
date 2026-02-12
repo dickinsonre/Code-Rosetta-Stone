@@ -1,800 +1,7 @@
 import { useState, useEffect, useRef } from "react";
+import { modules, languages, translationNotes } from "./modules.js";
 
-// ─── Code Samples ────────────────────────────────────────────────────
-const modules = {
-  "rdii.c — RTK Unit Hydrograph": {
-    category: "Hydrology",
-    difficulty: "intermediate",
-    description: "Computes how rainfall enters the sewer system through cracked pipes, deteriorated manholes, and illegal connections. Uses three triangular unit hydrographs (R, T, K) representing short-term, medium-term, and long-term rainfall response. This is SWMM5's method for modeling \"wet weather\" inflow — the extra flow that overwhelms sewers during storms.",
-    equations: "Q(t) = R * P(t) * UH(t), where UH is triangular with peak = 2/T_base at time T, base = T*(1+K)",
-    inputs: "Rainfall time series, R/T/K parameters per unit hydrograph, subcatchment area",
-    outputs: "RDII flow time series (added to dry weather flow at each node)",
-    links: [
-      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
-      { label: "PySWMM Wrapper", url: "https://github.com/pyswmm/pyswmm" },
-    ],
-    c: `// rdii.c — RTK Unit Hydrograph Response
-// EPA SWMM5 Engine — Rain-Dependent Infiltration/Inflow
-// Computes RDII flow from rainfall using three
-// triangular unit hydrographs (short, medium, long term)
-
-typedef struct {
-    double r;        // fraction of rainfall volume
-    double t;        // time to peak (hours)
-    double k;        // ratio of recession to time-to-peak
-    double tBase;    // total base time = t * (1 + k)
-} TUnitHyd;
-
-double rdii_getUnitHydOrd(TUnitHyd* uh, double t)
-{
-    // Returns unit hydrograph ordinate at time t (hours)
-    double qPeak, tBase;
-
-    // Compute peak flow rate (area = 1.0)
-    tBase = uh->t * (1.0 + uh->k);
-    if (tBase <= 0.0) return 0.0;
-    qPeak = 2.0 / tBase;
-
-    // Rising limb
-    if (t <= uh->t)
-    {
-        if (uh->t <= 0.0) return 0.0;
-        return qPeak * t / uh->t;
-    }
-
-    // Recession limb
-    if (t <= tBase)
-    {
-        double tRecession = uh->k * uh->t;
-        if (tRecession <= 0.0) return 0.0;
-        return qPeak * (tBase - t) / tRecession;
-    }
-
-    return 0.0;
-}
-
-double rdii_getRdiiFlow(TUnitHyd uh[3], double* rainfall,
-                        int nPeriods, int period, double area)
-{
-    // Convolve rainfall with three unit hydrographs
-    double flow = 0.0;
-    int i, j;
-
-    for (i = 0; i < 3; i++)
-    {
-        if (uh[i].r <= 0.0) continue;
-        for (j = 0; j <= period; j++)
-        {
-            double t = (period - j) * 1.0; // time in hours
-            double uhOrd = rdii_getUnitHydOrd(&uh[i], t);
-            flow += uh[i].r * rainfall[j] * uhOrd * area;
-        }
-    }
-    return flow;
-}`,
-    rust: `// rdii.rs — RTK Unit Hydrograph Response
-// SWMM5 Engine in Rust — Rain-Dependent Infiltration/Inflow
-// Computes RDII flow from rainfall using three
-// triangular unit hydrographs (short, medium, long term)
-
-#[derive(Clone, Debug)]
-pub struct UnitHyd {
-    pub r: f64,       // fraction of rainfall volume
-    pub t: f64,       // time to peak (hours)
-    pub k: f64,       // ratio of recession to time-to-peak
-    pub t_base: f64,  // total base time = t * (1 + k)
-}
-
-impl UnitHyd {
-    /// Returns unit hydrograph ordinate at time t (hours)
-    pub fn get_ordinate(&self, t: f64) -> f64 {
-        let t_base = self.t * (1.0 + self.k);
-        if t_base <= 0.0 { return 0.0; }
-
-        let q_peak = 2.0 / t_base;
-
-        // Rising limb
-        if t <= self.t {
-            if self.t <= 0.0 { return 0.0; }
-            return q_peak * t / self.t;
-        }
-
-        // Recession limb
-        if t <= t_base {
-            let t_recession = self.k * self.t;
-            if t_recession <= 0.0 { return 0.0; }
-            return q_peak * (t_base - t) / t_recession;
-        }
-
-        0.0
-    }
-}
-
-/// Convolve rainfall with three RTK unit hydrographs
-pub fn get_rdii_flow(
-    uh: &[UnitHyd; 3],
-    rainfall: &[f64],
-    period: usize,
-    area: f64,
-) -> f64 {
-    uh.iter()
-        .filter(|u| u.r > 0.0)
-        .map(|u| {
-            (0..=period)
-                .map(|j| {
-                    let t = (period - j) as f64;
-                    u.r * rainfall[j] * u.get_ordinate(t) * area
-                })
-                .sum::<f64>()
-        })
-        .sum()
-}`,
-    python: `# rdii.py — RTK Unit Hydrograph Response
-# SWMM5 Engine in Python — Rain-Dependent Infiltration/Inflow
-# Computes RDII flow from rainfall using three
-# triangular unit hydrographs (short, medium, long term)
-
-from dataclasses import dataclass
-
-@dataclass
-class UnitHyd:
-    r: float       # fraction of rainfall volume
-    t: float       # time to peak (hours)
-    k: float       # ratio of recession to time-to-peak
-
-    @property
-    def t_base(self) -> float:
-        """Total base time = t * (1 + k)"""
-        return self.t * (1.0 + self.k)
-
-    def get_ordinate(self, time: float) -> float:
-        """Returns unit hydrograph ordinate at given time (hours)."""
-        t_base = self.t_base
-        if t_base <= 0.0:
-            return 0.0
-
-        q_peak = 2.0 / t_base
-
-        # Rising limb
-        if time <= self.t:
-            if self.t <= 0.0:
-                return 0.0
-            return q_peak * time / self.t
-
-        # Recession limb
-        if time <= t_base:
-            t_recession = self.k * self.t
-            if t_recession <= 0.0:
-                return 0.0
-            return q_peak * (t_base - time) / t_recession
-
-        return 0.0
-
-
-def get_rdii_flow(
-    unit_hyds: list[UnitHyd],
-    rainfall: list[float],
-    period: int,
-    area: float,
-) -> float:
-    """Convolve rainfall with three RTK unit hydrographs."""
-    flow = 0.0
-    for uh in unit_hyds:
-        if uh.r <= 0.0:
-            continue
-        for j in range(period + 1):
-            t = float(period - j)
-            uh_ord = uh.get_ordinate(t)
-            flow += uh.r * rainfall[j] * uh_ord * area
-    return flow`,
-    fortran: `! rdii.f90 — RTK Unit Hydrograph Response
-! SWMM5 Engine in Fortran — Rain-Dependent Infiltration/Inflow
-! Computes RDII flow from rainfall using three
-! triangular unit hydrographs (short, medium, long term)
-
-module rdii_module
-    implicit none
-
-    type :: UnitHyd
-        real(8) :: r       ! fraction of rainfall volume
-        real(8) :: t       ! time to peak (hours)
-        real(8) :: k       ! ratio of recession to time-to-peak
-    end type UnitHyd
-
-contains
-
-    function get_unit_hyd_ord(uh, time) result(ord)
-        ! Returns unit hydrograph ordinate at given time
-        type(UnitHyd), intent(in) :: uh
-        real(8), intent(in) :: time
-        real(8) :: ord, t_base, q_peak, t_recession
-
-        t_base = uh%t * (1.0d0 + uh%k)
-        if (t_base <= 0.0d0) then
-            ord = 0.0d0
-            return
-        end if
-
-        q_peak = 2.0d0 / t_base
-
-        ! Rising limb
-        if (time <= uh%t) then
-            if (uh%t <= 0.0d0) then
-                ord = 0.0d0
-            else
-                ord = q_peak * time / uh%t
-            end if
-            return
-        end if
-
-        ! Recession limb
-        if (time <= t_base) then
-            t_recession = uh%k * uh%t
-            if (t_recession <= 0.0d0) then
-                ord = 0.0d0
-            else
-                ord = q_peak * (t_base - time) / t_recession
-            end if
-            return
-        end if
-
-        ord = 0.0d0
-    end function get_unit_hyd_ord
-
-    function get_rdii_flow(uh, rainfall, n_periods, &
-                           period, area) result(flow)
-        ! Convolve rainfall with three RTK unit hydrographs
-        type(UnitHyd), intent(in) :: uh(3)
-        real(8), intent(in) :: rainfall(:)
-        integer, intent(in) :: n_periods, period
-        real(8), intent(in) :: area
-        real(8) :: flow, t, uh_ord
-        integer :: i, j
-
-        flow = 0.0d0
-        do i = 1, 3
-            if (uh(i)%r <= 0.0d0) cycle
-            do j = 0, period
-                t = dble(period - j)
-                uh_ord = get_unit_hyd_ord(uh(i), t)
-                flow = flow + uh(i)%r * rainfall(j+1) &
-                       * uh_ord * area
-            end do
-        end do
-    end function get_rdii_flow
-
-end module rdii_module`,
-    julia: `# rdii.jl — RTK Unit Hydrograph Response
-# SWMM5 Engine in Julia — Rain-Dependent Infiltration/Inflow
-# Computes RDII flow from rainfall using three
-# triangular unit hydrographs (short, medium, long term)
-
-struct UnitHyd
-    r::Float64       # fraction of rainfall volume
-    t::Float64       # time to peak (hours)
-    k::Float64       # ratio of recession to time-to-peak
-end
-
-# Total base time
-t_base(uh::UnitHyd) = uh.t * (1.0 + uh.k)
-
-function get_ordinate(uh::UnitHyd, time::Float64)::Float64
-    """Returns unit hydrograph ordinate at given time (hours)."""
-    tb = t_base(uh)
-    tb ≤ 0.0 && return 0.0
-
-    q_peak = 2.0 / tb
-
-    # Rising limb
-    if time ≤ uh.t
-        uh.t ≤ 0.0 && return 0.0
-        return q_peak * time / uh.t
-    end
-
-    # Recession limb
-    if time ≤ tb
-        t_recession = uh.k * uh.t
-        t_recession ≤ 0.0 && return 0.0
-        return q_peak * (tb - time) / t_recession
-    end
-
-    return 0.0
-end
-
-function get_rdii_flow(
-    unit_hyds::Vector{UnitHyd},
-    rainfall::Vector{Float64},
-    period::Int,
-    area::Float64
-)::Float64
-    """Convolve rainfall with three RTK unit hydrographs."""
-    flow = 0.0
-    for uh in unit_hyds
-        uh.r ≤ 0.0 && continue
-        for j in 0:period
-            t = Float64(period - j)
-            flow += uh.r * rainfall[j+1] * get_ordinate(uh, t) * area
-        end
-    end
-    return flow
-end`,
-    javascript: `// rdii.js — RTK Unit Hydrograph Response
-// SWMM5 Engine in JavaScript — Rain-Dependent Infiltration/Inflow
-// Computes RDII flow from rainfall using three
-// triangular unit hydrographs (short, medium, long term)
-
-class UnitHyd {
-    constructor(r, t, k) {
-        this.r = r;       // fraction of rainfall volume
-        this.t = t;       // time to peak (hours)
-        this.k = k;       // ratio of recession to time-to-peak
-    }
-
-    get tBase() {
-        return this.t * (1.0 + this.k);
-    }
-
-    /** Returns unit hydrograph ordinate at time t (hours) */
-    getOrdinate(time) {
-        const tBase = this.tBase;
-        if (tBase <= 0.0) return 0.0;
-
-        const qPeak = 2.0 / tBase;
-
-        // Rising limb
-        if (time <= this.t) {
-            if (this.t <= 0.0) return 0.0;
-            return qPeak * time / this.t;
-        }
-
-        // Recession limb
-        if (time <= tBase) {
-            const tRecession = this.k * this.t;
-            if (tRecession <= 0.0) return 0.0;
-            return qPeak * (tBase - time) / tRecession;
-        }
-
-        return 0.0;
-    }
-}
-
-/** Convolve rainfall with three RTK unit hydrographs */
-function getRdiiFlow(unitHyds, rainfall, period, area) {
-    let flow = 0.0;
-
-    for (const uh of unitHyds) {
-        if (uh.r <= 0.0) continue;
-        for (let j = 0; j <= period; j++) {
-            const t = period - j;
-            const uhOrd = uh.getOrdinate(t);
-            flow += uh.r * rainfall[j] * uhOrd * area;
-        }
-    }
-
-    return flow;
-}
-
-export { UnitHyd, getRdiiFlow };`,
-    go: `// rdii.go — RTK Unit Hydrograph Response
-// SWMM5 Engine in Go — Rain-Dependent Infiltration/Inflow
-// Computes RDII flow from rainfall using three
-// triangular unit hydrographs (short, medium, long term)
-
-package swmm
-
-// UnitHyd represents a single RTK triangular unit hydrograph
-type UnitHyd struct {
-    R float64 // fraction of rainfall volume
-    T float64 // time to peak (hours)
-    K float64 // ratio of recession to time-to-peak
-}
-
-// TBase returns total base time = T * (1 + K)
-func (uh *UnitHyd) TBase() float64 {
-    return uh.T * (1.0 + uh.K)
-}
-
-// GetOrdinate returns unit hydrograph ordinate at time t
-func (uh *UnitHyd) GetOrdinate(t float64) float64 {
-    tBase := uh.TBase()
-    if tBase <= 0.0 {
-        return 0.0
-    }
-
-    qPeak := 2.0 / tBase
-
-    // Rising limb
-    if t <= uh.T {
-        if uh.T <= 0.0 {
-            return 0.0
-        }
-        return qPeak * t / uh.T
-    }
-
-    // Recession limb
-    if t <= tBase {
-        tRecession := uh.K * uh.T
-        if tRecession <= 0.0 {
-            return 0.0
-        }
-        return qPeak * (tBase - t) / tRecession
-    }
-
-    return 0.0
-}
-
-// GetRdiiFlow convolves rainfall with three unit hydrographs
-func GetRdiiFlow(uh [3]UnitHyd, rainfall []float64,
-    period int, area float64) float64 {
-
-    flow := 0.0
-    for i := 0; i < 3; i++ {
-        if uh[i].R <= 0.0 {
-            continue
-        }
-        for j := 0; j <= period; j++ {
-            t := float64(period - j)
-            uhOrd := uh[i].GetOrdinate(t)
-            flow += uh[i].R * rainfall[j] * uhOrd * area
-        }
-    }
-    return flow
-}`,
-  },
-  "runoff.c — Surface Runoff": {
-    category: "Hydrology",
-    difficulty: "intermediate",
-    description: "Computes how rainwater flows across the land surface into the drainage system. Uses Manning's equation with a nonlinear reservoir approach — water pools on the surface (depression storage) and only runs off once the depth exceeds what the ground can hold. Also includes Green-Ampt infiltration to determine how much rainfall soaks into the soil versus becoming runoff.",
-    equations: "Q = (W * S^0.5 / n) * (d - d_store)^(5/3) / A (Manning's); f = Ks * (1 + psi * deficit / F) (Green-Ampt)",
-    inputs: "Subcatchment area, width, slope, Manning's n, depression storage, soil properties",
-    outputs: "Surface runoff flow rate, infiltration rate",
-    links: [
-      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
-      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
-    ],
-    c: `// runoff.c — Nonlinear Reservoir Surface Runoff
-// EPA SWMM5 Engine — Subcatchment Overland Flow
-// Uses Manning's equation with depth-based nonlinear
-// reservoir routing for subcatchment runoff
-
-typedef struct {
-    double area;        // subcatchment area (ft2)
-    double width;       // characteristic width (ft)
-    double slope;       // average surface slope
-    double nPerv;       // Manning's n for pervious area
-    double nImperv;     // Manning's n for impervious area
-    double dStorePerv;  // depression storage, pervious (ft)
-    double dStoreImperv;// depression storage, impervious (ft)
-} TSubcatch;
-
-double runoff_getRunoff(TSubcatch* sc, double depth,
-                        double nMannings, double dStore)
-{
-    // Computes outflow from a subcatchment using
-    // Manning's equation for nonlinear reservoir
-    double excess, alpha, outflow;
-
-    // Depth must exceed depression storage
-    excess = depth - dStore;
-    if (excess <= 0.0) return 0.0;
-
-    // Manning's discharge coefficient
-    // alpha = W * S^0.5 / n  (per unit area)
-    alpha = sc->width * sqrt(sc->slope) / nMannings;
-    if (alpha <= 0.0) return 0.0;
-
-    // Q = alpha * (d - dStore)^(5/3) / Area
-    outflow = alpha * pow(excess, 5.0 / 3.0) / sc->area;
-
-    return outflow;
-}
-
-double runoff_getInfiltration(double rainfall,
-    double upperMoist, double ks, double psi)
-{
-    // Green-Ampt infiltration estimate
-    // f = Ks * (1 + psi * (porosity - moisture) / F)
-    double deficit, infil;
-
-    deficit = 1.0 - upperMoist;
-    if (deficit <= 0.0) return 0.0;
-
-    infil = ks * (1.0 + psi * deficit / rainfall);
-    if (infil > rainfall) infil = rainfall;
-
-    return infil;
-}`,
-    rust: `// runoff.rs — Nonlinear Reservoir Surface Runoff
-// SWMM5 Engine in Rust — Subcatchment Overland Flow
-// Uses Manning's equation with depth-based nonlinear
-// reservoir routing for subcatchment runoff
-
-pub struct Subcatch {
-    pub area: f64,          // subcatchment area (ft²)
-    pub width: f64,         // characteristic width (ft)
-    pub slope: f64,         // average surface slope
-    pub n_perv: f64,        // Manning's n for pervious
-    pub n_imperv: f64,      // Manning's n for impervious
-    pub d_store_perv: f64,  // depression storage, perv (ft)
-    pub d_store_imperv: f64,// depression storage, imperv
-}
-
-impl Subcatch {
-    /// Computes outflow using Manning's nonlinear reservoir
-    pub fn get_runoff(&self, depth: f64, n_mannings: f64,
-                      d_store: f64) -> f64 {
-        // Depth must exceed depression storage
-        let excess = depth - d_store;
-        if excess <= 0.0 { return 0.0; }
-
-        // Manning's discharge coefficient
-        // alpha = W * S^0.5 / n
-        let alpha = self.width * self.slope.sqrt()
-                    / n_mannings;
-        if alpha <= 0.0 { return 0.0; }
-
-        // Q = alpha * (d - dStore)^(5/3) / Area
-        alpha * excess.powf(5.0 / 3.0) / self.area
-    }
-}
-
-/// Green-Ampt infiltration estimate
-pub fn get_infiltration(rainfall: f64, upper_moist: f64,
-                        ks: f64, psi: f64) -> f64 {
-    let deficit = 1.0 - upper_moist;
-    if deficit <= 0.0 { return 0.0; }
-
-    let infil = ks * (1.0 + psi * deficit / rainfall);
-    infil.min(rainfall)
-}`,
-    python: `# runoff.py — Nonlinear Reservoir Surface Runoff
-# SWMM5 Engine in Python — Subcatchment Overland Flow
-# Uses Manning's equation with depth-based nonlinear
-# reservoir routing for subcatchment runoff
-
-import math
-from dataclasses import dataclass
-
-@dataclass
-class Subcatch:
-    area: float          # subcatchment area (ft²)
-    width: float         # characteristic width (ft)
-    slope: float         # average surface slope
-    n_perv: float        # Manning's n for pervious
-    n_imperv: float      # Manning's n for impervious
-    d_store_perv: float  # depression storage, perv (ft)
-    d_store_imperv: float# depression storage, imperv
-
-    def get_runoff(self, depth: float, n_mannings: float,
-                   d_store: float) -> float:
-        """Computes outflow using Manning's nonlinear reservoir."""
-        # Depth must exceed depression storage
-        excess = depth - d_store
-        if excess <= 0.0:
-            return 0.0
-
-        # Manning's discharge coefficient
-        alpha = (self.width * math.sqrt(self.slope)
-                 / n_mannings)
-        if alpha <= 0.0:
-            return 0.0
-
-        # Q = alpha * (d - dStore)^(5/3) / Area
-        return alpha * excess ** (5.0 / 3.0) / self.area
-
-
-def get_infiltration(rainfall: float, upper_moist: float,
-                     ks: float, psi: float) -> float:
-    """Green-Ampt infiltration estimate."""
-    deficit = 1.0 - upper_moist
-    if deficit <= 0.0:
-        return 0.0
-
-    infil = ks * (1.0 + psi * deficit / rainfall)
-    return min(infil, rainfall)`,
-    fortran: `! runoff.f90 — Nonlinear Reservoir Surface Runoff
-! SWMM5 Engine in Fortran — Subcatchment Overland Flow
-! Uses Manning's equation with depth-based nonlinear
-! reservoir routing for subcatchment runoff
-
-module runoff_module
-    implicit none
-
-    type :: Subcatch
-        real(8) :: area          ! subcatchment area (ft²)
-        real(8) :: width         ! characteristic width (ft)
-        real(8) :: slope         ! average surface slope
-        real(8) :: n_perv        ! Manning's n for pervious
-        real(8) :: n_imperv      ! Manning's n for impervious
-        real(8) :: d_store_perv  ! depression storage (ft)
-        real(8) :: d_store_imperv
-    end type Subcatch
-
-contains
-
-    function get_runoff(sc, depth, n_mannings, &
-                        d_store) result(outflow)
-        type(Subcatch), intent(in) :: sc
-        real(8), intent(in) :: depth, n_mannings, d_store
-        real(8) :: outflow, excess, alpha
-
-        excess = depth - d_store
-        if (excess <= 0.0d0) then
-            outflow = 0.0d0
-            return
-        end if
-
-        alpha = sc%width * sqrt(sc%slope) / n_mannings
-        if (alpha <= 0.0d0) then
-            outflow = 0.0d0
-            return
-        end if
-
-        outflow = alpha * excess**(5.0d0/3.0d0) / sc%area
-    end function get_runoff
-
-    function get_infiltration(rainfall, upper_moist, &
-                              ks, psi) result(infil)
-        real(8), intent(in) :: rainfall, upper_moist
-        real(8), intent(in) :: ks, psi
-        real(8) :: infil, deficit
-
-        deficit = 1.0d0 - upper_moist
-        if (deficit <= 0.0d0) then
-            infil = 0.0d0
-            return
-        end if
-
-        infil = ks * (1.0d0 + psi * deficit / rainfall)
-        if (infil > rainfall) infil = rainfall
-    end function get_infiltration
-
-end module runoff_module`,
-    julia: `# runoff.jl — Nonlinear Reservoir Surface Runoff
-# SWMM5 Engine in Julia — Subcatchment Overland Flow
-# Uses Manning's equation with depth-based nonlinear
-# reservoir routing for subcatchment runoff
-
-struct Subcatch
-    area::Float64          # subcatchment area (ft²)
-    width::Float64         # characteristic width (ft)
-    slope::Float64         # average surface slope
-    n_perv::Float64        # Manning's n for pervious
-    n_imperv::Float64      # Manning's n for impervious
-    d_store_perv::Float64  # depression storage (ft)
-    d_store_imperv::Float64
-end
-
-function get_runoff(sc::Subcatch, depth::Float64,
-                    n_mannings::Float64,
-                    d_store::Float64)::Float64
-    # Depth must exceed depression storage
-    excess = depth - d_store
-    excess ≤ 0.0 && return 0.0
-
-    # Manning's discharge coefficient
-    alpha = sc.width * sqrt(sc.slope) / n_mannings
-    alpha ≤ 0.0 && return 0.0
-
-    # Q = alpha * (d - dStore)^(5/3) / Area
-    return alpha * excess^(5.0/3.0) / sc.area
-end
-
-function get_infiltration(rainfall::Float64,
-    upper_moist::Float64, ks::Float64,
-    psi::Float64)::Float64
-    """Green-Ampt infiltration estimate."""
-    deficit = 1.0 - upper_moist
-    deficit ≤ 0.0 && return 0.0
-
-    infil = ks * (1.0 + psi * deficit / rainfall)
-    return min(infil, rainfall)
-end`,
-    javascript: `// runoff.js — Nonlinear Reservoir Surface Runoff
-// SWMM5 Engine in JavaScript — Subcatchment Overland Flow
-// Uses Manning's equation with depth-based nonlinear
-// reservoir routing for subcatchment runoff
-
-class Subcatch {
-    constructor({ area, width, slope, nPerv, nImperv,
-                  dStorePerv, dStoreImperv }) {
-        this.area = area;
-        this.width = width;
-        this.slope = slope;
-        this.nPerv = nPerv;
-        this.nImperv = nImperv;
-        this.dStorePerv = dStorePerv;
-        this.dStoreImperv = dStoreImperv;
-    }
-
-    /** Computes outflow using Manning's nonlinear reservoir */
-    getRunoff(depth, nMannings, dStore) {
-        const excess = depth - dStore;
-        if (excess <= 0.0) return 0.0;
-
-        const alpha = this.width * Math.sqrt(this.slope)
-                      / nMannings;
-        if (alpha <= 0.0) return 0.0;
-
-        return alpha * Math.pow(excess, 5.0 / 3.0)
-               / this.area;
-    }
-}
-
-/** Green-Ampt infiltration estimate */
-function getInfiltration(rainfall, upperMoist, ks, psi) {
-    const deficit = 1.0 - upperMoist;
-    if (deficit <= 0.0) return 0.0;
-
-    const infil = ks * (1.0 + psi * deficit / rainfall);
-    return Math.min(infil, rainfall);
-}
-
-export { Subcatch, getInfiltration };`,
-    go: `// runoff.go — Nonlinear Reservoir Surface Runoff
-// SWMM5 Engine in Go — Subcatchment Overland Flow
-// Uses Manning's equation with depth-based nonlinear
-// reservoir routing for subcatchment runoff
-
-package swmm
-
-import "math"
-
-type Subcatch struct {
-    Area         float64 // subcatchment area (ft²)
-    Width        float64 // characteristic width (ft)
-    Slope        float64 // average surface slope
-    NPerv        float64 // Manning's n for pervious
-    NImperv      float64 // Manning's n for impervious
-    DStorePerv   float64 // depression storage (ft)
-    DStoreImperv float64
-}
-
-// GetRunoff computes outflow using Manning's nonlinear
-// reservoir equation
-func (sc *Subcatch) GetRunoff(depth, nMannings,
-    dStore float64) float64 {
-
-    excess := depth - dStore
-    if excess <= 0.0 {
-        return 0.0
-    }
-
-    alpha := sc.Width * math.Sqrt(sc.Slope) / nMannings
-    if alpha <= 0.0 {
-        return 0.0
-    }
-
-    return alpha * math.Pow(excess, 5.0/3.0) / sc.Area
-}
-
-// GetInfiltration computes Green-Ampt infiltration
-func GetInfiltration(rainfall, upperMoist,
-    ks, psi float64) float64 {
-
-    deficit := 1.0 - upperMoist
-    if deficit <= 0.0 {
-        return 0.0
-    }
-
-    infil := ks * (1.0 + psi*deficit/rainfall)
-    if infil > rainfall {
-        infil = rainfall
-    }
-    return infil
-}`,
-  },
-};
-
-const languages = [
-  { id: "c", label: "C", ext: ".c", color: "#555555" },
-  { id: "rust", label: "Rust", ext: ".rs", color: "#DEA584" },
-  { id: "python", label: "Python", ext: ".py", color: "#3572A5" },
-  { id: "fortran", label: "Fortran", ext: ".f90", color: "#4d41b1" },
-  { id: "julia", label: "Julia", ext: ".jl", color: "#9558B2" },
-  { id: "javascript", label: "JavaScript", ext: ".js", color: "#f1e05a" },
-  { id: "go", label: "Go", ext: ".go", color: "#00ADD8" },
-];
+// ─── Code Samples (moved to modules.js) ─────────────────────────────
 
 // ─── Syntax Highlighting ─────────────────────────────────────────────
 
@@ -1112,6 +319,8 @@ export default function SWMM5CodeViewer() {
   const [showModuleInfo, setShowModuleInfo] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [isMobile, setIsMobile] = useState(false);
+  const [showLanding, setShowLanding] = useState(true);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
@@ -1123,6 +332,27 @@ export default function SWMM5CodeViewer() {
     window.addEventListener("resize", check);
     return () => window.removeEventListener("resize", check);
   }, []);
+
+  useEffect(() => {
+    if (searchQuery.trim()) {
+      const filtered = moduleKeys.filter((key) => {
+        const q = searchQuery.toLowerCase();
+        const m = modules[key];
+        return (
+          key.toLowerCase().includes(q) ||
+          m.description.toLowerCase().includes(q) ||
+          m.category.toLowerCase().includes(q) ||
+          (m.equations && m.equations.toLowerCase().includes(q)) ||
+          (m.inputs && m.inputs.toLowerCase().includes(q)) ||
+          (m.outputs && m.outputs.toLowerCase().includes(q)) ||
+          (m.tags && m.tags.some((tag) => tag.toLowerCase().includes(q)))
+        );
+      });
+      if (filtered.length > 0 && !filtered.includes(selectedModule)) {
+        setSelectedModule(filtered[0]);
+      }
+    }
+  }, [searchQuery]);
 
   const handleScrollSync = (source) => () => {
     if (isSyncing.current) return;
@@ -1139,20 +369,35 @@ export default function SWMM5CodeViewer() {
   };
 
   const t = themes[theme];
-  const mod = modules[selectedModule];
+
+  const filteredModuleKeys = searchQuery.trim()
+    ? moduleKeys.filter((key) => {
+        const q = searchQuery.toLowerCase();
+        const m = modules[key];
+        return (
+          key.toLowerCase().includes(q) ||
+          m.description.toLowerCase().includes(q) ||
+          m.category.toLowerCase().includes(q) ||
+          (m.equations && m.equations.toLowerCase().includes(q)) ||
+          (m.inputs && m.inputs.toLowerCase().includes(q)) ||
+          (m.outputs && m.outputs.toLowerCase().includes(q)) ||
+          (m.tags && m.tags.some((tag) => tag.toLowerCase().includes(q)))
+        );
+      })
+    : moduleKeys;
+
+  const effectiveModule = filteredModuleKeys.includes(selectedModule)
+    ? selectedModule
+    : filteredModuleKeys[0] || moduleKeys[0];
+  const mod = modules[effectiveModule];
   const leftInfo = languages.find((l) => l.id === leftLang);
   const rightInfo = languages.find((l) => l.id === rightLang);
   const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
 
-  const translationNotes = {
-    rust: "Rust enforces memory safety at compile time. Notice how the C pointer-based struct access (&uh[i]) becomes Rust references with lifetime guarantees. The iterator chain in get_rdii_flow replaces the nested for loops with a more functional approach. No null pointers possible — the type system prevents it.",
-    python: "Python uses @dataclass for clean struct-like definitions and @property for computed fields. The explicit type hints mirror C's type declarations but are optional. Notice how Python's readability makes the algorithm's intent clearer, though at the cost of runtime performance vs C.",
-    fortran: "Full circle — SWMM3 was originally Fortran! Note the 1-based array indexing (rainfall(j+1) vs rainfall[j]), the explicit intent(in) declarations, and the real(8) double precision type. The module/contains pattern replaces C's header files. The % operator accesses struct members instead of -> or dot notation.",
-    julia: "Julia's multiple dispatch replaces OOP methods — get_ordinate(uh, t) instead of uh.getOrdinate(t). The ≤ operator is native Unicode syntax. Julia uses 1-based indexing like Fortran. Short-circuit returns (expr && return val) are idiomatic. The struct is immutable by default.",
-    javascript: "JavaScript uses class syntax with getters (get tBase) for computed properties. Math.pow and Math.sqrt replace C's pow() and sqrt(). ES module exports make this ready for browser-based SWMM implementations and WebAssembly integration.",
-    go: "Go uses exported names (capitalized) instead of public/private keywords. Methods are defined outside the struct with receiver syntax. Error handling would typically use multiple returns. The math package provides numerical functions. Simple, readable, and fast.",
-    c: "The original EPA SWMM5 C implementation. Pointer-based struct access, manual memory management, and direct mathematical operations. This code has been running in production since 2004, computing RDII for thousands of sewer systems worldwide.",
-  };
+  const shareUrl = typeof window !== "undefined" ? window.location.href : "";
+  const shareText = `Compare EPA SWMM5 stormwater algorithms across 7 programming languages — C, Rust, Python, Fortran, Julia, JavaScript, and Go. The SWMM5 Rosetta Stone:`;
+  const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
+  const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
 
   return (
     <div style={{
@@ -1223,48 +468,190 @@ export default function SWMM5CodeViewer() {
         }
       `}</style>
 
+      {/* Landing/About Section */}
+      {showLanding && (
+        <div style={{
+          padding: "40px 24px 32px",
+          borderBottom: `1px solid ${t.borderLight}`,
+          textAlign: "center",
+          position: "relative",
+        }}>
+          <button
+            onClick={() => setShowLanding(false)}
+            style={{
+              position: "absolute", top: 12, right: 16,
+              background: "transparent", border: "none",
+              color: t.textDim, cursor: "pointer", fontSize: 18,
+              padding: 4,
+            }}
+            title="Dismiss"
+          >&times;</button>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14, margin: "0 auto 16px",
+            background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt} 100%)`,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 26, fontWeight: 700, color: "#fff",
+            fontFamily: "'JetBrains Mono', monospace",
+            boxShadow: `0 4px 20px ${t.accent}33`,
+          }}>S5</div>
+          <h1 style={{
+            fontSize: 28, fontWeight: 700, color: t.textBright,
+            margin: "0 0 8px", letterSpacing: -0.5,
+          }}>SWMM5 Rosetta Stone</h1>
+          <p style={{
+            fontSize: 15, color: t.textMuted, maxWidth: 680,
+            margin: "0 auto 20px", lineHeight: 1.7,
+          }}>
+            Explore the core algorithms of{" "}
+            <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
+              target="_blank" rel="noopener noreferrer"
+              style={{ color: t.accent, textDecoration: "none" }}>EPA SWMM5</a>
+            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 7 modern programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
+          </p>
+          <div style={{
+            display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20,
+          }}>
+            {languages.map((lang) => (
+              <span key={lang.id} style={{
+                display: "flex", alignItems: "center", gap: 5,
+                padding: "4px 12px", borderRadius: 6,
+                background: t.panelHeader, border: `1px solid ${t.border}`,
+                fontSize: 12, color: t.text,
+                fontFamily: "'JetBrains Mono', monospace",
+              }}>
+                <span style={{
+                  width: 8, height: 8, borderRadius: "50%",
+                  background: lang.color,
+                }} />
+                {lang.label}
+              </span>
+            ))}
+          </div>
+          <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
+            <span style={{
+              fontSize: 12, color: t.textDim, padding: "4px 10px",
+              borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
+            }}>{moduleKeys.length} algorithm modules</span>
+            <span style={{
+              fontSize: 12, color: t.textDim, padding: "4px 10px",
+              borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
+            }}>7 languages</span>
+            <span style={{
+              fontSize: 12, color: t.textDim, padding: "4px 10px",
+              borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
+            }}>Synchronized scrolling</span>
+          </div>
+          <div style={{ marginTop: 20 }}>
+            <button
+              onClick={() => setShowLanding(false)}
+              style={{
+                padding: "10px 28px", borderRadius: 8,
+                background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt} 100%)`,
+                border: "none", color: "#fff", cursor: "pointer",
+                fontSize: 14, fontWeight: 600,
+                boxShadow: `0 2px 12px ${t.accent}44`,
+                transition: "transform 0.2s",
+              }}
+            >
+              Start Exploring
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div style={{
-        padding: "20px 24px 16px",
+        padding: "14px 24px",
         borderBottom: `1px solid ${t.borderLight}`,
         display: "flex",
         alignItems: "center",
-        gap: 16,
+        gap: 12,
         flexWrap: "wrap",
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexShrink: 0 }}>
           <div style={{
-            width: 36, height: 36, borderRadius: 8,
+            width: 32, height: 32, borderRadius: 7,
             background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt} 100%)`,
             display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 18, fontWeight: 700, color: "#fff",
+            fontSize: 15, fontWeight: 700, color: "#fff",
             fontFamily: "'JetBrains Mono', monospace",
-          }}>S5</div>
+            cursor: "pointer",
+          }} onClick={() => setShowLanding(true)}>S5</div>
           <div>
             <div style={{
-              fontSize: 17, fontWeight: 700, color: t.textBright,
-              letterSpacing: -0.3,
-            }}>
+              fontSize: 15, fontWeight: 700, color: t.textBright,
+              letterSpacing: -0.3, cursor: "pointer",
+            }} onClick={() => setShowLanding(true)}>
               SWMM5 Rosetta Stone
             </div>
-            <div style={{ fontSize: 11.5, color: t.textDim, marginTop: 1 }}>
+            <div style={{ fontSize: 10.5, color: t.textDim, marginTop: 1 }}>
               EPA SWMM5 Engine Code — Multi-Language Translation Viewer
             </div>
           </div>
         </div>
 
-        <div style={{ marginLeft: "auto", display: "flex", gap: 8, alignItems: "center" }}>
-          <span style={{ fontSize: 11, color: t.textDim, marginRight: 4 }}>MODULE:</span>
-          {moduleKeys.map((key) => (
+        <div style={{
+          position: "relative", flex: "0 1 220px", minWidth: 140,
+        }}>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search modules..."
+            style={{
+              width: "100%", padding: "6px 30px 6px 10px",
+              borderRadius: 6, border: `1px solid ${t.border}`,
+              background: t.panelBg, color: t.text,
+              fontSize: 12, outline: "none",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery("")}
+              style={{
+                position: "absolute", right: 6, top: "50%", transform: "translateY(-50%)",
+                background: "transparent", border: "none",
+                color: t.textDim, cursor: "pointer", fontSize: 14, padding: 0,
+              }}
+            >&times;</button>
+          )}
+        </div>
+
+        <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 10, color: t.textDim, marginRight: 2 }}>MODULE:</span>
+          {filteredModuleKeys.map((key) => (
             <button
               key={key}
-              className={`mod-btn ${selectedModule === key ? "active" : ""}`}
-              onClick={() => setSelectedModule(key)}
-              style={{ width: "auto", padding: "6px 12px", fontSize: 12 }}
+              className={`mod-btn ${effectiveModule === key ? "active" : ""}`}
+              onClick={() => { setSelectedModule(key); setShowLanding(false); }}
+              style={{ width: "auto", padding: "5px 10px", fontSize: 11 }}
             >
               {key.split("—")[0].trim()}
             </button>
           ))}
+          {searchQuery && filteredModuleKeys.length === 0 && (
+            <span style={{ fontSize: 11, color: t.textDim, fontStyle: "italic" }}>No matches</span>
+          )}
+          <div style={{ width: 1, height: 20, background: t.border, margin: "0 4px" }} />
+          <a href={linkedInUrl} target="_blank" rel="noopener noreferrer"
+            title="Share on LinkedIn"
+            style={{
+              width: 30, height: 30, borderRadius: 6,
+              border: `1px solid ${t.border}`, background: t.panelHeader,
+              color: t.textMuted, display: "flex", alignItems: "center",
+              justifyContent: "center", textDecoration: "none",
+              fontSize: 13, transition: "all 0.2s",
+            }}>in</a>
+          <a href={twitterUrl} target="_blank" rel="noopener noreferrer"
+            title="Share on X/Twitter"
+            style={{
+              width: 30, height: 30, borderRadius: 6,
+              border: `1px solid ${t.border}`, background: t.panelHeader,
+              color: t.textMuted, display: "flex", alignItems: "center",
+              justifyContent: "center", textDecoration: "none",
+              fontSize: 13, transition: "all 0.2s",
+            }}>X</a>
           <button
             className="theme-toggle"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
@@ -1451,9 +838,21 @@ export default function SWMM5CodeViewer() {
         fontSize: 11,
         color: t.textFaint,
         textAlign: "center",
+        display: "flex",
+        justifyContent: "center",
+        alignItems: "center",
+        gap: 8,
+        flexWrap: "wrap",
       }}>
-        SWMM5 Rosetta Stone • EPA Storm Water Management Model • Engine Code Translations •{" "}
-        <span style={{ color: t.textDim }}>swmm5.org</span>
+        <span>SWMM5 Rosetta Stone</span>
+        <span>&bull;</span>
+        <span>EPA Storm Water Management Model</span>
+        <span>&bull;</span>
+        <span>{moduleKeys.length} Modules &bull; 7 Languages</span>
+        <span>&bull;</span>
+        <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
+          target="_blank" rel="noopener noreferrer"
+          style={{ color: t.textDim, textDecoration: "none" }}>swmm5.org</a>
       </div>
     </div>
   );
