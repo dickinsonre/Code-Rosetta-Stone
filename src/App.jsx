@@ -776,14 +776,18 @@ export default function SWMM5CodeViewer() {
       </div>
 
       {/* Translation Notes */}
-      {showNotes && rightLang !== leftLang && (
-        <div className="notes-box" style={{ margin: "16px 20px 0" }}>
-          <strong style={{ color: t.accentAlt }}>
-            {leftInfo.label} → {rightInfo.label}:
-          </strong>{" "}
-          {translationNotes[rightLang]}
-        </div>
-      )}
+      {showNotes && rightLang !== leftLang && (() => {
+        const pairKey = [leftLang, rightLang].sort().join("-");
+        const note = translationNotes[pairKey];
+        return note ? (
+          <div className="notes-box" style={{ margin: "16px 20px 0" }}>
+            <strong style={{ color: t.accentAlt }}>
+              {leftInfo.label} \u2194 {rightInfo.label}:
+            </strong>{" "}
+            {note}
+          </div>
+        ) : null;
+      })()}
 
       {/* Code Panels */}
       <div style={{

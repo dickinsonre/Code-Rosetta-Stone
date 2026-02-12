@@ -1,0 +1,172 @@
+Based on the current state of the **SWMM5 Rosetta Stone** app, here's a thorough review. This is actually one of your strongest apps conceptually — a side-by-side code translation viewer is a genuinely useful educational tool. But there are gaps that could hold it back:
+
+---
+
+## What's Working Well ✅
+
+- **Brilliant concept** — Viewing the same SWMM5 algorithm in multiple languages side-by-side is something that doesn't exist elsewhere
+- **Language selection is generous** — C, Rust, Python, Fortran, Julia, JavaScript, Go covers nearly every language a water resources engineer might encounter
+- **Translation Notes are excellent** — The C → Rust note explaining memory safety, iterator chains, and null pointer elimination is genuinely educational
+- **Code is accurate** — The RTK unit hydrograph math is correct in both the C and Rust versions
+- **Module selector exists** —`rdii.c` and`runoff.c` tabs show there's more than one module
+
+---
+
+## What's Missing
+
+### 🔴 High Priority — Content & Functionality Gaps
+
+**1. Only 2 Modules Visible (`rdii.c` and`runoff.c`)**
+
+SWMM5 has **~40+ source files** in its engine. Two modules makes this feel like a demo, not a tool. The most-requested modules for learning are:
+
+| | Priority | Module | Why Engineers Want It | |
+|---|---|---|
+| | 🔴 | |`routing.c`| | The St. Venant equation solver — the heart of SWMM | |
+| | 🔴 | |`dynwave.c`| | Dynamic wave routing (most complex algorithm) | |
+| | 🔴 | |`flowrout.c`| | Flow routing dispatch (kinematic vs. dynamic) | |
+| | 🟠 | |`subcatch.c`| | Subcatchment runoff calculations | |
+| | 🟠 | |`infil.c`| | Green-Ampt, Horton, CN infiltration | |
+| | 🟠 | |`lid.c`| | LID/BMP controls (hot topic for stormwater) | |
+| | 🟠 | |`link.c`| | Pipe/conduit hydraulics | |
+| | 🟡 | |`node.c`| | Junction/storage node calculations | |
+| | 🟡 | |`rain.c`| | Rainfall processing | |
+| | 🟡 | |`massbal.c`| | Mass balance / continuity checks | |
+
+**Recommendation:** Even adding just`routing.c` and`infil.c` would triple the app's value. These are the modules people actually study.
+
+**2. Only 2 of 7 Languages Are Shown**
+
+The LEFT panel shows C code. The RIGHT panel shows Rust. But the selector lists **7 languages** (C, Rust, Python, Fortran, Julia, JavaScript, Go).
+
+**Key question:** Do the other 5 translations actually exist? If a user selects "Python" on the right panel, do they see Python code, or does nothing happen?
+
+- If translations exist → great, but the default should show the **most popular pairing** (C ↔ Python, not C ↔ Rust)
+- If translations don't exist yet → **gray out the unavailable languages** and add a label: *"Coming soon"*. Showing 7 clickable options that produce no output is worse than showing 2 that work.
+
+**3. Translation Notes Only Cover C → Rust**
+
+The note says:
+> **C → Rust:** Rust enforces memory safety at compile time...
+
+But what about:
+- **C → Python:** How does the struct become a class? What about NumPy vectorization?
+- **C → Fortran:** How does the pointer-based access translate to Fortran's array-first paradigm?
+- **C → Julia:** How do multiple dispatch and type annotations compare?
+
+**Each language pair needs its own translation note.** This is arguably the most educational part of the app.
+
+**Fix:** Add a note template for each pair:
+```
+C → Python:  Notice how the typedef struct becomes a Python 
+             dataclass. The nested for loops can be replaced 
+             with numpy convolution (np.convolve)...
+
+C → Fortran: Fortran uses column-major arrays and 1-based 
+             indexing. The pointer dereference uh->t becomes 
+             uh%t using Fortran's derived type syntax...
+```
+
+---
+
+### 🟠 Medium Priority — UX & Navigation
+
+**4. No Search or Jump-to-Function**
+
+The code shown has two functions:`rdii_getUnitHydOrd` and`rdii_getRdiiFlow`. In larger modules like`routing.c` (which has 10+ functions), users need to jump to a specific function.
+
+**Fix:** Add a function dropdown or clickable index:
+```
+Functions in rdii.c:
+  → rdii_getUnitHydOrd()  (line 13)
+  → rdii_getRdiiFlow()    (line 41)
+```
+
+**5. No Line-by-Line Correspondence Highlighting**
+
+The most powerful feature of a Rosetta Stone viewer is showing **which line on the left corresponds to which line on the right**. Currently, both panels are independent code blocks.
+
+**Fix:** When a user hovers over line 19 in C (`tBase = uh->t * (1.0 + uh->k)`), highlight line 17 in Rust (`let t_base = self.t * (1.0 + self.k)`). This is the killer feature that would make this app truly unique.
+
+**6. The`☀` Icon — What Is It?**
+
+Next to the module selector:`rdii.c runoff.c ☀`
+
+Is this a dark/light mode toggle? A sun icon with no label is ambiguous. If it's a theme toggle:
+
+**Fix:** Replace with a labeled toggle:`🌙 Dark / ☀ Light` or use a standard toggle switch.
+
+**7. The`▸` /`▾` Expand/Collapse Symbols Are Subtle**
+
+The description block uses`▸ Details` (collapsed) and`▾ Translation Notes` (expanded). These are very small text characters that users might not recognize as interactive.
+
+**Fix:** Use standard expand/collapse UI (chevron icons, accordion components) or add "Show/Hide" text.
+
+---
+
+### 🟡 Low Priority — Polish
+
+**8. No "Copy Code" Button**
+
+Engineers will want to copy the Python or Rust version to use in their own projects. Currently they'd have to manually select all text.
+
+**Fix:** Add a 📋 button in the top-right corner of each code panel.
+
+**9. No "About" or Context Section**
+
+A new visitor might wonder:
+- What is SWMM5?
+- Why translate engine code?
+- Who is this for?
+
+The subtitle says "EPA SWMM5 Engine Code — Multi-Language Translation Viewer" but there's no 2-sentence explanation of the *purpose.*
+
+**Fix:** Add a collapsible intro:
+> *"SWMM5 is the world's most widely used urban drainage model. This tool shows the original C engine code translated into modern languages, helping engineers understand both the algorithms and the language differences."*
+
+**10. Footer Links to`swmm5.org`**
+
+The footer says:
+> SWMM5 Rosetta Stone • EPA Storm Water Management Model • Engine Code Translations • **swmm5.org**
+
+Verify that`swmm5.org` is the correct link (the official EPA page is`epa.gov/water-research/epanet`... wait, that's EPANET). The official SWMM page is`epa.gov/water-research/storm-water-management-model-swmm`. Make sure`swmm5.org` actually resolves and isn't a dead link.
+
+**11. Difficulty Badge Says "🟡 Intermediate"**
+
+This appeared in the earlier fetch:
+> Hydrology 🟡 Intermediate
+
+But`rdii.c` is actually **advanced** for most users (convolution, unit hydrographs, RTK parameters). Consider:
+-`rdii.c` → 🟠 Advanced
+-`runoff.c` → 🟡 Intermediate
+-`rain.c` (if added) → 🟢 Beginner
+
+---
+
+## The Big Missing Feature
+
+**12. No "Swap Panels" Shortcut**
+
+The`⇄` symbol appears between the panels, suggesting you can swap left/right. But can a user do **Python ↔ Julia** (no C at all)? If the tool *requires* C on one side, state that clearly:
+
+> "Left panel: Original C source | Right panel: Choose translation"
+
+If any language can go on either side, that's powerful — but make sure it actually works for all 42 possible pairings (7 × 6).
+
+---
+
+## Summary: What to Build Next
+
+| | | Priority | What | Impact | |
+|---|---|---|
+| | 🔴 | Add`routing.c`,`infil.c`,`subcatch.c` modules | Triples content |
+| | | 🔴 | Verify all 7 languages actually work (or gray out missing ones) | Prevents user frustration | |
+| | | 🔴 | Add translation notes for each language pair | Educational core | |
+| | | 🟠 | Line-by-line hover highlighting between panels | Killer differentiator | |
+| | | 🟠 | Function index / jump-to-function | Necessary for larger modules | |
+| | | 🟠 | "Copy Code" button on each panel | Basic utility | |
+| | | 🟡 | Label the ☀ icon | Clarity | |
+| | | 🟡 | Add brief "About" intro | Context for new visitors | |
+| | 🟡 | Verify`swmm5.org` footer link | Broken link check |
+
+**Bottom line:** The concept is a 10/10. The execution is currently a solid demo with 2 modules and 1 language pair fully working. The path from "demo" to "indispensable reference tool" is adding **more modules**, **confirming all languages work**, and **per-pair translation notes**. The line-by-line highlighting would make it truly unique — nothing else like it exists in the water resources space.
