@@ -3,7 +3,16 @@ import { useState, useEffect, useRef } from "react";
 // ─── Code Samples ────────────────────────────────────────────────────
 const modules = {
   "rdii.c — RTK Unit Hydrograph": {
-    description: "Computes RDII inflow using the RTK unit hydrograph method. Three triangular unit hydrographs (R, T, K) represent short-term, medium-term, and long-term rainfall response.",
+    category: "Hydrology",
+    difficulty: "intermediate",
+    description: "Computes how rainfall enters the sewer system through cracked pipes, deteriorated manholes, and illegal connections. Uses three triangular unit hydrographs (R, T, K) representing short-term, medium-term, and long-term rainfall response. This is SWMM5's method for modeling \"wet weather\" inflow — the extra flow that overwhelms sewers during storms.",
+    equations: "Q(t) = R * P(t) * UH(t), where UH is triangular with peak = 2/T_base at time T, base = T*(1+K)",
+    inputs: "Rainfall time series, R/T/K parameters per unit hydrograph, subcatchment area",
+    outputs: "RDII flow time series (added to dry weather flow at each node)",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "PySWMM Wrapper", url: "https://github.com/pyswmm/pyswmm" },
+    ],
     c: `// rdii.c — RTK Unit Hydrograph Response
 // EPA SWMM5 Engine — Rain-Dependent Infiltration/Inflow
 // Computes RDII flow from rainfall using three
@@ -433,7 +442,16 @@ func GetRdiiFlow(uh [3]UnitHyd, rainfall []float64,
 }`,
   },
   "runoff.c — Surface Runoff": {
-    description: "Computes nonlinear reservoir surface runoff using Manning's equation. Transforms subcatchment rainfall excess into overland flow via the kinematic wave approximation.",
+    category: "Hydrology",
+    difficulty: "intermediate",
+    description: "Computes how rainwater flows across the land surface into the drainage system. Uses Manning's equation with a nonlinear reservoir approach — water pools on the surface (depression storage) and only runs off once the depth exceeds what the ground can hold. Also includes Green-Ampt infiltration to determine how much rainfall soaks into the soil versus becoming runoff.",
+    equations: "Q = (W * S^0.5 / n) * (d - d_store)^(5/3) / A (Manning's); f = Ks * (1 + psi * deficit / F) (Green-Ampt)",
+    inputs: "Subcatchment area, width, slope, Manning's n, depression storage, soil properties",
+    outputs: "Surface runoff flow rate, infiltration rate",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
     c: `// runoff.c — Nonlinear Reservoir Surface Runoff
 // EPA SWMM5 Engine — Subcatchment Overland Flow
 // Uses Manning's equation with depth-based nonlinear
@@ -832,11 +850,40 @@ function highlightCode(code, langId) {
   return html;
 }
 
+// ─── Difficulty Badge ────────────────────────────────────────────────
+
+const difficultyConfig = {
+  accessible: { label: "Accessible", color: "#50a14f", icon: "\u{1F7E2}" },
+  intermediate: { label: "Intermediate", color: "#c18401", icon: "\u{1F7E1}" },
+  advanced: { label: "Advanced", color: "#e45649", icon: "\u{1F534}" },
+};
+
 // ─── Components ──────────────────────────────────────────────────────
 
-function CodePanel({ code, langId, label, color, t }) {
-  const ref = useRef(null);
+function CodePanel({ code, langId, label, color, t, scrollRef, onScroll }) {
+  const [copied, setCopied] = useState(false);
   const lines = code.split("\n");
+
+  const handleCopy = async () => {
+    try {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(code);
+      } else {
+        const ta = document.createElement("textarea");
+        ta.value = code;
+        ta.style.position = "fixed";
+        ta.style.left = "-9999px";
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand("copy");
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  };
 
   return (
     <div style={{
@@ -867,8 +914,26 @@ function CodePanel({ code, langId, label, color, t }) {
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
           letterSpacing: 0.5,
         }}>{label}</span>
+        <button
+          onClick={handleCopy}
+          title="Copy code"
+          style={{
+            marginLeft: "auto",
+            padding: "3px 8px",
+            borderRadius: 4,
+            border: `1px solid ${t.border}`,
+            background: copied ? t.accent + "22" : "transparent",
+            color: copied ? t.accent : t.textDim,
+            cursor: "pointer",
+            fontSize: 11,
+            fontFamily: "'JetBrains Mono', monospace",
+            transition: "all 0.2s",
+          }}
+        >
+          {copied ? "\u2713 Copied" : "Copy"}
+        </button>
       </div>
-      <div ref={ref} style={{
+      <div ref={scrollRef} onScroll={onScroll} style={{
         flex: 1,
         overflow: "auto",
         padding: "12px 0",
@@ -900,6 +965,77 @@ function CodePanel({ code, langId, label, color, t }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+function ModuleInfoPanel({ mod, t, show, onToggle }) {
+  if (!show) return null;
+
+  const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
+
+  return (
+    <div style={{
+      margin: "0 20px",
+      padding: "16px 20px",
+      background: t.notesBg,
+      border: `1px solid ${t.border}`,
+      borderRadius: 8,
+      fontSize: 13,
+      lineHeight: 1.7,
+      color: t.textMuted,
+    }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+        <span style={{
+          padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600,
+          background: t.accent + "18", color: t.accent, border: `1px solid ${t.accent}33`,
+        }}>{mod.category}</span>
+        <span style={{
+          padding: "2px 10px", borderRadius: 12, fontSize: 11, fontWeight: 600,
+          background: diff.color + "18", color: diff.color, border: `1px solid ${diff.color}33`,
+        }}>{diff.icon} {diff.label}</span>
+      </div>
+
+      {mod.equations && (
+        <div style={{ marginBottom: 8 }}>
+          <strong style={{ color: t.accentAlt }}>Equations: </strong>
+          <code style={{
+            fontSize: 12, background: t.panelBg, padding: "2px 6px",
+            borderRadius: 4, fontFamily: "'JetBrains Mono', monospace",
+          }}>{mod.equations}</code>
+        </div>
+      )}
+
+      <div style={{ display: "flex", gap: 24, flexWrap: "wrap", marginBottom: 8 }}>
+        {mod.inputs && (
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <strong style={{ color: t.textBright, fontSize: 12 }}>Inputs: </strong>
+            <span style={{ fontSize: 12 }}>{mod.inputs}</span>
+          </div>
+        )}
+        {mod.outputs && (
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <strong style={{ color: t.textBright, fontSize: 12 }}>Outputs: </strong>
+            <span style={{ fontSize: 12 }}>{mod.outputs}</span>
+          </div>
+        )}
+      </div>
+
+      {mod.links && mod.links.length > 0 && (
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 8 }}>
+          {mod.links.map((link, i) => (
+            <a key={i} href={link.url} target="_blank" rel="noopener noreferrer"
+              style={{
+                fontSize: 11, color: t.accent, textDecoration: "none",
+                padding: "3px 10px", borderRadius: 4,
+                border: `1px solid ${t.accent}33`, background: t.accent + "08",
+              }}
+            >
+              {link.label} ↗
+            </a>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -973,12 +1109,40 @@ export default function SWMM5CodeViewer() {
   const [leftLang, setLeftLang] = useState("c");
   const [rightLang, setRightLang] = useState("rust");
   const [showNotes, setShowNotes] = useState(true);
+  const [showModuleInfo, setShowModuleInfo] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [isMobile, setIsMobile] = useState(false);
+
+  const leftScrollRef = useRef(null);
+  const rightScrollRef = useRef(null);
+  const isSyncing = useRef(false);
+
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 900);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+
+  const handleScrollSync = (source) => () => {
+    if (isSyncing.current) return;
+    const srcEl = source === "left" ? leftScrollRef.current : rightScrollRef.current;
+    const tgtEl = source === "left" ? rightScrollRef.current : leftScrollRef.current;
+    if (!srcEl || !tgtEl) return;
+    const srcMax = srcEl.scrollHeight - srcEl.clientHeight;
+    const tgtMax = tgtEl.scrollHeight - tgtEl.clientHeight;
+    if (srcMax <= 0 || tgtMax <= 0) return;
+    isSyncing.current = true;
+    const ratio = srcEl.scrollTop / srcMax;
+    tgtEl.scrollTop = Math.round(ratio * tgtMax);
+    requestAnimationFrame(() => { isSyncing.current = false; });
+  };
 
   const t = themes[theme];
   const mod = modules[selectedModule];
   const leftInfo = languages.find((l) => l.id === leftLang);
   const rightInfo = languages.find((l) => l.id === rightLang);
+  const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
 
   const translationNotes = {
     rust: "Rust enforces memory safety at compile time. Notice how the C pointer-based struct access (&uh[i]) becomes Rust references with lifetime guarantees. The iterator chain in get_rdii_flow replaces the nested for loops with a more functional approach. No null pointers possible — the type system prevents it.",
@@ -1053,6 +1217,10 @@ export default function SWMM5CodeViewer() {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: ${t.scrollThumb}; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: ${t.scrollThumbHover}; }
+        @media (max-width: 899px) {
+          .lang-tab { padding: 5px 8px !important; font-size: 11px !important; }
+          .mod-btn { padding: 4px 8px !important; font-size: 11px !important; }
+        }
       `}</style>
 
       {/* Header */}
@@ -1113,11 +1281,39 @@ export default function SWMM5CodeViewer() {
         fontSize: 13,
         color: t.textMuted,
         borderBottom: `1px solid ${t.borderSubtle}`,
-        lineHeight: 1.5,
+        lineHeight: 1.6,
       }}>
-        <span style={{ color: t.accent, fontWeight: 600, marginRight: 8 }}>▸</span>
-        {mod.description}
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6, flexWrap: "wrap" }}>
+              <span style={{
+                padding: "1px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600,
+                background: t.accent + "18", color: t.accent, border: `1px solid ${t.accent}33`,
+              }}>{mod.category}</span>
+              <span style={{
+                padding: "1px 8px", borderRadius: 10, fontSize: 10, fontWeight: 600,
+                background: diff.color + "18", color: diff.color, border: `1px solid ${diff.color}33`,
+              }}>{diff.icon} {diff.label}</span>
+            </div>
+            {mod.description}
+          </div>
+          <button
+            onClick={() => setShowModuleInfo(!showModuleInfo)}
+            style={{
+              padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`,
+              background: showModuleInfo ? t.modActiveBg : "transparent",
+              color: showModuleInfo ? t.accent : t.textDim,
+              cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
+              fontFamily: "'IBM Plex Sans', sans-serif",
+            }}
+          >
+            {showModuleInfo ? "▾" : "▸"} Details
+          </button>
+        </div>
       </div>
+
+      {/* Module Info Panel */}
+      {showModuleInfo && <ModuleInfoPanel mod={mod} t={t} show={showModuleInfo} />}
 
       {/* Language Selectors */}
       <div style={{
@@ -1205,36 +1401,47 @@ export default function SWMM5CodeViewer() {
       {/* Code Panels */}
       <div style={{
         display: "flex",
+        flexDirection: isMobile ? "column" : "row",
         gap: 12,
         padding: "16px 20px 24px",
-        height: "calc(100vh - 260px)",
-        minHeight: 400,
+        height: isMobile ? "auto" : "calc(100vh - 280px)",
+        minHeight: isMobile ? 0 : 400,
       }}>
-        <CodePanel
-          code={mod[leftLang]}
-          langId={leftLang}
-          label={`${leftInfo.label} ${leftInfo.ext}`}
-          color={leftInfo.color}
-          t={t}
-        />
-        <div style={{
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 4,
-          flexShrink: 0,
-          padding: "0 4px",
-        }}>
-          <div style={{ color: t.textFaint, fontSize: 18 }}>⇄</div>
+        <div style={{ flex: 1, minHeight: isMobile ? 350 : 0, display: "flex", flexDirection: "column" }}>
+          <CodePanel
+            code={mod[leftLang]}
+            langId={leftLang}
+            label={`${leftInfo.label} ${leftInfo.ext}`}
+            color={leftInfo.color}
+            t={t}
+            scrollRef={leftScrollRef}
+            onScroll={handleScrollSync("left")}
+          />
         </div>
-        <CodePanel
-          code={mod[rightLang]}
-          langId={rightLang}
-          label={`${rightInfo.label} ${rightInfo.ext}`}
-          color={rightInfo.color}
-          t={t}
-        />
+        {!isMobile && (
+          <div style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 4,
+            flexShrink: 0,
+            padding: "0 4px",
+          }}>
+            <div style={{ color: t.textFaint, fontSize: 18 }}>⇄</div>
+          </div>
+        )}
+        <div style={{ flex: 1, minHeight: isMobile ? 350 : 0, display: "flex", flexDirection: "column" }}>
+          <CodePanel
+            code={mod[rightLang]}
+            langId={rightLang}
+            label={`${rightInfo.label} ${rightInfo.ext}`}
+            color={rightInfo.color}
+            t={t}
+            scrollRef={rightScrollRef}
+            onScroll={handleScrollSync("right")}
+          />
+        </div>
       </div>
 
       {/* Footer */}
