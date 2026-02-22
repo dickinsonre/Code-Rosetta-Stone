@@ -5,7 +5,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Two top-level tabs: "Rosetta Stone" (code comparison) and "PySWMM4" (embedded SWMM4PyExplorer via iframe from https://swmm-explorer-1-robertdickinson.replit.app)
+- Three top-level tabs: "Rosetta Stone" (code comparison), "PySWMM4" (embedded SWMM4PyExplorer via iframe from https://swmm-explorer-1-robertdickinson.replit.app), and "MicroGPT" (embedded SWMM5 MicroGPT via iframe from https://micro-gpt-swmm.replit.app)
 - Ten SWMM5 modules organized by engineering priority:
   - routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch)
   - subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure)
