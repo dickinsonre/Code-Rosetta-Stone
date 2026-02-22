@@ -321,6 +321,7 @@ export default function SWMM5CodeViewer() {
   const [isMobile, setIsMobile] = useState(false);
   const [showLanding, setShowLanding] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState("rosetta");
 
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
@@ -457,6 +458,19 @@ export default function SWMM5CodeViewer() {
           transition: all 0.2s;
         }
         .theme-toggle:hover { background: ${t.hoverBg}; color: ${t.text}; }
+        .app-tab {
+          padding: 10px 20px; border: none; cursor: pointer;
+          font-size: 13px; font-weight: 600; transition: all 0.2s;
+          font-family: 'IBM Plex Sans', sans-serif;
+          background: transparent; color: ${t.textMuted};
+          border-bottom: 2px solid transparent;
+          display: flex; align-items: center; gap: 6px;
+        }
+        .app-tab:hover { color: ${t.text}; background: ${t.hoverBg}; }
+        .app-tab.active {
+          color: ${t.accent}; border-bottom-color: ${t.accent};
+          background: ${t.modActiveBg};
+        }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -467,6 +481,65 @@ export default function SWMM5CodeViewer() {
           .mod-btn { padding: 4px 8px !important; font-size: 11px !important; }
         }
       `}</style>
+
+      {/* Top Tab Bar */}
+      <div style={{
+        display: "flex",
+        alignItems: "center",
+        borderBottom: `1px solid ${t.borderLight}`,
+        background: t.panelHeader,
+        gap: 0,
+      }}>
+        <button
+          className={`app-tab ${activeTab === "rosetta" ? "active" : ""}`}
+          onClick={() => setActiveTab("rosetta")}
+        >
+          <span style={{
+            width: 20, height: 20, borderRadius: 5,
+            background: `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt} 100%)`,
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, fontWeight: 700, color: "#fff",
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>S5</span>
+          Rosetta Stone
+        </button>
+        <button
+          className={`app-tab ${activeTab === "pyswmm4" ? "active" : ""}`}
+          onClick={() => setActiveTab("pyswmm4")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDC0D"}</span>
+          PySWMM4
+        </button>
+        <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
+          <button
+            className="theme-toggle"
+            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
+            style={{ width: 30, height: 30, fontSize: 16 }}
+          >
+            {theme === "dark" ? "\u2600" : "\u263E"}
+          </button>
+        </div>
+      </div>
+
+      {/* PySWMM4 Tab */}
+      {activeTab === "pyswmm4" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://swmm-explorer-1-robertdickinson.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="SWMM4PyExplorer"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* Rosetta Stone Tab Content */}
+      {activeTab === "rosetta" && <>
 
       {/* Landing/About Section */}
       {showLanding && (
@@ -652,13 +725,6 @@ export default function SWMM5CodeViewer() {
               justifyContent: "center", textDecoration: "none",
               fontSize: 13, transition: "all 0.2s",
             }}>X</a>
-          <button
-            className="theme-toggle"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-          >
-            {theme === "dark" ? "\u2600" : "\u263E"}
-          </button>
         </div>
       </div>
 
@@ -858,6 +924,8 @@ export default function SWMM5CodeViewer() {
           target="_blank" rel="noopener noreferrer"
           style={{ color: t.textDim, textDecoration: "none" }}>swmm5.org</a>
       </div>
+
+      </>}
     </div>
   );
 }

@@ -4,7 +4,8 @@
 An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 7 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, and Go.
 
 ## Current State
-- Fully functional single-page React application
+- Fully functional single-page React application with tabbed interface
+- Two top-level tabs: "Rosetta Stone" (code comparison) and "PySWMM4" (embedded SWMM4PyExplorer via iframe from https://swmm-explorer-1-robertdickinson.replit.app)
 - Ten SWMM5 modules organized by engineering priority:
   - routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch)
   - subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure)
