@@ -538,6 +538,13 @@ export default function SWMM5CodeViewer() {
           <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "serif" }}>R</span>
           swmmr
         </button>
+        <button
+          className={`app-tab ${activeTab === "swmanywhere" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmanywhere")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83C\uDF0D"}</span>
+          SWMManywhere
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -625,6 +632,22 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="swmmr Explorer"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* SWMManywhere Tab */}
+      {activeTab === "swmanywhere" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://swm-explorer.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="SWMManywhere Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
