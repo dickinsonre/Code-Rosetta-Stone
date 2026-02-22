@@ -524,6 +524,13 @@ export default function SWMM5CodeViewer() {
           <span style={{ fontSize: 15 }}>{"\uD83D\uDDA5\uFE0F"}</span>
           SWMM GUI
         </button>
+        <button
+          className={`app-tab ${activeTab === "swmmcat" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmmcat")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83C\uDF26\uFE0F"}</span>
+          SWMM-CAT
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -579,6 +586,22 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="SWMM GUI Explorer"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* SWMM-CAT Tab */}
+      {activeTab === "swmmcat" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://swmm-explorer-2.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="SWMM-CAT Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
