@@ -504,13 +504,6 @@ export default function SWMM5CodeViewer() {
           Rosetta Stone
         </button>
         <button
-          className={`app-tab ${activeTab === "pyswmm4" ? "active" : ""}`}
-          onClick={() => setActiveTab("pyswmm4")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83D\uDC0D"}</span>
-          PySWMM4
-        </button>
-        <button
           className={`app-tab ${activeTab === "microgpt" ? "active" : ""}`}
           onClick={() => setActiveTab("microgpt")}
         >
@@ -518,39 +511,11 @@ export default function SWMM5CodeViewer() {
           MicroGPT
         </button>
         <button
-          className={`app-tab ${activeTab === "swmmgui" ? "active" : ""}`}
-          onClick={() => setActiveTab("swmmgui")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83D\uDDA5\uFE0F"}</span>
-          SWMM GUI
-        </button>
-        <button
-          className={`app-tab ${activeTab === "swmmcat" ? "active" : ""}`}
-          onClick={() => setActiveTab("swmmcat")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83C\uDF26\uFE0F"}</span>
-          SWMM-CAT
-        </button>
-        <button
-          className={`app-tab ${activeTab === "swmmr" ? "active" : ""}`}
-          onClick={() => setActiveTab("swmmr")}
-        >
-          <span style={{ fontSize: 15, fontWeight: 700, fontFamily: "serif" }}>R</span>
-          swmmr
-        </button>
-        <button
           className={`app-tab ${activeTab === "swmanywhere" ? "active" : ""}`}
           onClick={() => setActiveTab("swmanywhere")}
         >
           <span style={{ fontSize: 15 }}>{"\uD83C\uDF0D"}</span>
           SWMManywhere
-        </button>
-        <button
-          className={`app-tab ${activeTab === "pyswmm5" ? "active" : ""}`}
-          onClick={() => setActiveTab("pyswmm5")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83D\uDC0D"}</span>
-          PySWMM5
         </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
@@ -563,22 +528,6 @@ export default function SWMM5CodeViewer() {
           </button>
         </div>
       </div>
-
-      {/* PySWMM4 Tab */}
-      {activeTab === "pyswmm4" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swmm-explorer-1-robertdickinson.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="SWMM4PyExplorer"
-            allow="clipboard-read; clipboard-write"
-          />
-        </div>
-      )}
 
       {/* MicroGPT Tab */}
       {activeTab === "microgpt" && (
@@ -596,54 +545,6 @@ export default function SWMM5CodeViewer() {
         </div>
       )}
 
-      {/* SWMM GUI Tab */}
-      {activeTab === "swmmgui" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swmm-explorer-1.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="SWMM GUI Explorer"
-            allow="clipboard-read; clipboard-write"
-          />
-        </div>
-      )}
-
-      {/* SWMM-CAT Tab */}
-      {activeTab === "swmmcat" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swmm-explorer-2.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="SWMM-CAT Explorer"
-            allow="clipboard-read; clipboard-write"
-          />
-        </div>
-      )}
-
-      {/* swmmr Tab */}
-      {activeTab === "swmmr" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swmmr-explorer.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="swmmr Explorer"
-            allow="clipboard-read; clipboard-write"
-          />
-        </div>
-      )}
-
       {/* SWMManywhere Tab */}
       {activeTab === "swmanywhere" && (
         <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
@@ -655,22 +556,6 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="SWMManywhere Explorer"
-            allow="clipboard-read; clipboard-write"
-          />
-        </div>
-      )}
-
-      {/* PySWMM5 Tab */}
-      {activeTab === "pyswmm5" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swmm-explorer-2.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="PySWMM5 Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
