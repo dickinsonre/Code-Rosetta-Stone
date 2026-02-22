@@ -664,13 +664,13 @@ export default function SWMM5CodeViewer() {
       {activeTab === "pyswmm5" && (
         <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
           <iframe
-            src="https://swmm-explorer.replit.app"
+            src="https://swmm-explorer-2.replit.app"
             style={{
               width: "100%",
               height: "100%",
               border: "none",
             }}
-            title="PySWMM Explorer"
+            title="PySWMM5 Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
