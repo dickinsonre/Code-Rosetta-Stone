@@ -517,6 +517,13 @@ export default function SWMM5CodeViewer() {
           <span style={{ fontSize: 15 }}>{"\uD83E\uDDE0"}</span>
           MicroGPT
         </button>
+        <button
+          className={`app-tab ${activeTab === "swmmgui" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmmgui")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDDA5\uFE0F"}</span>
+          SWMM GUI
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -556,6 +563,22 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="SWMM5 MicroGPT"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* SWMM GUI Tab */}
+      {activeTab === "swmmgui" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://swmm-explorer-1.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="SWMM GUI Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
