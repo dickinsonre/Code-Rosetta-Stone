@@ -524,6 +524,13 @@ export default function SWMM5CodeViewer() {
           <span style={{ fontSize: 15 }}>{"\uD83D\uDC0D"}</span>
           PySWMM
         </button>
+        <button
+          className={`app-tab ${activeTab === "hydrocouple" ? "active" : ""}`}
+          onClick={() => setActiveTab("hydrocouple")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDCA7"}</span>
+          HydroCouple
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -579,6 +586,22 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="PySWMM Explorer"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* HydroCouple Tab */}
+      {activeTab === "hydrocouple" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://hydro-couple-explorer.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="HydroCouple Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
