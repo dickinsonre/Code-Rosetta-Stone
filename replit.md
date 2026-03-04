@@ -6,11 +6,12 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 ## Current State
 - Fully functional single-page React application with tabbed interface
 - Five top-level tabs: "Rosetta Stone" (code comparison), "MicroGPT" (embedded SWMM5 MicroGPT via iframe from https://micro-gpt-swmm.replit.app), "SWMManywhere" (embedded SWMManywhere urban drainage synthesizer via iframe from https://swm-explorer.replit.app), "PySWMM" (embedded PySWMM Explorer via iframe from https://pyswmm-explorer.replit.app), and "HydroCouple" (embedded HydroCouple Explorer via iframe from https://hydro-couple-explorer.replit.app)
-- Ten SWMM5 modules organized by engineering priority:
-  - routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch)
-  - subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure)
-  - link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes)
-  - rain.c (Rainfall Processing), massbal.c (Mass Balance Checking)
+- Sixteen SWMM5 modules organized by engineering priority:
+  - Hydraulics: routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch), kinwave.c (Kinematic Wave Routing), xsect.c (Cross-Section Geometry), link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes)
+  - Hydrology: subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure), gwater.c (Groundwater Flow), climate.c (Climate/Evaporation Processing)
+  - Water Quality: qualrout.c (Water Quality Routing)
+  - Operations: controls.c (Rule-Based Controls)
+  - Data Processing: rain.c (Rainfall Processing), massbal.c (Mass Balance Checking)
 - 23 languages organized in tiers:
   - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
   - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal
