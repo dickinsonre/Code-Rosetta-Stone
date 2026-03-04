@@ -1,7 +1,7 @@
 # SWMM5 Rosetta Stone
 
 ## Overview
-An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 8 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, and Zig.
+An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 23 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, C#, MATLAB, R, Delphi/Pascal, TypeScript, CUDA, WebAssembly/WAT, Mojo, Java, Nim, Ada, Chapel, Swift, and Kotlin.
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
@@ -11,6 +11,11 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure)
   - link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes)
   - rain.c (Rainfall Processing), massbal.c (Mass Balance Checking)
+- 23 languages organized in tiers:
+  - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
+  - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal
+  - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
+  - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
 - Dark/light theme toggle
 - Synchronized scrolling between code panels
@@ -20,13 +25,13 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Landing/About section with project overview and EPA SWMM5 link
 - Search/Filter to find modules by concept, equation, tag, or description
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
-- Per-language-pair translation notes (28 pairs covering all 8 languages)
+- Per-language-pair translation notes (253 pairs covering all 23 languages)
 
 ## Project Architecture
 - **Framework**: React + Vite
 - **Structure**: 
-  - `src/modules.js` — All module data (~5100 lines: code samples, metadata, languages, translation notes with 21 language-pair keys)
-  - `src/App.jsx` — UI components, themes, syntax highlighting, main app (~860 lines)
+  - `src/modules.js` — All module data (code samples for 23 languages × 10 modules, metadata, languages array, 253 translation notes)
+  - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
 - **Port**: 5000 (Vite dev server)

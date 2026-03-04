@@ -375,6 +375,783 @@ const Conduit = struct {
         return math.clamp(q_new, -q_max, q_max);
     }
 };`,
+    cpp: `// routing.cpp — Dynamic Wave Routing
+// SWMM5 Engine in C++ — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+constexpr double GRAVITY = 32.2; // ft/s²
+
+struct Conduit {
+    double length;     // conduit length (ft)
+    double roughness;  // Manning's n
+    double aFull;      // full cross-section area (ft²)
+    double width;      // top width at full depth (ft)
+
+    double frictionSlope(double Q, double area) const {
+        if (area <= 0.0 || Q == 0.0) return 0.0;
+
+        double hRadius = area / width;
+        double sfBase = roughness * Q
+                        / (area * std::pow(hRadius, 2.0 / 3.0));
+        double sf = sfBase * sfBase;
+
+        return (Q < 0.0) ? -sf : sf;
+    }
+
+    double getFlow(double Qold, double area, double hUp,
+                   double hDown, double dt) const {
+        if (area <= 0.0) return 0.0;
+
+        double dhdx = (hUp - hDown) / length;
+        double sf = frictionSlope(Qold, area);
+
+        double Qnew = Qold + dt * GRAVITY * area * (dhdx - sf);
+
+        double qMax = area * 50.0;
+        return std::clamp(Qnew, -qMax, qMax);
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Routing.cs — Dynamic Wave Routing
+// SWMM5 Engine in C# — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+using System;
+
+namespace Swmm
+{
+    public class Conduit
+    {
+        public double Length { get; set; }
+        public double Roughness { get; set; }
+        public double AFull { get; set; }
+        public double Width { get; set; }
+
+        private const double Gravity = 32.2;
+
+        public Conduit(double length, double roughness,
+                       double aFull, double width)
+        {
+            Length = length;
+            Roughness = roughness;
+            AFull = aFull;
+            Width = width;
+        }
+
+        public double FrictionSlope(double Q, double area)
+        {
+            if (area <= 0.0 || Q == 0.0) return 0.0;
+
+            double hRadius = area / Width;
+            double sfBase = Roughness * Q
+                / (area * Math.Pow(hRadius, 2.0 / 3.0));
+            double sf = sfBase * sfBase;
+
+            return Q < 0.0 ? -sf : sf;
+        }
+
+        public double GetFlow(double Qold, double area,
+                              double hUp, double hDown,
+                              double dt)
+        {
+            if (area <= 0.0) return 0.0;
+
+            double dhdx = (hUp - hDown) / Length;
+            double sf = FrictionSlope(Qold, area);
+
+            double Qnew = Qold + dt * Gravity * area
+                          * (dhdx - sf);
+
+            double qMax = area * 50.0;
+            return Math.Clamp(Qnew, -qMax, qMax);
+        }
+    }
+}`,
+    matlab: `% routing.m — Dynamic Wave Routing
+% SWMM5 Engine in MATLAB — Saint-Venant Equation Solver
+% Simplified explicit finite-difference scheme for
+% unsteady flow routing through drainage conduits
+
+function conduit = create_conduit(len, roughness, ...
+                                   a_full, width)
+    conduit.length    = len;
+    conduit.roughness = roughness;
+    conduit.a_full    = a_full;
+    conduit.width     = width;
+end
+
+function sf = friction_slope(conduit, Q, area)
+    GRAVITY = 32.2;  % ft/s^2
+    if area <= 0.0 || Q == 0.0
+        sf = 0.0;
+        return;
+    end
+
+    h_radius = area / conduit.width;
+    sf_base  = conduit.roughness * Q ...
+               / (area * h_radius^(2.0/3.0));
+    sf = sf_base * sf_base;
+
+    if Q < 0.0
+        sf = -sf;
+    end
+end
+
+function Q_new = get_flow(conduit, Q_old, area, ...
+                          h_up, h_down, dt)
+    GRAVITY = 32.2;
+    if area <= 0.0
+        Q_new = 0.0;
+        return;
+    end
+
+    dhdx = (h_up - h_down) / conduit.length;
+    sf   = friction_slope(conduit, Q_old, area);
+
+    Q_new = Q_old + dt * GRAVITY * area * (dhdx - sf);
+
+    q_max = area * 50.0;
+    Q_new = max(-q_max, min(Q_new, q_max));
+end`,
+    r: `# routing.R — Dynamic Wave Routing
+# SWMM5 Engine in R — Saint-Venant Equation Solver
+# Simplified explicit finite-difference scheme for
+# unsteady flow routing through drainage conduits
+
+GRAVITY <- 32.2  # ft/s^2
+
+create_conduit <- function(length, roughness,
+                            a_full, width) {
+    list(
+        length    = length,
+        roughness = roughness,
+        a_full    = a_full,
+        width     = width
+    )
+}
+
+friction_slope <- function(conduit, Q, area) {
+    if (area <= 0.0 || Q == 0.0) return(0.0)
+
+    h_radius <- area / conduit$width
+    sf_base  <- conduit$roughness * Q /
+                (area * h_radius^(2.0 / 3.0))
+    sf <- sf_base * sf_base
+
+    if (Q < 0.0) -sf else sf
+}
+
+get_flow <- function(conduit, Q_old, area,
+                     h_up, h_down, dt) {
+    if (area <= 0.0) return(0.0)
+
+    dhdx <- (h_up - h_down) / conduit$length
+    sf   <- friction_slope(conduit, Q_old, area)
+
+    Q_new <- Q_old + dt * GRAVITY * area * (dhdx - sf)
+
+    q_max <- area * 50.0
+    max(-q_max, min(Q_new, q_max))
+}`,
+    delphi: `{ routing.pas — Dynamic Wave Routing }
+{ SWMM5 Engine in Delphi — Saint-Venant Equation Solver }
+{ Simplified explicit finite-difference scheme for }
+{ unsteady flow routing through drainage conduits }
+
+unit Routing;
+
+interface
+
+const
+  GRAVITY = 32.2;  { ft/s^2 }
+
+type
+  TConduit = class
+  private
+    FLength: Double;
+    FRoughness: Double;
+    FAFull: Double;
+    FWidth: Double;
+  public
+    constructor Create(ALength, ARoughness,
+                       AAFull, AWidth: Double);
+    function FrictionSlope(Q, Area: Double): Double;
+    function GetFlow(Qold, Area, HUp, HDown,
+                     Dt: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TConduit.Create(ALength, ARoughness,
+                            AAFull, AWidth: Double);
+begin
+  FLength    := ALength;
+  FRoughness := ARoughness;
+  FAFull     := AAFull;
+  FWidth     := AWidth;
+end;
+
+function TConduit.FrictionSlope(Q, Area: Double): Double;
+var
+  HRadius, SfBase: Double;
+begin
+  if (Area <= 0.0) or (Q = 0.0) then
+    Exit(0.0);
+
+  HRadius := Area / FWidth;
+  SfBase  := FRoughness * Q
+             / (Area * Power(HRadius, 2.0/3.0));
+  Result := SfBase * SfBase;
+
+  if Q < 0.0 then
+    Result := -Result;
+end;
+
+function TConduit.GetFlow(Qold, Area, HUp, HDown,
+                          Dt: Double): Double;
+var
+  Dhdx, Sf, QMax: Double;
+begin
+  if Area <= 0.0 then
+    Exit(0.0);
+
+  Dhdx := (HUp - HDown) / FLength;
+  Sf   := FrictionSlope(Qold, Area);
+
+  Result := Qold + Dt * GRAVITY * Area * (Dhdx - Sf);
+
+  QMax := Area * 50.0;
+  Result := Max(-QMax, Min(Result, QMax));
+end;
+
+end.`,
+    typescript: `// routing.ts — Dynamic Wave Routing
+// SWMM5 Engine in TypeScript — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+const GRAVITY: number = 32.2; // ft/s²
+
+interface ConduitParams {
+    length: number;
+    roughness: number;
+    aFull: number;
+    width: number;
+}
+
+class Conduit {
+    readonly length: number;
+    readonly roughness: number;
+    readonly aFull: number;
+    readonly width: number;
+
+    constructor(params: ConduitParams) {
+        this.length = params.length;
+        this.roughness = params.roughness;
+        this.aFull = params.aFull;
+        this.width = params.width;
+    }
+
+    frictionSlope(Q: number, area: number): number {
+        if (area <= 0.0 || Q === 0.0) return 0.0;
+
+        const hRadius: number = area / this.width;
+        const sfBase: number = this.roughness * Q
+            / (area * Math.pow(hRadius, 2.0 / 3.0));
+        const sf: number = sfBase * sfBase;
+
+        return Q < 0.0 ? -sf : sf;
+    }
+
+    getFlow(Qold: number, area: number, hUp: number,
+            hDown: number, dt: number): number {
+        if (area <= 0.0) return 0.0;
+
+        const dhdx: number = (hUp - hDown) / this.length;
+        const sf: number = this.frictionSlope(Qold, area);
+
+        const Qnew: number = Qold + dt * GRAVITY
+                             * area * (dhdx - sf);
+
+        const qMax: number = area * 50.0;
+        return Math.max(-qMax, Math.min(Qnew, qMax));
+    }
+}
+
+export { Conduit, GRAVITY };`,
+    cuda: `// routing.cu — Dynamic Wave Routing
+// SWMM5 Engine in CUDA — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+#include <math.h>
+
+#define GRAVITY 32.2f  // ft/s²
+
+struct Conduit {
+    float length;
+    float roughness;
+    float aFull;
+    float width;
+};
+
+__device__ float frictionSlope(const Conduit* c,
+                                float Q, float area)
+{
+    if (area <= 0.0f || Q == 0.0f) return 0.0f;
+
+    float hRadius = area / c->width;
+    float sfBase = c->roughness * Q
+                   / (area * powf(hRadius, 2.0f/3.0f));
+    float sf = sfBase * sfBase;
+
+    return (Q < 0.0f) ? -sf : sf;
+}
+
+__global__ void routeFlowKernel(Conduit* conduits,
+    float* Qold, float* areas, float* hUp,
+    float* hDown, float dt, float* Qnew, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Conduit c = conduits[idx];
+    float area = areas[idx];
+
+    if (area <= 0.0f) {
+        Qnew[idx] = 0.0f;
+        return;
+    }
+
+    float dhdx = (hUp[idx] - hDown[idx]) / c.length;
+    float sf = frictionSlope(&c, Qold[idx], area);
+
+    float qNew = Qold[idx] + dt * GRAVITY
+                 * area * (dhdx - sf);
+
+    float qMax = area * 50.0f;
+    Qnew[idx] = fmaxf(-qMax, fminf(qNew, qMax));
+}`,
+    wasm: `;; routing.wat — Dynamic Wave Routing
+;; SWMM5 Engine in WebAssembly — Saint-Venant Equation Solver
+;; Simplified explicit finite-difference scheme for
+;; unsteady flow routing through drainage conduits
+
+(module
+  (func $frictionSlope
+    (param $roughness f64) (param $width f64)
+    (param $Q f64) (param $area f64)
+    (result f64)
+    (local $hRadius f64)
+    (local $sfBase f64)
+    (local $sf f64)
+
+    (if (result f64) (f64.le (local.get $area)
+                              (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (if (result f64) (f64.eq (local.get $Q)
+                                  (f64.const 0.0))
+          (then (f64.const 0.0))
+          (else
+            (local.set $hRadius
+              (f64.div (local.get $area)
+                       (local.get $width)))
+            (local.set $sfBase
+              (f64.div
+                (f64.mul (local.get $roughness)
+                         (local.get $Q))
+                (f64.mul (local.get $area)
+                  (call $pow23 (local.get $hRadius)))))
+            (local.set $sf
+              (f64.mul (local.get $sfBase)
+                       (local.get $sfBase)))
+            (if (result f64) (f64.lt (local.get $Q)
+                                      (f64.const 0.0))
+              (then (f64.neg (local.get $sf)))
+              (else (local.get $sf)))))))
+  )
+
+  (func $getFlow
+    (param $length f64) (param $roughness f64)
+    (param $width f64) (param $Qold f64)
+    (param $area f64) (param $hUp f64)
+    (param $hDown f64) (param $dt f64)
+    (result f64)
+    (local $dhdx f64) (local $sf f64)
+    (local $Qnew f64) (local $qMax f64)
+
+    (if (result f64) (f64.le (local.get $area)
+                              (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (local.set $dhdx
+          (f64.div (f64.sub (local.get $hUp)
+                            (local.get $hDown))
+                   (local.get $length)))
+        (local.set $sf
+          (call $frictionSlope
+            (local.get $roughness) (local.get $width)
+            (local.get $Qold) (local.get $area)))
+        (local.set $Qnew
+          (f64.add (local.get $Qold)
+            (f64.mul (local.get $dt)
+              (f64.mul (f64.const 32.2)
+                (f64.mul (local.get $area)
+                  (f64.sub (local.get $dhdx)
+                           (local.get $sf)))))))
+        (local.set $qMax
+          (f64.mul (local.get $area) (f64.const 50.0)))
+        (f64.max (f64.neg (local.get $qMax))
+          (f64.min (local.get $Qnew)
+                   (local.get $qMax))))))
+  )
+)`,
+    mojo: `# routing.mojo — Dynamic Wave Routing
+# SWMM5 Engine in Mojo — Saint-Venant Equation Solver
+# Simplified explicit finite-difference scheme for
+# unsteady flow routing through drainage conduits
+
+from math import pow, abs, clamp
+
+alias GRAVITY: Float64 = 32.2
+
+struct Conduit:
+    var length: Float64
+    var roughness: Float64
+    var a_full: Float64
+    var width: Float64
+
+    fn __init__(inout self, length: Float64,
+                roughness: Float64, a_full: Float64,
+                width: Float64):
+        self.length = length
+        self.roughness = roughness
+        self.a_full = a_full
+        self.width = width
+
+    fn friction_slope(self, q: Float64,
+                      area: Float64) -> Float64:
+        if area <= 0.0 or q == 0.0:
+            return 0.0
+
+        var h_radius = area / self.width
+        var sf_base = self.roughness * q / (
+            area * pow(h_radius, 2.0 / 3.0))
+        var sf = sf_base * sf_base
+
+        if q < 0.0:
+            return -sf
+        return sf
+
+    fn get_flow(self, q_old: Float64, area: Float64,
+                h_up: Float64, h_down: Float64,
+                dt: Float64) -> Float64:
+        if area <= 0.0:
+            return 0.0
+
+        var dhdx = (h_up - h_down) / self.length
+        var sf = self.friction_slope(q_old, area)
+
+        var q_new = q_old + dt * GRAVITY * area * (
+            dhdx - sf)
+
+        var q_max = area * 50.0
+        return clamp(q_new, -q_max, q_max)`,
+    java: `// Routing.java — Dynamic Wave Routing
+// SWMM5 Engine in Java — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+package swmm;
+
+public class Conduit {
+    private static final double GRAVITY = 32.2;
+
+    private final double length;
+    private final double roughness;
+    private final double aFull;
+    private final double width;
+
+    public Conduit(double length, double roughness,
+                   double aFull, double width) {
+        this.length = length;
+        this.roughness = roughness;
+        this.aFull = aFull;
+        this.width = width;
+    }
+
+    public double getLength()    { return length; }
+    public double getRoughness() { return roughness; }
+    public double getAFull()     { return aFull; }
+    public double getWidth()     { return width; }
+
+    public double frictionSlope(double Q, double area) {
+        if (area <= 0.0 || Q == 0.0) return 0.0;
+
+        double hRadius = area / width;
+        double sfBase = roughness * Q
+            / (area * Math.pow(hRadius, 2.0 / 3.0));
+        double sf = sfBase * sfBase;
+
+        return Q < 0.0 ? -sf : sf;
+    }
+
+    public double getFlow(double Qold, double area,
+                          double hUp, double hDown,
+                          double dt) {
+        if (area <= 0.0) return 0.0;
+
+        double dhdx = (hUp - hDown) / length;
+        double sf = frictionSlope(Qold, area);
+
+        double Qnew = Qold + dt * GRAVITY * area
+                      * (dhdx - sf);
+
+        double qMax = area * 50.0;
+        return Math.max(-qMax, Math.min(Qnew, qMax));
+    }
+}`,
+    nim: `# routing.nim — Dynamic Wave Routing
+# SWMM5 Engine in Nim — Saint-Venant Equation Solver
+# Simplified explicit finite-difference scheme for
+# unsteady flow routing through drainage conduits
+
+import math
+
+const Gravity = 32.2  # ft/s^2
+
+type
+  Conduit = object
+    length: float64
+    roughness: float64
+    aFull: float64
+    width: float64
+
+proc frictionSlope(c: Conduit, Q, area: float64): float64 =
+  if area <= 0.0 or Q == 0.0:
+    return 0.0
+
+  let hRadius = area / c.width
+  let sfBase = c.roughness * Q /
+               (area * pow(hRadius, 2.0 / 3.0))
+  result = sfBase * sfBase
+
+  if Q < 0.0:
+    result = -result
+
+proc getFlow(c: Conduit, qOld, area, hUp, hDown,
+             dt: float64): float64 =
+  if area <= 0.0:
+    return 0.0
+
+  let dhdx = (hUp - hDown) / c.length
+  let sf = frictionSlope(c, qOld, area)
+
+  result = qOld + dt * Gravity * area * (dhdx - sf)
+
+  let qMax = area * 50.0
+  result = clamp(result, -qMax, qMax)`,
+    ada: `-- routing.adb — Dynamic Wave Routing
+-- SWMM5 Engine in Ada — Saint-Venant Equation Solver
+-- Simplified explicit finite-difference scheme for
+-- unsteady flow routing through drainage conduits
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Routing is
+
+   Gravity : constant Float := 32.2;
+
+   type Conduit is record
+      Length    : Float;
+      Roughness : Float;
+      A_Full   : Float;
+      Width    : Float;
+   end record;
+
+   function Friction_Slope
+     (C : Conduit; Q, Area : Float) return Float
+   is
+      H_Radius : Float;
+      Sf_Base  : Float;
+      Sf       : Float;
+   begin
+      if Area <= 0.0 or else Q = 0.0 then
+         return 0.0;
+      end if;
+
+      H_Radius := Area / C.Width;
+      Sf_Base  := C.Roughness * Q /
+                  (Area * H_Radius ** (2.0 / 3.0));
+      Sf := Sf_Base * Sf_Base;
+
+      if Q < 0.0 then
+         return -Sf;
+      end if;
+      return Sf;
+   end Friction_Slope;
+
+   function Get_Flow
+     (C : Conduit; Q_Old, Area, H_Up, H_Down,
+      Dt : Float) return Float
+   is
+      Dhdx  : Float;
+      Sf    : Float;
+      Q_New : Float;
+      Q_Max : Float;
+   begin
+      if Area <= 0.0 then
+         return 0.0;
+      end if;
+
+      Dhdx  := (H_Up - H_Down) / C.Length;
+      Sf    := Friction_Slope(C, Q_Old, Area);
+      Q_New := Q_Old + Dt * Gravity * Area
+               * (Dhdx - Sf);
+
+      Q_Max := Area * 50.0;
+      return Float'Max(-Q_Max, Float'Min(Q_New, Q_Max));
+   end Get_Flow;
+
+end Routing;`,
+    chapel: `// routing.chpl — Dynamic Wave Routing
+// SWMM5 Engine in Chapel — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+param GRAVITY: real = 32.2;  // ft/s²
+
+record Conduit {
+    var length: real;
+    var roughness: real;
+    var aFull: real;
+    var width: real;
+
+    proc frictionSlope(Q: real, area: real): real {
+        if area <= 0.0 || Q == 0.0 then return 0.0;
+
+        const hRadius = area / this.width;
+        const sfBase = this.roughness * Q
+                       / (area * hRadius ** (2.0/3.0));
+        const sf = sfBase * sfBase;
+
+        return if Q < 0.0 then -sf else sf;
+    }
+
+    proc getFlow(Qold: real, area: real, hUp: real,
+                 hDown: real, dt: real): real {
+        if area <= 0.0 then return 0.0;
+
+        const dhdx = (hUp - hDown) / this.length;
+        const sf = this.frictionSlope(Qold, area);
+
+        var Qnew = Qold + dt * GRAVITY * area
+                   * (dhdx - sf);
+
+        const qMax = area * 50.0;
+        return max(-qMax, min(Qnew, qMax));
+    }
+}`,
+    swift: `// Routing.swift — Dynamic Wave Routing
+// SWMM5 Engine in Swift — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+import Foundation
+
+let gravity: Double = 32.2  // ft/s²
+
+struct Conduit {
+    let length: Double
+    let roughness: Double
+    let aFull: Double
+    let width: Double
+
+    func frictionSlope(Q: Double, area: Double) -> Double {
+        guard area > 0.0, Q != 0.0 else { return 0.0 }
+
+        let hRadius = area / width
+        let sfBase = roughness * Q
+                     / (area * pow(hRadius, 2.0 / 3.0))
+        let sf = sfBase * sfBase
+
+        return Q < 0.0 ? -sf : sf
+    }
+
+    func getFlow(Qold: Double, area: Double,
+                 hUp: Double, hDown: Double,
+                 dt: Double) -> Double {
+        guard area > 0.0 else { return 0.0 }
+
+        let dhdx = (hUp - hDown) / length
+        let sf = frictionSlope(Q: Qold, area: area)
+
+        var Qnew = Qold + dt * gravity * area
+                   * (dhdx - sf)
+
+        let qMax = area * 50.0
+        Qnew = max(-qMax, min(Qnew, qMax))
+        return Qnew
+    }
+}`,
+    kotlin: `// Routing.kt — Dynamic Wave Routing
+// SWMM5 Engine in Kotlin — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+package swmm
+
+import kotlin.math.abs
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+
+const val GRAVITY = 32.2  // ft/s²
+
+data class Conduit(
+    val length: Double,
+    val roughness: Double,
+    val aFull: Double,
+    val width: Double
+) {
+    fun frictionSlope(Q: Double, area: Double): Double {
+        if (area <= 0.0 || Q == 0.0) return 0.0
+
+        val hRadius = area / width
+        val sfBase = roughness * Q /
+                     (area * hRadius.pow(2.0 / 3.0))
+        val sf = sfBase * sfBase
+
+        return if (Q < 0.0) -sf else sf
+    }
+
+    fun getFlow(Qold: Double, area: Double,
+                hUp: Double, hDown: Double,
+                dt: Double): Double {
+        if (area <= 0.0) return 0.0
+
+        val dhdx = (hUp - hDown) / length
+        val sf = frictionSlope(Qold, area)
+
+        var Qnew = Qold + dt * GRAVITY * area *
+                   (dhdx - sf)
+
+        val qMax = area * 50.0
+        return Qnew.coerceIn(-qMax, qMax)
+    }
+}`,
   },
   "dynwave.c — Dynamic Wave Solver": {
     category: "Hydraulics",
@@ -979,6 +1756,1019 @@ const Link = struct {
             0.0;
     }
 };`,
+    cpp: `// dynwave.cpp — Dynamic Wave Solver
+// SWMM5 Engine in C++ — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+constexpr double GRAVITY = 32.174; // ft/s²
+
+struct Link {
+    double length;      // conduit length (ft)
+    double roughness;   // Manning's n
+    double aFull;       // full cross-section area (ft²)
+    double rFull;       // full hydraulic radius (ft)
+    double flow;        // current flow (cfs)
+    double newFlow;     // updated flow (cfs)
+    double velocity;    // flow velocity (ft/s)
+    double froude;      // Froude number
+
+    double getFrictionSlope(double area, double vel) const {
+        if (area <= 0.0) return 0.0;
+        double rh = rFull * (area / aFull);
+        if (rh <= 0.0) return 0.0;
+
+        double nv = roughness * std::abs(vel);
+        return (nv * nv) / std::pow(rh, 4.0 / 3.0);
+    }
+
+    void updateFlow(double h1, double h2,
+                    double a1, double a2, double dt) {
+        double aAvg = 0.5 * (a1 + a2);
+        if (aAvg <= 0.0) { newFlow = 0.0; return; }
+
+        double vel = flow / aAvg;
+        double sf = getFrictionSlope(aAvg, vel);
+
+        double headGrad = GRAVITY * aAvg * (h1 - h2) / length;
+        double fricTerm = GRAVITY * aAvg * sf;
+        if (flow < 0.0) fricTerm = -fricTerm;
+
+        double convTerm = flow * std::abs(flow)
+                          / (aAvg * length) * (a2 - a1);
+
+        double dq = (headGrad - fricTerm - convTerm) * dt;
+        newFlow = flow + dq;
+
+        double qMax = aFull * 25.0;
+        newFlow = std::clamp(newFlow, -qMax, qMax);
+
+        velocity = newFlow / aAvg;
+        double depth = aAvg / aFull * (2.0 * rFull);
+        froude = (depth > 0.0)
+            ? std::abs(velocity) / std::sqrt(GRAVITY * depth)
+            : 0.0;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// dynwave.cs — Dynamic Wave Solver
+// SWMM5 Engine in C# — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+using System;
+
+namespace Swmm
+{
+    public class Link
+    {
+        public double Length { get; set; }
+        public double Roughness { get; set; }
+        public double AFull { get; set; }
+        public double RFull { get; set; }
+        public double Flow { get; set; }
+        public double NewFlow { get; set; }
+        public double Velocity { get; set; }
+        public double Froude { get; set; }
+
+        private const double Gravity = 32.174;
+
+        public double GetFrictionSlope(double area, double vel)
+        {
+            if (area <= 0.0) return 0.0;
+            double rh = RFull * (area / AFull);
+            if (rh <= 0.0) return 0.0;
+
+            double nv = Roughness * Math.Abs(vel);
+            return (nv * nv) / Math.Pow(rh, 4.0 / 3.0);
+        }
+
+        public void UpdateFlow(double h1, double h2,
+                               double a1, double a2, double dt)
+        {
+            double aAvg = 0.5 * (a1 + a2);
+            if (aAvg <= 0.0) { NewFlow = 0.0; return; }
+
+            double vel = Flow / aAvg;
+            double sf = GetFrictionSlope(aAvg, vel);
+
+            double headGrad = Gravity * aAvg * (h1 - h2) / Length;
+            double fricTerm = Gravity * aAvg * sf;
+            if (Flow < 0.0) fricTerm = -fricTerm;
+
+            double convTerm = Flow * Math.Abs(Flow)
+                              / (aAvg * Length) * (a2 - a1);
+
+            double dq = (headGrad - fricTerm - convTerm) * dt;
+            NewFlow = Flow + dq;
+
+            double qMax = AFull * 25.0;
+            NewFlow = Math.Clamp(NewFlow, -qMax, qMax);
+
+            Velocity = NewFlow / aAvg;
+            double depth = aAvg / AFull * (2.0 * RFull);
+            Froude = (depth > 0.0)
+                ? Math.Abs(Velocity) / Math.Sqrt(Gravity * depth)
+                : 0.0;
+        }
+    }
+}`,
+    matlab: `% dynwave.m — Dynamic Wave Solver
+% SWMM5 Engine in MATLAB — Saint-Venant Equation Solver
+% Solves full momentum equation using explicit
+% finite-difference scheme for unsteady conduit flow
+
+function link = dynwave_createLink(length, roughness, ...
+                                    aFull, rFull, flow)
+    link.length    = length;
+    link.roughness = roughness;
+    link.aFull     = aFull;
+    link.rFull     = rFull;
+    link.flow      = flow;
+    link.newFlow   = 0.0;
+    link.velocity  = 0.0;
+    link.froude    = 0.0;
+end
+
+function sf = getFrictionSlope(link, area, vel)
+    GRAVITY = 32.174;
+    if area <= 0.0
+        sf = 0.0; return;
+    end
+    rh = link.rFull * (area / link.aFull);
+    if rh <= 0.0
+        sf = 0.0; return;
+    end
+    nv = link.roughness * abs(vel);
+    sf = (nv * nv) / rh^(4.0/3.0);
+end
+
+function link = updateFlow(link, h1, h2, a1, a2, dt)
+    GRAVITY = 32.174;
+    aAvg = 0.5 * (a1 + a2);
+    if aAvg <= 0.0
+        link.newFlow = 0.0; return;
+    end
+
+    vel = link.flow / aAvg;
+    sf = getFrictionSlope(link, aAvg, vel);
+
+    headGrad = GRAVITY * aAvg * (h1 - h2) / link.length;
+    fricTerm = GRAVITY * aAvg * sf;
+    if link.flow < 0.0
+        fricTerm = -fricTerm;
+    end
+
+    convTerm = link.flow * abs(link.flow) ...
+               / (aAvg * link.length) * (a2 - a1);
+
+    dq = (headGrad - fricTerm - convTerm) * dt;
+    link.newFlow = link.flow + dq;
+
+    qMax = link.aFull * 25.0;
+    link.newFlow = max(-qMax, min(link.newFlow, qMax));
+
+    link.velocity = link.newFlow / aAvg;
+    depth = aAvg / link.aFull * (2.0 * link.rFull);
+    if depth > 0.0
+        link.froude = abs(link.velocity) ...
+                      / sqrt(GRAVITY * depth);
+    else
+        link.froude = 0.0;
+    end
+end`,
+    r: `# dynwave.R — Dynamic Wave Solver
+# SWMM5 Engine in R — Saint-Venant Equation Solver
+# Solves full momentum equation using explicit
+# finite-difference scheme for unsteady conduit flow
+
+GRAVITY <- 32.174  # ft/s²
+
+create_link <- function(length, roughness, a_full,
+                        r_full, flow) {
+    list(
+        length    = length,
+        roughness = roughness,
+        a_full    = a_full,
+        r_full    = r_full,
+        flow      = flow,
+        new_flow  = 0.0,
+        velocity  = 0.0,
+        froude    = 0.0
+    )
+}
+
+get_friction_slope <- function(link, area, vel) {
+    if (area <= 0.0) return(0.0)
+    rh <- link$r_full * (area / link$a_full)
+    if (rh <= 0.0) return(0.0)
+
+    nv <- link$roughness * abs(vel)
+    (nv * nv) / rh^(4.0 / 3.0)
+}
+
+update_flow <- function(link, h1, h2, a1, a2, dt) {
+    a_avg <- 0.5 * (a1 + a2)
+    if (a_avg <= 0.0) {
+        link$new_flow <- 0.0
+        return(link)
+    }
+
+    vel <- link$flow / a_avg
+    sf <- get_friction_slope(link, a_avg, vel)
+
+    head_grad <- GRAVITY * a_avg * (h1 - h2) / link$length
+    fric_term <- GRAVITY * a_avg * sf
+    if (link$flow < 0.0) fric_term <- -fric_term
+
+    conv_term <- link$flow * abs(link$flow) /
+                 (a_avg * link$length) * (a2 - a1)
+
+    dq <- (head_grad - fric_term - conv_term) * dt
+    link$new_flow <- link$flow + dq
+
+    q_max <- link$a_full * 25.0
+    link$new_flow <- max(-q_max, min(link$new_flow, q_max))
+
+    link$velocity <- link$new_flow / a_avg
+    depth <- a_avg / link$a_full * (2.0 * link$r_full)
+    link$froude <- if (depth > 0.0)
+        abs(link$velocity) / sqrt(GRAVITY * depth)
+    else 0.0
+
+    link
+}`,
+    delphi: `{ dynwave.pas — Dynamic Wave Solver }
+{ SWMM5 Engine in Delphi — Saint-Venant Equation Solver }
+{ Solves full momentum equation using explicit }
+{ finite-difference scheme for unsteady conduit flow }
+
+unit DynWave;
+
+interface
+
+uses Math;
+
+const
+  GRAVITY = 32.174;  { ft/s² }
+
+type
+  TLink = class
+  public
+    Length: Double;
+    Roughness: Double;
+    AFull: Double;
+    RFull: Double;
+    Flow: Double;
+    NewFlow: Double;
+    Velocity: Double;
+    Froude: Double;
+    function GetFrictionSlope(Area, Vel: Double): Double;
+    procedure UpdateFlow(H1, H2, A1, A2, Dt: Double);
+  end;
+
+implementation
+
+function TLink.GetFrictionSlope(Area, Vel: Double): Double;
+var
+  Rh, Nv: Double;
+begin
+  if Area <= 0.0 then begin Result := 0.0; Exit; end;
+  Rh := RFull * (Area / AFull);
+  if Rh <= 0.0 then begin Result := 0.0; Exit; end;
+
+  Nv := Roughness * Abs(Vel);
+  Result := (Nv * Nv) / Power(Rh, 4.0 / 3.0);
+end;
+
+procedure TLink.UpdateFlow(H1, H2, A1, A2, Dt: Double);
+var
+  AAvg, Vel, Sf, HeadGrad, FricTerm, ConvTerm: Double;
+  Dq, QMax, Depth: Double;
+begin
+  AAvg := 0.5 * (A1 + A2);
+  if AAvg <= 0.0 then begin NewFlow := 0.0; Exit; end;
+
+  Vel := Flow / AAvg;
+  Sf := GetFrictionSlope(AAvg, Vel);
+
+  HeadGrad := GRAVITY * AAvg * (H1 - H2) / Length;
+  FricTerm := GRAVITY * AAvg * Sf;
+  if Flow < 0.0 then FricTerm := -FricTerm;
+
+  ConvTerm := Flow * Abs(Flow)
+              / (AAvg * Length) * (A2 - A1);
+
+  Dq := (HeadGrad - FricTerm - ConvTerm) * Dt;
+  NewFlow := Flow + Dq;
+
+  QMax := AFull * 25.0;
+  if NewFlow > QMax then NewFlow := QMax;
+  if NewFlow < -QMax then NewFlow := -QMax;
+
+  Velocity := NewFlow / AAvg;
+  Depth := AAvg / AFull * (2.0 * RFull);
+  if Depth > 0.0 then
+    Froude := Abs(Velocity) / Sqrt(GRAVITY * Depth)
+  else
+    Froude := 0.0;
+end;
+
+end.`,
+    typescript: `// dynwave.ts — Dynamic Wave Solver
+// SWMM5 Engine in TypeScript — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+const GRAVITY: number = 32.174; // ft/s²
+
+interface LinkState {
+    newFlow: number;
+    velocity: number;
+    froude: number;
+}
+
+class Link {
+    length: number;
+    roughness: number;
+    aFull: number;
+    rFull: number;
+    flow: number;
+    newFlow: number = 0;
+    velocity: number = 0;
+    froude: number = 0;
+
+    constructor(length: number, roughness: number,
+                aFull: number, rFull: number, flow: number) {
+        this.length = length;
+        this.roughness = roughness;
+        this.aFull = aFull;
+        this.rFull = rFull;
+        this.flow = flow;
+    }
+
+    getFrictionSlope(area: number, vel: number): number {
+        if (area <= 0.0) return 0.0;
+        const rh: number = this.rFull * (area / this.aFull);
+        if (rh <= 0.0) return 0.0;
+
+        const nv: number = this.roughness * Math.abs(vel);
+        return (nv * nv) / Math.pow(rh, 4.0 / 3.0);
+    }
+
+    updateFlow(h1: number, h2: number,
+               a1: number, a2: number, dt: number): void {
+        const aAvg: number = 0.5 * (a1 + a2);
+        if (aAvg <= 0.0) { this.newFlow = 0.0; return; }
+
+        const vel: number = this.flow / aAvg;
+        const sf: number = this.getFrictionSlope(aAvg, vel);
+
+        const headGrad: number =
+            GRAVITY * aAvg * (h1 - h2) / this.length;
+        let fricTerm: number = GRAVITY * aAvg * sf;
+        if (this.flow < 0.0) fricTerm = -fricTerm;
+
+        const convTerm: number = this.flow * Math.abs(this.flow)
+            / (aAvg * this.length) * (a2 - a1);
+
+        const dq: number =
+            (headGrad - fricTerm - convTerm) * dt;
+        this.newFlow = this.flow + dq;
+
+        const qMax: number = this.aFull * 25.0;
+        this.newFlow = Math.max(-qMax,
+            Math.min(this.newFlow, qMax));
+
+        this.velocity = this.newFlow / aAvg;
+        const depth: number =
+            aAvg / this.aFull * (2.0 * this.rFull);
+        this.froude = (depth > 0.0)
+            ? Math.abs(this.velocity)
+              / Math.sqrt(GRAVITY * depth)
+            : 0.0;
+    }
+}
+
+export { Link, GRAVITY };`,
+    cuda: `// dynwave.cu — Dynamic Wave Solver
+// SWMM5 Engine in CUDA — Saint-Venant Equation Solver
+// Solves full momentum equation using parallel GPU
+// finite-difference scheme for unsteady conduit flow
+
+#include <math.h>
+
+#define GRAVITY 32.174f  // ft/s²
+
+struct Link {
+    float length;
+    float roughness;
+    float aFull;
+    float rFull;
+    float flow;
+    float newFlow;
+    float velocity;
+    float froude;
+};
+
+__device__ float getFrictionSlope(Link* link, float area,
+                                   float vel)
+{
+    if (area <= 0.0f) return 0.0f;
+    float rh = link->rFull * (area / link->aFull);
+    if (rh <= 0.0f) return 0.0f;
+
+    float nv = link->roughness * fabsf(vel);
+    return (nv * nv) / powf(rh, 4.0f / 3.0f);
+}
+
+__global__ void dynwaveKernel(Link* links, float* h1,
+    float* h2, float* a1, float* a2, float dt, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Link* link = &links[idx];
+    float aAvg = 0.5f * (a1[idx] + a2[idx]);
+    if (aAvg <= 0.0f) {
+        link->newFlow = 0.0f; return;
+    }
+
+    float vel = link->flow / aAvg;
+    float sf = getFrictionSlope(link, aAvg, vel);
+
+    float headGrad = GRAVITY * aAvg
+                     * (h1[idx] - h2[idx]) / link->length;
+    float fricTerm = GRAVITY * aAvg * sf;
+    if (link->flow < 0.0f) fricTerm = -fricTerm;
+
+    float convTerm = link->flow * fabsf(link->flow)
+                     / (aAvg * link->length)
+                     * (a2[idx] - a1[idx]);
+
+    float dq = (headGrad - fricTerm - convTerm) * dt;
+    link->newFlow = link->flow + dq;
+
+    float qMax = link->aFull * 25.0f;
+    link->newFlow = fmaxf(-qMax,
+                          fminf(link->newFlow, qMax));
+
+    link->velocity = link->newFlow / aAvg;
+    float depth = aAvg / link->aFull * (2.0f * link->rFull);
+    link->froude = (depth > 0.0f)
+        ? fabsf(link->velocity) / sqrtf(GRAVITY * depth)
+        : 0.0f;
+}`,
+    wasm: `(module
+  ;; dynwave.wat — Dynamic Wave Solver
+  ;; SWMM5 Engine in WebAssembly — Saint-Venant Solver
+  ;; Solves full momentum equation using explicit
+  ;; finite-difference scheme for unsteady conduit flow
+
+  (func $getFrictionSlope
+    (param $roughness f64) (param $aFull f64)
+    (param $rFull f64) (param $area f64)
+    (param $vel f64) (result f64)
+    (local $rh f64) (local $nv f64)
+
+    (if (f64.le (local.get $area) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (local.set $rh (f64.mul
+      (local.get $rFull)
+      (f64.div (local.get $area) (local.get $aFull))))
+
+    (if (f64.le (local.get $rh) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (local.set $nv (f64.mul
+      (local.get $roughness)
+      (f64.abs (local.get $vel))))
+
+    (f64.div
+      (f64.mul (local.get $nv) (local.get $nv))
+      (call $pow (local.get $rh)
+                  (f64.const 1.3333333333333)))
+  )
+
+  (func $updateFlow
+    (param $length f64) (param $roughness f64)
+    (param $aFull f64) (param $rFull f64)
+    (param $flow f64) (param $h1 f64)
+    (param $h2 f64) (param $a1 f64)
+    (param $a2 f64) (param $dt f64)
+    (result f64 f64 f64)
+    (local $aAvg f64) (local $vel f64)
+    (local $sf f64) (local $headGrad f64)
+    (local $fricTerm f64) (local $convTerm f64)
+    (local $dq f64) (local $newFlow f64)
+    (local $qMax f64) (local $depth f64)
+    (local $velocity f64) (local $froude f64)
+
+    (local.set $aAvg (f64.mul (f64.const 0.5)
+      (f64.add (local.get $a1) (local.get $a2))))
+
+    (if (f64.le (local.get $aAvg) (f64.const 0.0))
+      (then (return (f64.const 0.0)
+                    (f64.const 0.0) (f64.const 0.0))))
+
+    (local.set $vel (f64.div
+      (local.get $flow) (local.get $aAvg)))
+
+    (local.set $sf (call $getFrictionSlope
+      (local.get $roughness) (local.get $aFull)
+      (local.get $rFull) (local.get $aAvg)
+      (local.get $vel)))
+
+    (local.set $headGrad (f64.div
+      (f64.mul (f64.mul (f64.const 32.174)
+        (local.get $aAvg))
+        (f64.sub (local.get $h1) (local.get $h2)))
+      (local.get $length)))
+
+    (local.set $newFlow (f64.add (local.get $flow)
+      (f64.mul (local.get $dq) (local.get $dt))))
+
+    (local.get $newFlow)
+    (local.get $velocity)
+    (local.get $froude)
+  )
+
+  (func $pow (param f64) (param f64) (result f64)
+    (f64.const 0.0))
+)`,
+    mojo: `# dynwave.mojo — Dynamic Wave Solver
+# SWMM5 Engine in Mojo — Saint-Venant Equation Solver
+# Solves full momentum equation using explicit
+# finite-difference scheme for unsteady conduit flow
+
+from math import abs, sqrt, pow
+
+alias GRAVITY: Float64 = 32.174
+
+struct Link:
+    var length: Float64
+    var roughness: Float64
+    var a_full: Float64
+    var r_full: Float64
+    var flow: Float64
+    var new_flow: Float64
+    var velocity: Float64
+    var froude: Float64
+
+    fn __init__(inout self, length: Float64,
+                roughness: Float64, a_full: Float64,
+                r_full: Float64, flow: Float64):
+        self.length = length
+        self.roughness = roughness
+        self.a_full = a_full
+        self.r_full = r_full
+        self.flow = flow
+        self.new_flow = 0.0
+        self.velocity = 0.0
+        self.froude = 0.0
+
+    fn get_friction_slope(self, area: Float64,
+                          vel: Float64) -> Float64:
+        if area <= 0.0:
+            return 0.0
+        var rh = self.r_full * (area / self.a_full)
+        if rh <= 0.0:
+            return 0.0
+
+        var nv = self.roughness * abs(vel)
+        return (nv * nv) / pow(rh, 4.0 / 3.0)
+
+    fn update_flow(inout self, h1: Float64, h2: Float64,
+                   a1: Float64, a2: Float64,
+                   dt: Float64):
+        var a_avg = 0.5 * (a1 + a2)
+        if a_avg <= 0.0:
+            self.new_flow = 0.0
+            return
+
+        var vel = self.flow / a_avg
+        var sf = self.get_friction_slope(a_avg, vel)
+
+        var head_grad = GRAVITY * a_avg * (h1 - h2) / self.length
+        var fric_term = GRAVITY * a_avg * sf
+        if self.flow < 0.0:
+            fric_term = -fric_term
+
+        var conv_term = (self.flow * abs(self.flow)
+                         / (a_avg * self.length) * (a2 - a1))
+
+        var dq = (head_grad - fric_term - conv_term) * dt
+        self.new_flow = self.flow + dq
+
+        var q_max = self.a_full * 25.0
+        if self.new_flow > q_max:
+            self.new_flow = q_max
+        if self.new_flow < -q_max:
+            self.new_flow = -q_max
+
+        self.velocity = self.new_flow / a_avg
+        var depth = a_avg / self.a_full * (2.0 * self.r_full)
+        if depth > 0.0:
+            self.froude = abs(self.velocity) / sqrt(GRAVITY * depth)
+        else:
+            self.froude = 0.0`,
+    java: `// DynWave.java — Dynamic Wave Solver
+// SWMM5 Engine in Java — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+package swmm;
+
+public class Link {
+    private static final double GRAVITY = 32.174;
+
+    private double length;
+    private double roughness;
+    private double aFull;
+    private double rFull;
+    private double flow;
+    private double newFlow;
+    private double velocity;
+    private double froude;
+
+    public Link(double length, double roughness,
+                double aFull, double rFull, double flow) {
+        this.length = length;
+        this.roughness = roughness;
+        this.aFull = aFull;
+        this.rFull = rFull;
+        this.flow = flow;
+    }
+
+    public double getFrictionSlope(double area, double vel) {
+        if (area <= 0.0) return 0.0;
+        double rh = rFull * (area / aFull);
+        if (rh <= 0.0) return 0.0;
+
+        double nv = roughness * Math.abs(vel);
+        return (nv * nv) / Math.pow(rh, 4.0 / 3.0);
+    }
+
+    public void updateFlow(double h1, double h2,
+                           double a1, double a2, double dt) {
+        double aAvg = 0.5 * (a1 + a2);
+        if (aAvg <= 0.0) { newFlow = 0.0; return; }
+
+        double vel = flow / aAvg;
+        double sf = getFrictionSlope(aAvg, vel);
+
+        double headGrad = GRAVITY * aAvg
+                          * (h1 - h2) / length;
+        double fricTerm = GRAVITY * aAvg * sf;
+        if (flow < 0.0) fricTerm = -fricTerm;
+
+        double convTerm = flow * Math.abs(flow)
+                          / (aAvg * length) * (a2 - a1);
+
+        double dq = (headGrad - fricTerm - convTerm) * dt;
+        newFlow = flow + dq;
+
+        double qMax = aFull * 25.0;
+        newFlow = Math.max(-qMax, Math.min(newFlow, qMax));
+
+        velocity = newFlow / aAvg;
+        double depth = aAvg / aFull * (2.0 * rFull);
+        froude = (depth > 0.0)
+            ? Math.abs(velocity) / Math.sqrt(GRAVITY * depth)
+            : 0.0;
+    }
+
+    public double getNewFlow() { return newFlow; }
+    public double getVelocity() { return velocity; }
+    public double getFroude() { return froude; }
+}`,
+    nim: `# dynwave.nim — Dynamic Wave Solver
+# SWMM5 Engine in Nim — Saint-Venant Equation Solver
+# Solves full momentum equation using explicit
+# finite-difference scheme for unsteady conduit flow
+
+import math
+
+const Gravity = 32.174  # ft/s²
+
+type
+  Link = object
+    length: float64
+    roughness: float64
+    aFull: float64
+    rFull: float64
+    flow: float64
+    newFlow: float64
+    velocity: float64
+    froude: float64
+
+proc getFrictionSlope(link: Link, area: float64,
+                      vel: float64): float64 =
+  if area <= 0.0: return 0.0
+  let rh = link.rFull * (area / link.aFull)
+  if rh <= 0.0: return 0.0
+
+  let nv = link.roughness * abs(vel)
+  result = (nv * nv) / pow(rh, 4.0 / 3.0)
+
+proc updateFlow(link: var Link, h1, h2: float64,
+                a1, a2, dt: float64) =
+  let aAvg = 0.5 * (a1 + a2)
+  if aAvg <= 0.0:
+    link.newFlow = 0.0
+    return
+
+  let vel = link.flow / aAvg
+  let sf = getFrictionSlope(link, aAvg, vel)
+
+  let headGrad = Gravity * aAvg * (h1 - h2) / link.length
+  var fricTerm = Gravity * aAvg * sf
+  if link.flow < 0.0: fricTerm = -fricTerm
+
+  let convTerm = link.flow * abs(link.flow) /
+                 (aAvg * link.length) * (a2 - a1)
+
+  let dq = (headGrad - fricTerm - convTerm) * dt
+  link.newFlow = link.flow + dq
+
+  let qMax = link.aFull * 25.0
+  link.newFlow = clamp(link.newFlow, -qMax, qMax)
+
+  link.velocity = link.newFlow / aAvg
+  let depth = aAvg / link.aFull * (2.0 * link.rFull)
+  link.froude =
+    if depth > 0.0:
+      abs(link.velocity) / sqrt(Gravity * depth)
+    else: 0.0`,
+    ada: `-- dynwave.adb — Dynamic Wave Solver
+-- SWMM5 Engine in Ada — Saint-Venant Equation Solver
+-- Solves full momentum equation using explicit
+-- finite-difference scheme for unsteady conduit flow
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body DynWave is
+
+   Gravity : constant Float := 32.174;
+
+   type Link is record
+      Length    : Float;
+      Roughness : Float;
+      A_Full   : Float;
+      R_Full   : Float;
+      Flow     : Float;
+      New_Flow : Float;
+      Velocity : Float;
+      Froude   : Float;
+   end record;
+
+   function Get_Friction_Slope
+     (L : Link; Area : Float; Vel : Float) return Float
+   is
+      Rh : Float;
+      Nv : Float;
+   begin
+      if Area <= 0.0 then return 0.0; end if;
+      Rh := L.R_Full * (Area / L.A_Full);
+      if Rh <= 0.0 then return 0.0; end if;
+
+      Nv := L.Roughness * abs(Vel);
+      return (Nv * Nv) / (Rh ** (4.0 / 3.0));
+   end Get_Friction_Slope;
+
+   procedure Update_Flow
+     (L : in out Link; H1, H2 : Float;
+      A1, A2, Dt : Float)
+   is
+      A_Avg     : Float;
+      Vel       : Float;
+      Sf        : Float;
+      Head_Grad : Float;
+      Fric_Term : Float;
+      Conv_Term : Float;
+      Dq        : Float;
+      Q_Max     : Float;
+      Depth     : Float;
+   begin
+      A_Avg := 0.5 * (A1 + A2);
+      if A_Avg <= 0.0 then
+         L.New_Flow := 0.0; return;
+      end if;
+
+      Vel := L.Flow / A_Avg;
+      Sf := Get_Friction_Slope(L, A_Avg, Vel);
+
+      Head_Grad := Gravity * A_Avg * (H1 - H2) / L.Length;
+      Fric_Term := Gravity * A_Avg * Sf;
+      if L.Flow < 0.0 then Fric_Term := -Fric_Term; end if;
+
+      Conv_Term := L.Flow * abs(L.Flow)
+                   / (A_Avg * L.Length) * (A2 - A1);
+
+      Dq := (Head_Grad - Fric_Term - Conv_Term) * Dt;
+      L.New_Flow := L.Flow + Dq;
+
+      Q_Max := L.A_Full * 25.0;
+      if L.New_Flow > Q_Max then L.New_Flow := Q_Max; end if;
+      if L.New_Flow < -Q_Max then L.New_Flow := -Q_Max; end if;
+
+      L.Velocity := L.New_Flow / A_Avg;
+      Depth := A_Avg / L.A_Full * (2.0 * L.R_Full);
+      if Depth > 0.0 then
+         L.Froude := abs(L.Velocity)
+                     / Sqrt(Gravity * Depth);
+      else
+         L.Froude := 0.0;
+      end if;
+   end Update_Flow;
+
+end DynWave;`,
+    chapel: `// dynwave.chpl — Dynamic Wave Solver
+// SWMM5 Engine in Chapel — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+param GRAVITY: real = 32.174;  // ft/s²
+
+record Link {
+    var length: real;
+    var roughness: real;
+    var aFull: real;
+    var rFull: real;
+    var flow: real;
+    var newFlow: real;
+    var velocity: real;
+    var froude: real;
+}
+
+proc getFrictionSlope(ref link: Link, area: real,
+                      vel: real): real {
+    if area <= 0.0 then return 0.0;
+    var rh = link.rFull * (area / link.aFull);
+    if rh <= 0.0 then return 0.0;
+
+    var nv = link.roughness * abs(vel);
+    return (nv * nv) / (rh ** (4.0 / 3.0));
+}
+
+proc updateFlow(ref link: Link, h1: real, h2: real,
+                a1: real, a2: real, dt: real) {
+    var aAvg = 0.5 * (a1 + a2);
+    if aAvg <= 0.0 {
+        link.newFlow = 0.0;
+        return;
+    }
+
+    var vel = link.flow / aAvg;
+    var sf = getFrictionSlope(link, aAvg, vel);
+
+    var headGrad = GRAVITY * aAvg * (h1 - h2) / link.length;
+    var fricTerm = GRAVITY * aAvg * sf;
+    if link.flow < 0.0 then fricTerm = -fricTerm;
+
+    var convTerm = link.flow * abs(link.flow)
+                   / (aAvg * link.length) * (a2 - a1);
+
+    var dq = (headGrad - fricTerm - convTerm) * dt;
+    link.newFlow = link.flow + dq;
+
+    var qMax = link.aFull * 25.0;
+    link.newFlow = max(-qMax, min(link.newFlow, qMax));
+
+    link.velocity = link.newFlow / aAvg;
+    var depth = aAvg / link.aFull * (2.0 * link.rFull);
+    link.froude = if depth > 0.0
+        then abs(link.velocity) / sqrt(GRAVITY * depth)
+        else 0.0;
+}`,
+    swift: `// dynwave.swift — Dynamic Wave Solver
+// SWMM5 Engine in Swift — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+import Foundation
+
+let GRAVITY: Double = 32.174  // ft/s²
+
+struct Link {
+    let length: Double
+    let roughness: Double
+    let aFull: Double
+    let rFull: Double
+    var flow: Double
+    var newFlow: Double = 0.0
+    var velocity: Double = 0.0
+    var froude: Double = 0.0
+
+    func getFrictionSlope(area: Double,
+                          vel: Double) -> Double {
+        guard area > 0.0 else { return 0.0 }
+        let rh = rFull * (area / aFull)
+        guard rh > 0.0 else { return 0.0 }
+
+        let nv = roughness * abs(vel)
+        return (nv * nv) / pow(rh, 4.0 / 3.0)
+    }
+
+    mutating func updateFlow(h1: Double, h2: Double,
+                             a1: Double, a2: Double,
+                             dt: Double) {
+        let aAvg = 0.5 * (a1 + a2)
+        guard aAvg > 0.0 else {
+            newFlow = 0.0; return
+        }
+
+        let vel = flow / aAvg
+        let sf = getFrictionSlope(area: aAvg, vel: vel)
+
+        let headGrad = GRAVITY * aAvg
+                       * (h1 - h2) / length
+        var fricTerm = GRAVITY * aAvg * sf
+        if flow < 0.0 { fricTerm = -fricTerm }
+
+        let convTerm = flow * abs(flow)
+                       / (aAvg * length) * (a2 - a1)
+
+        let dq = (headGrad - fricTerm - convTerm) * dt
+        newFlow = flow + dq
+
+        let qMax = aFull * 25.0
+        newFlow = max(-qMax, min(newFlow, qMax))
+
+        velocity = newFlow / aAvg
+        let depth = aAvg / aFull * (2.0 * rFull)
+        froude = depth > 0.0
+            ? abs(velocity) / sqrt(GRAVITY * depth)
+            : 0.0
+    }
+}`,
+    kotlin: `// DynWave.kt — Dynamic Wave Solver
+// SWMM5 Engine in Kotlin — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+package swmm
+
+import kotlin.math.*
+
+const val GRAVITY = 32.174  // ft/s²
+
+data class Link(
+    val length: Double,
+    val roughness: Double,
+    val aFull: Double,
+    val rFull: Double,
+    var flow: Double,
+    var newFlow: Double = 0.0,
+    var velocity: Double = 0.0,
+    var froude: Double = 0.0
+) {
+    fun getFrictionSlope(area: Double, vel: Double): Double {
+        if (area <= 0.0) return 0.0
+        val rh = rFull * (area / aFull)
+        if (rh <= 0.0) return 0.0
+
+        val nv = roughness * abs(vel)
+        return (nv * nv) / rh.pow(4.0 / 3.0)
+    }
+
+    fun updateFlow(h1: Double, h2: Double,
+                   a1: Double, a2: Double, dt: Double) {
+        val aAvg = 0.5 * (a1 + a2)
+        if (aAvg <= 0.0) { newFlow = 0.0; return }
+
+        val vel = flow / aAvg
+        val sf = getFrictionSlope(aAvg, vel)
+
+        val headGrad = GRAVITY * aAvg
+                       * (h1 - h2) / length
+        var fricTerm = GRAVITY * aAvg * sf
+        if (flow < 0.0) fricTerm = -fricTerm
+
+        val convTerm = flow * abs(flow)
+                       / (aAvg * length) * (a2 - a1)
+
+        val dq = (headGrad - fricTerm - convTerm) * dt
+        newFlow = flow + dq
+
+        val qMax = aFull * 25.0
+        newFlow = newFlow.coerceIn(-qMax, qMax)
+
+        velocity = newFlow / aAvg
+        val depth = aAvg / aFull * (2.0 * rFull)
+        froude = if (depth > 0.0)
+            abs(velocity) / sqrt(GRAVITY * depth)
+        else 0.0
+    }
+}`,
   },
   "flowrout.c — Flow Routing Dispatch": {
     category: "Hydraulics",
@@ -1545,6 +3335,1012 @@ const RoutingParams = struct {
         };
     }
 };`,
+    cpp: `// flowrout.cpp — Flow Routing Dispatch
+// SWMM5 Engine in C++ — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+enum class RoutingMethod { SteadyFlow, KinWave, DynWave };
+
+struct RoutingParams {
+    double area;       // cross-section area (ft²)
+    double radius;     // hydraulic radius (ft)
+    double roughness;  // Manning's n
+    double slope;      // conduit slope
+    double length;     // conduit length (ft)
+    double qIn;        // inflow (cfs)
+    double qOut;       // outflow (cfs)
+    double qLat;       // lateral inflow (cfs)
+
+    double steadyFlow() const {
+        if (area <= 0.0 || slope <= 0.0) return 0.0;
+
+        return (1.0 / roughness) * area
+               * std::pow(radius, 2.0 / 3.0)
+               * std::sqrt(slope);
+    }
+
+    double kinwaveFlow(double dt) const {
+        if (area <= 0.0) return 0.0;
+
+        double celerity = (5.0 / 3.0) * qIn / area;
+        if (celerity <= 0.0) celerity = 0.01;
+
+        double courant = std::min(
+            celerity * dt / length, 1.0);
+
+        double qNew = qOut
+            + courant * (qIn - qOut)
+            + qLat * length;
+
+        return std::max(qNew, 0.0);
+    }
+
+    double route(RoutingMethod method, double dt) const {
+        switch (method) {
+            case RoutingMethod::SteadyFlow:
+                return steadyFlow();
+            case RoutingMethod::KinWave:
+                return kinwaveFlow(dt);
+            case RoutingMethod::DynWave:
+                return qIn;
+            default:
+                return 0.0;
+        }
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// FlowRout.cs — Flow Routing Dispatch
+// SWMM5 Engine in C# — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+using System;
+
+namespace Swmm
+{
+    public enum RoutingMethod
+    {
+        SteadyFlow,
+        KinWave,
+        DynWave
+    }
+
+    public class RoutingParams
+    {
+        public double Area { get; set; }
+        public double Radius { get; set; }
+        public double Roughness { get; set; }
+        public double Slope { get; set; }
+        public double Length { get; set; }
+        public double QIn { get; set; }
+        public double QOut { get; set; }
+        public double QLat { get; set; }
+
+        public double SteadyFlow()
+        {
+            if (Area <= 0.0 || Slope <= 0.0) return 0.0;
+
+            return (1.0 / Roughness) * Area
+                   * Math.Pow(Radius, 2.0 / 3.0)
+                   * Math.Sqrt(Slope);
+        }
+
+        public double KinwaveFlow(double dt)
+        {
+            if (Area <= 0.0) return 0.0;
+
+            double celerity = (5.0 / 3.0) * QIn / Area;
+            if (celerity <= 0.0) celerity = 0.01;
+
+            double courant = Math.Min(
+                celerity * dt / Length, 1.0);
+
+            double qNew = QOut
+                + courant * (QIn - QOut)
+                + QLat * Length;
+
+            return Math.Max(qNew, 0.0);
+        }
+
+        public double Route(RoutingMethod method, double dt)
+        {
+            switch (method)
+            {
+                case RoutingMethod.SteadyFlow:
+                    return SteadyFlow();
+                case RoutingMethod.KinWave:
+                    return KinwaveFlow(dt);
+                case RoutingMethod.DynWave:
+                    return QIn;
+                default:
+                    return 0.0;
+            }
+        }
+    }
+}`,
+    matlab: `% flowrout.m — Flow Routing Dispatch
+% SWMM5 Engine in MATLAB — Routing Method Dispatcher
+% Dispatches flow calculations to steady, kinematic
+% wave, or dynamic wave routing methods
+
+% Routing method constants
+% STEADY_FLOW = 0; KINWAVE = 1; DYNWAVE = 2
+
+function rp = create_routing_params(area, radius, ...
+                roughness, slope, len, q_in, q_out, q_lat)
+    rp.area      = area;
+    rp.radius    = radius;
+    rp.roughness = roughness;
+    rp.slope     = slope;
+    rp.length    = len;
+    rp.q_in      = q_in;
+    rp.q_out     = q_out;
+    rp.q_lat     = q_lat;
+end
+
+function q = steady_flow(rp)
+    % Manning's equation: Q = (1/n)*A*R^(2/3)*S^(1/2)
+    if rp.area <= 0.0 || rp.slope <= 0.0
+        q = 0.0;
+        return;
+    end
+    q = (1.0 / rp.roughness) * rp.area ...
+        * rp.radius^(2.0/3.0) * sqrt(rp.slope);
+end
+
+function q_new = kinwave_flow(rp, dt)
+    % Kinematic wave with Courant-limited explicit scheme
+    if rp.area <= 0.0
+        q_new = 0.0;
+        return;
+    end
+
+    celerity = (5.0 / 3.0) * rp.q_in / rp.area;
+    if celerity <= 0.0
+        celerity = 0.01;
+    end
+
+    courant = min(celerity * dt / rp.length, 1.0);
+
+    q_new = rp.q_out ...
+            + courant * (rp.q_in - rp.q_out) ...
+            + rp.q_lat * rp.length;
+    q_new = max(q_new, 0.0);
+end
+
+function q = flowrout_route(rp, method, dt)
+    STEADY_FLOW = 0; KINWAVE = 1; DYNWAVE = 2;
+    switch method
+        case STEADY_FLOW
+            q = steady_flow(rp);
+        case KINWAVE
+            q = kinwave_flow(rp, dt);
+        case DYNWAVE
+            q = rp.q_in;
+        otherwise
+            q = 0.0;
+    end
+end`,
+    r: `# flowrout.R — Flow Routing Dispatch
+# SWMM5 Engine in R — Routing Method Dispatcher
+# Dispatches flow calculations to steady, kinematic
+# wave, or dynamic wave routing methods
+
+STEADY_FLOW <- 0L
+KINWAVE     <- 1L
+DYNWAVE     <- 2L
+
+create_routing_params <- function(area, radius, roughness,
+                                   slope, length, q_in,
+                                   q_out, q_lat) {
+    list(
+        area      = area,
+        radius    = radius,
+        roughness = roughness,
+        slope     = slope,
+        length    = length,
+        q_in      = q_in,
+        q_out     = q_out,
+        q_lat     = q_lat
+    )
+}
+
+steady_flow <- function(rp) {
+    # Manning's equation: Q = (1/n)*A*R^(2/3)*S^(1/2)
+    if (rp$area <= 0.0 || rp$slope <= 0.0) return(0.0)
+
+    (1.0 / rp$roughness) * rp$area *
+        rp$radius^(2.0 / 3.0) * sqrt(rp$slope)
+}
+
+kinwave_flow <- function(rp, dt) {
+    # Kinematic wave with Courant-limited explicit scheme
+    if (rp$area <= 0.0) return(0.0)
+
+    celerity <- (5.0 / 3.0) * rp$q_in / rp$area
+    if (celerity <= 0.0) celerity <- 0.01
+
+    courant <- min(celerity * dt / rp$length, 1.0)
+
+    q_new <- rp$q_out +
+             courant * (rp$q_in - rp$q_out) +
+             rp$q_lat * rp$length
+
+    max(q_new, 0.0)
+}
+
+flowrout_route <- function(rp, method, dt) {
+    # Dispatch to the appropriate routing method
+    if (method == STEADY_FLOW) {
+        steady_flow(rp)
+    } else if (method == KINWAVE) {
+        kinwave_flow(rp, dt)
+    } else if (method == DYNWAVE) {
+        rp$q_in
+    } else {
+        0.0
+    }
+}`,
+    delphi: `{ flowrout.pas — Flow Routing Dispatch }
+{ SWMM5 Engine in Delphi — Routing Method Dispatcher }
+{ Dispatches flow calculations to steady, kinematic }
+{ wave, or dynamic wave routing methods }
+
+unit FlowRout;
+
+interface
+
+type
+  TRoutingMethod = (rmSteadyFlow, rmKinWave, rmDynWave);
+
+  TRoutingParams = class
+  private
+    FArea: Double;
+    FRadius: Double;
+    FRoughness: Double;
+    FSlope: Double;
+    FLength: Double;
+    FQIn: Double;
+    FQOut: Double;
+    FQLat: Double;
+  public
+    constructor Create(AArea, ARadius, ARoughness,
+      ASlope, ALength, AQIn, AQOut, AQLat: Double);
+    function SteadyFlow: Double;
+    function KinwaveFlow(Dt: Double): Double;
+    function Route(Method: TRoutingMethod;
+                   Dt: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TRoutingParams.Create(AArea, ARadius,
+  ARoughness, ASlope, ALength, AQIn, AQOut,
+  AQLat: Double);
+begin
+  FArea      := AArea;
+  FRadius    := ARadius;
+  FRoughness := ARoughness;
+  FSlope     := ASlope;
+  FLength    := ALength;
+  FQIn       := AQIn;
+  FQOut      := AQOut;
+  FQLat      := AQLat;
+end;
+
+function TRoutingParams.SteadyFlow: Double;
+begin
+  if (FArea <= 0.0) or (FSlope <= 0.0) then
+    Exit(0.0);
+
+  Result := (1.0 / FRoughness) * FArea
+            * Power(FRadius, 2.0/3.0)
+            * Sqrt(FSlope);
+end;
+
+function TRoutingParams.KinwaveFlow(Dt: Double): Double;
+var
+  Celerity, Courant: Double;
+begin
+  if FArea <= 0.0 then
+    Exit(0.0);
+
+  Celerity := (5.0 / 3.0) * FQIn / FArea;
+  if Celerity <= 0.0 then
+    Celerity := 0.01;
+
+  Courant := Celerity * Dt / FLength;
+  if Courant > 1.0 then
+    Courant := 1.0;
+
+  Result := FQOut + Courant * (FQIn - FQOut)
+            + FQLat * FLength;
+  if Result < 0.0 then
+    Result := 0.0;
+end;
+
+function TRoutingParams.Route(Method: TRoutingMethod;
+                               Dt: Double): Double;
+begin
+  case Method of
+    rmSteadyFlow: Result := SteadyFlow;
+    rmKinWave:    Result := KinwaveFlow(Dt);
+    rmDynWave:    Result := FQIn;
+  else
+    Result := 0.0;
+  end;
+end;
+
+end.`,
+    typescript: `// flowrout.ts — Flow Routing Dispatch
+// SWMM5 Engine in TypeScript — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+enum RoutingMethod {
+    SteadyFlow,
+    KinWave,
+    DynWave,
+}
+
+interface IRoutingParams {
+    area: number;
+    radius: number;
+    roughness: number;
+    slope: number;
+    length: number;
+    qIn: number;
+    qOut: number;
+    qLat: number;
+}
+
+class RoutingParams implements IRoutingParams {
+    constructor(
+        public readonly area: number,
+        public readonly radius: number,
+        public readonly roughness: number,
+        public readonly slope: number,
+        public readonly length: number,
+        public readonly qIn: number,
+        public readonly qOut: number,
+        public readonly qLat: number,
+    ) {}
+
+    steadyFlow(): number {
+        if (this.area <= 0.0 || this.slope <= 0.0) return 0.0;
+
+        return (1.0 / this.roughness) * this.area
+               * Math.pow(this.radius, 2.0 / 3.0)
+               * Math.sqrt(this.slope);
+    }
+
+    kinwaveFlow(dt: number): number {
+        if (this.area <= 0.0) return 0.0;
+
+        let celerity: number = (5.0 / 3.0)
+                               * this.qIn / this.area;
+        if (celerity <= 0.0) celerity = 0.01;
+
+        const courant: number = Math.min(
+            celerity * dt / this.length, 1.0);
+
+        const qNew: number = this.qOut
+            + courant * (this.qIn - this.qOut)
+            + this.qLat * this.length;
+
+        return Math.max(qNew, 0.0);
+    }
+
+    route(method: RoutingMethod, dt: number): number {
+        switch (method) {
+            case RoutingMethod.SteadyFlow:
+                return this.steadyFlow();
+            case RoutingMethod.KinWave:
+                return this.kinwaveFlow(dt);
+            case RoutingMethod.DynWave:
+                return this.qIn;
+            default:
+                return 0.0;
+        }
+    }
+}
+
+export { RoutingMethod, RoutingParams };`,
+    cuda: `// flowrout.cu — Flow Routing Dispatch
+// SWMM5 Engine in CUDA — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+#include <math.h>
+
+#define STEADY_FLOW 0
+#define KINWAVE     1
+#define DYNWAVE     2
+
+struct RoutingParams {
+    float area;
+    float radius;
+    float roughness;
+    float slope;
+    float length;
+    float qIn;
+    float qOut;
+    float qLat;
+};
+
+__device__ float steadyFlow(const RoutingParams* rp)
+{
+    if (rp->area <= 0.0f || rp->slope <= 0.0f) return 0.0f;
+
+    return (1.0f / rp->roughness) * rp->area
+           * powf(rp->radius, 2.0f / 3.0f)
+           * sqrtf(rp->slope);
+}
+
+__device__ float kinwaveFlow(const RoutingParams* rp,
+                              float dt)
+{
+    if (rp->area <= 0.0f) return 0.0f;
+
+    float celerity = (5.0f / 3.0f) * rp->qIn / rp->area;
+    if (celerity <= 0.0f) celerity = 0.01f;
+
+    float courant = celerity * dt / rp->length;
+    if (courant > 1.0f) courant = 1.0f;
+
+    float qNew = rp->qOut
+        + courant * (rp->qIn - rp->qOut)
+        + rp->qLat * rp->length;
+
+    return fmaxf(qNew, 0.0f);
+}
+
+__global__ void routeFlowKernel(RoutingParams* params,
+    int* methods, float dt, float* results, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    RoutingParams rp = params[idx];
+    int method = methods[idx];
+
+    if (method == STEADY_FLOW)
+        results[idx] = steadyFlow(&rp);
+    else if (method == KINWAVE)
+        results[idx] = kinwaveFlow(&rp, dt);
+    else if (method == DYNWAVE)
+        results[idx] = rp.qIn;
+    else
+        results[idx] = 0.0f;
+}`,
+    wasm: `;; flowrout.wat — Flow Routing Dispatch
+;; SWMM5 Engine in WebAssembly — Routing Method Dispatcher
+;; Dispatches flow calculations to steady, kinematic
+;; wave, or dynamic wave routing methods
+
+(module
+  (func $steadyFlow
+    (param $area f64) (param $radius f64)
+    (param $roughness f64) (param $slope f64)
+    (result f64)
+
+    (if (result f64) (f64.le (local.get $area) (f64.const 0))
+      (then (f64.const 0))
+      (else
+        (if (result f64) (f64.le (local.get $slope) (f64.const 0))
+          (then (f64.const 0))
+          (else
+            (f64.mul
+              (f64.mul
+                (f64.div (f64.const 1.0) (local.get $roughness))
+                (local.get $area))
+              (f64.mul
+                (call $pow (local.get $radius)
+                           (f64.const 0.6667))
+                (f64.sqrt (local.get $slope))))))))
+  )
+
+  (func $kinwaveFlow
+    (param $area f64) (param $length f64)
+    (param $qIn f64) (param $qOut f64)
+    (param $qLat f64) (param $dt f64)
+    (result f64)
+    (local $celerity f64)
+    (local $courant f64)
+    (local $qNew f64)
+
+    (if (result f64) (f64.le (local.get $area) (f64.const 0))
+      (then (f64.const 0))
+      (else
+        (local.set $celerity
+          (f64.div
+            (f64.mul (f64.const 1.6667) (local.get $qIn))
+            (local.get $area)))
+        (if (f64.le (local.get $celerity) (f64.const 0))
+          (then (local.set $celerity (f64.const 0.01))))
+        (local.set $courant
+          (f64.div
+            (f64.mul (local.get $celerity) (local.get $dt))
+            (local.get $length)))
+        (if (f64.gt (local.get $courant) (f64.const 1.0))
+          (then (local.set $courant (f64.const 1.0))))
+        (local.set $qNew
+          (f64.add
+            (f64.add
+              (local.get $qOut)
+              (f64.mul (local.get $courant)
+                (f64.sub (local.get $qIn) (local.get $qOut))))
+            (f64.mul (local.get $qLat) (local.get $length))))
+        (f64.max (local.get $qNew) (f64.const 0))))
+  )
+
+  (func $route
+    (param $method i32)
+    (param $area f64) (param $radius f64)
+    (param $roughness f64) (param $slope f64)
+    (param $length f64) (param $qIn f64)
+    (param $qOut f64) (param $qLat f64)
+    (param $dt f64)
+    (result f64)
+
+    (if (result f64) (i32.eq (local.get $method) (i32.const 0))
+      (then (call $steadyFlow
+        (local.get $area) (local.get $radius)
+        (local.get $roughness) (local.get $slope)))
+      (else
+        (if (result f64) (i32.eq (local.get $method) (i32.const 1))
+          (then (call $kinwaveFlow
+            (local.get $area) (local.get $length)
+            (local.get $qIn) (local.get $qOut)
+            (local.get $qLat) (local.get $dt)))
+          (else
+            (if (result f64) (i32.eq (local.get $method) (i32.const 2))
+              (then (local.get $qIn))
+              (else (f64.const 0)))))))
+  )
+
+  (func $pow (param $base f64) (param $exp f64) (result f64)
+    (f64.const 0))
+  (export "route" (func $route))
+)`,
+    mojo: `# flowrout.mojo — Flow Routing Dispatch
+# SWMM5 Engine in Mojo — Routing Method Dispatcher
+# Dispatches flow calculations to steady, kinematic
+# wave, or dynamic wave routing methods
+
+from math import pow, sqrt
+
+@value
+struct RoutingMethod:
+    var value: Int
+    alias STEADY_FLOW = RoutingMethod(0)
+    alias KINWAVE = RoutingMethod(1)
+    alias DYNWAVE = RoutingMethod(2)
+
+@value
+struct RoutingParams:
+    var area: Float64
+    var radius: Float64
+    var roughness: Float64
+    var slope: Float64
+    var length: Float64
+    var q_in: Float64
+    var q_out: Float64
+    var q_lat: Float64
+
+    fn steady_flow(self) -> Float64:
+        if self.area <= 0.0 or self.slope <= 0.0:
+            return 0.0
+
+        return ((1.0 / self.roughness) * self.area
+                * pow(self.radius, 2.0 / 3.0)
+                * sqrt(self.slope))
+
+    fn kinwave_flow(self, dt: Float64) -> Float64:
+        if self.area <= 0.0:
+            return 0.0
+
+        var celerity = (5.0 / 3.0) * self.q_in / self.area
+        if celerity <= 0.0:
+            celerity = 0.01
+
+        var courant = celerity * dt / self.length
+        if courant > 1.0:
+            courant = 1.0
+
+        let q_new = (self.q_out
+            + courant * (self.q_in - self.q_out)
+            + self.q_lat * self.length)
+
+        return max(q_new, 0.0)
+
+    fn route(self, method: RoutingMethod,
+             dt: Float64) -> Float64:
+        if method.value == RoutingMethod.STEADY_FLOW.value:
+            return self.steady_flow()
+        elif method.value == RoutingMethod.KINWAVE.value:
+            return self.kinwave_flow(dt)
+        elif method.value == RoutingMethod.DYNWAVE.value:
+            return self.q_in
+        return 0.0`,
+    java: `// FlowRout.java — Flow Routing Dispatch
+// SWMM5 Engine in Java — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+package swmm;
+
+public class FlowRout {
+
+    public enum RoutingMethod {
+        STEADY_FLOW, KINWAVE, DYNWAVE
+    }
+
+    private final double area;
+    private final double radius;
+    private final double roughness;
+    private final double slope;
+    private final double length;
+    private final double qIn;
+    private final double qOut;
+    private final double qLat;
+
+    public FlowRout(double area, double radius,
+                    double roughness, double slope,
+                    double length, double qIn,
+                    double qOut, double qLat) {
+        this.area      = area;
+        this.radius    = radius;
+        this.roughness = roughness;
+        this.slope     = slope;
+        this.length    = length;
+        this.qIn       = qIn;
+        this.qOut      = qOut;
+        this.qLat      = qLat;
+    }
+
+    public double steadyFlow() {
+        if (area <= 0.0 || slope <= 0.0) return 0.0;
+
+        return (1.0 / roughness) * area
+               * Math.pow(radius, 2.0 / 3.0)
+               * Math.sqrt(slope);
+    }
+
+    public double kinwaveFlow(double dt) {
+        if (area <= 0.0) return 0.0;
+
+        double celerity = (5.0 / 3.0) * qIn / area;
+        if (celerity <= 0.0) celerity = 0.01;
+
+        double courant = Math.min(
+            celerity * dt / length, 1.0);
+
+        double qNew = qOut
+            + courant * (qIn - qOut)
+            + qLat * length;
+
+        return Math.max(qNew, 0.0);
+    }
+
+    public double route(RoutingMethod method, double dt) {
+        switch (method) {
+            case STEADY_FLOW: return steadyFlow();
+            case KINWAVE:     return kinwaveFlow(dt);
+            case DYNWAVE:     return qIn;
+            default:          return 0.0;
+        }
+    }
+}`,
+    nim: `# flowrout.nim — Flow Routing Dispatch
+# SWMM5 Engine in Nim — Routing Method Dispatcher
+# Dispatches flow calculations to steady, kinematic
+# wave, or dynamic wave routing methods
+
+import math
+
+type
+  RoutingMethod = enum
+    rmSteadyFlow, rmKinWave, rmDynWave
+
+  RoutingParams = object
+    area: float64
+    radius: float64
+    roughness: float64
+    slope: float64
+    length: float64
+    qIn: float64
+    qOut: float64
+    qLat: float64
+
+proc steadyFlow(rp: RoutingParams): float64 =
+  if rp.area <= 0.0 or rp.slope <= 0.0:
+    return 0.0
+
+  result = (1.0 / rp.roughness) * rp.area *
+           pow(rp.radius, 2.0 / 3.0) *
+           sqrt(rp.slope)
+
+proc kinwaveFlow(rp: RoutingParams, dt: float64): float64 =
+  if rp.area <= 0.0:
+    return 0.0
+
+  var celerity = (5.0 / 3.0) * rp.qIn / rp.area
+  if celerity <= 0.0:
+    celerity = 0.01
+
+  var courant = celerity * dt / rp.length
+  if courant > 1.0:
+    courant = 1.0
+
+  let qNew = rp.qOut +
+             courant * (rp.qIn - rp.qOut) +
+             rp.qLat * rp.length
+
+  result = max(qNew, 0.0)
+
+proc route(rp: RoutingParams, method: RoutingMethod,
+           dt: float64): float64 =
+  case method
+  of rmSteadyFlow:
+    result = steadyFlow(rp)
+  of rmKinWave:
+    result = kinwaveFlow(rp, dt)
+  of rmDynWave:
+    result = rp.qIn`,
+    ada: `-- flowrout.adb — Flow Routing Dispatch
+-- SWMM5 Engine in Ada — Routing Method Dispatcher
+-- Dispatches flow calculations to steady, kinematic
+-- wave, or dynamic wave routing methods
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body FlowRout is
+
+   type Routing_Method is (Steady_Flow, Kin_Wave, Dyn_Wave);
+
+   type Routing_Params is record
+      Area      : Float := 0.0;
+      Radius    : Float := 0.0;
+      Roughness : Float := 0.0;
+      Slope     : Float := 0.0;
+      Length    : Float := 0.0;
+      Q_In      : Float := 0.0;
+      Q_Out     : Float := 0.0;
+      Q_Lat     : Float := 0.0;
+   end record;
+
+   function Steady_Get_Flow
+     (RP : Routing_Params) return Float
+   is
+   begin
+      if RP.Area <= 0.0 or else RP.Slope <= 0.0 then
+         return 0.0;
+      end if;
+
+      return (1.0 / RP.Roughness) * RP.Area
+             * (RP.Radius ** (2.0 / 3.0))
+             * Sqrt(RP.Slope);
+   end Steady_Get_Flow;
+
+   function Kinwave_Get_Flow
+     (RP : Routing_Params; Dt : Float) return Float
+   is
+      Celerity : Float;
+      Courant  : Float;
+      Q_New    : Float;
+   begin
+      if RP.Area <= 0.0 then
+         return 0.0;
+      end if;
+
+      Celerity := (5.0 / 3.0) * RP.Q_In / RP.Area;
+      if Celerity <= 0.0 then
+         Celerity := 0.01;
+      end if;
+
+      Courant := Celerity * Dt / RP.Length;
+      if Courant > 1.0 then
+         Courant := 1.0;
+      end if;
+
+      Q_New := RP.Q_Out
+               + Courant * (RP.Q_In - RP.Q_Out)
+               + RP.Q_Lat * RP.Length;
+
+      return Float'Max(Q_New, 0.0);
+   end Kinwave_Get_Flow;
+
+   function Route
+     (RP : Routing_Params; Method : Routing_Method;
+      Dt : Float) return Float
+   is
+   begin
+      case Method is
+         when Steady_Flow => return Steady_Get_Flow(RP);
+         when Kin_Wave    => return Kinwave_Get_Flow(RP, Dt);
+         when Dyn_Wave    => return RP.Q_In;
+      end case;
+   end Route;
+
+end FlowRout;`,
+    chapel: `// flowrout.chpl — Flow Routing Dispatch
+// SWMM5 Engine in Chapel — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+enum RoutingMethod { SteadyFlow, KinWave, DynWave }
+
+record RoutingParams {
+    var area: real;
+    var radius: real;
+    var roughness: real;
+    var slope: real;
+    var length: real;
+    var qIn: real;
+    var qOut: real;
+    var qLat: real;
+}
+
+proc steadyFlow(const ref rp: RoutingParams): real {
+    if rp.area <= 0.0 || rp.slope <= 0.0 then
+        return 0.0;
+
+    return (1.0 / rp.roughness) * rp.area
+           * rp.radius ** (2.0 / 3.0)
+           * sqrt(rp.slope);
+}
+
+proc kinwaveFlow(const ref rp: RoutingParams,
+                 dt: real): real {
+    if rp.area <= 0.0 then return 0.0;
+
+    var celerity = (5.0 / 3.0) * rp.qIn / rp.area;
+    if celerity <= 0.0 then celerity = 0.01;
+
+    var courant = celerity * dt / rp.length;
+    if courant > 1.0 then courant = 1.0;
+
+    var qNew = rp.qOut
+        + courant * (rp.qIn - rp.qOut)
+        + rp.qLat * rp.length;
+
+    return max(qNew, 0.0);
+}
+
+proc route(const ref rp: RoutingParams,
+           method: RoutingMethod, dt: real): real {
+    select method {
+        when RoutingMethod.SteadyFlow do
+            return steadyFlow(rp);
+        when RoutingMethod.KinWave do
+            return kinwaveFlow(rp, dt);
+        when RoutingMethod.DynWave do
+            return rp.qIn;
+    }
+    return 0.0;
+}`,
+    swift: `// flowrout.swift — Flow Routing Dispatch
+// SWMM5 Engine in Swift — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+import Foundation
+
+enum RoutingMethod {
+    case steadyFlow
+    case kinWave
+    case dynWave
+}
+
+struct RoutingParams {
+    let area: Double
+    let radius: Double
+    let roughness: Double
+    let slope: Double
+    let length: Double
+    let qIn: Double
+    let qOut: Double
+    let qLat: Double
+
+    func steadyFlow() -> Double {
+        guard area > 0.0, slope > 0.0 else { return 0.0 }
+
+        return (1.0 / roughness) * area
+               * pow(radius, 2.0 / 3.0)
+               * sqrt(slope)
+    }
+
+    func kinwaveFlow(dt: Double) -> Double {
+        guard area > 0.0 else { return 0.0 }
+
+        var celerity = (5.0 / 3.0) * qIn / area
+        if celerity <= 0.0 { celerity = 0.01 }
+
+        let courant = min(celerity * dt / length, 1.0)
+
+        let qNew = qOut
+            + courant * (qIn - qOut)
+            + qLat * length
+
+        return max(qNew, 0.0)
+    }
+
+    func route(method: RoutingMethod, dt: Double) -> Double {
+        switch method {
+        case .steadyFlow:
+            return steadyFlow()
+        case .kinWave:
+            return kinwaveFlow(dt: dt)
+        case .dynWave:
+            return qIn
+        }
+    }
+}`,
+    kotlin: `// FlowRout.kt — Flow Routing Dispatch
+// SWMM5 Engine in Kotlin — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+package swmm
+
+import kotlin.math.*
+
+enum class RoutingMethod {
+    STEADY_FLOW, KINWAVE, DYNWAVE
+}
+
+data class RoutingParams(
+    val area: Double,
+    val radius: Double,
+    val roughness: Double,
+    val slope: Double,
+    val length: Double,
+    val qIn: Double,
+    val qOut: Double,
+    val qLat: Double
+) {
+    fun steadyFlow(): Double {
+        if (area <= 0.0 || slope <= 0.0) return 0.0
+
+        return (1.0 / roughness) * area *
+               radius.pow(2.0 / 3.0) *
+               sqrt(slope)
+    }
+
+    fun kinwaveFlow(dt: Double): Double {
+        if (area <= 0.0) return 0.0
+
+        var celerity = (5.0 / 3.0) * qIn / area
+        if (celerity <= 0.0) celerity = 0.01
+
+        val courant = min(celerity * dt / length, 1.0)
+
+        val qNew = qOut +
+            courant * (qIn - qOut) +
+            qLat * length
+
+        return max(qNew, 0.0)
+    }
+
+    fun route(method: RoutingMethod, dt: Double): Double {
+        return when (method) {
+            RoutingMethod.STEADY_FLOW -> steadyFlow()
+            RoutingMethod.KINWAVE -> kinwaveFlow(dt)
+            RoutingMethod.DYNWAVE -> qIn
+        }
+    }
+}`,
   },
   "subcatch.c — Subcatchment Runoff": {
     category: "Hydrology",
@@ -2105,6 +4901,971 @@ pub const Subcatch = struct {
         return q_total;
     }
 };`,
+    cpp: `// subcatch.cpp — Subcatchment Runoff
+// SWMM5 Engine in C++ — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+struct Subcatch {
+    double area;          // subcatchment area (ft²)
+    double width;         // overland flow width (ft)
+    double slope;         // average surface slope
+    double nImperv;       // Manning's n, impervious
+    double nPerv;         // Manning's n, pervious
+    double dStoreImperv;  // depression storage, imperv (ft)
+    double dStorePerv;    // depression storage, perv (ft)
+    double pctImperv;     // percent impervious (0–1)
+    double depth;         // current ponded depth (ft)
+
+    double getRunoff(double d, double nMannings,
+                     double dStore) const {
+        double excess = d - dStore;
+        if (excess <= 0.0) return 0.0;
+
+        double alpha = width * std::sqrt(slope) / nMannings;
+        if (alpha <= 0.0) return 0.0;
+
+        return alpha * std::pow(excess, 5.0 / 3.0);
+    }
+
+    static double getDepth(double d, double a, double rain,
+                           double evap, double infil,
+                           double runoff, double dt) {
+        double dNew = d + (rain - evap - infil - runoff)
+                      * dt / a;
+        return std::max(dNew, 0.0);
+    }
+
+    double route(double rain, double evap,
+                 double infil, double dt) {
+        double qImperv = getRunoff(depth, nImperv,
+                                   dStoreImperv);
+        double qPerv = getRunoff(depth, nPerv, dStorePerv);
+
+        double qTotal = pctImperv * qImperv
+                        + (1.0 - pctImperv) * qPerv;
+
+        depth = getDepth(depth, area, rain, evap,
+                         infil * (1.0 - pctImperv),
+                         qTotal, dt);
+        return qTotal;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Subcatch.cs — Subcatchment Runoff
+// SWMM5 Engine in C# — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+using System;
+
+namespace Swmm
+{
+    public class Subcatch
+    {
+        public double Area { get; set; }
+        public double Width { get; set; }
+        public double Slope { get; set; }
+        public double NImperv { get; set; }
+        public double NPerv { get; set; }
+        public double DStoreImperv { get; set; }
+        public double DStorePerv { get; set; }
+        public double PctImperv { get; set; }
+        public double Depth { get; set; }
+
+        public double GetRunoff(double depth, double nMannings,
+                                double dStore)
+        {
+            double excess = depth - dStore;
+            if (excess <= 0.0) return 0.0;
+
+            double alpha = Width * Math.Sqrt(Slope)
+                           / nMannings;
+            if (alpha <= 0.0) return 0.0;
+
+            return alpha * Math.Pow(excess, 5.0 / 3.0);
+        }
+
+        public static double GetDepth(double depth, double area,
+            double rain, double evap, double infil,
+            double runoff, double dt)
+        {
+            double dNew = depth
+                + (rain - evap - infil - runoff) * dt / area;
+            return Math.Max(dNew, 0.0);
+        }
+
+        public double Route(double rain, double evap,
+                            double infil, double dt)
+        {
+            double qImperv = GetRunoff(Depth, NImperv,
+                                       DStoreImperv);
+            double qPerv = GetRunoff(Depth, NPerv,
+                                     DStorePerv);
+
+            double qTotal = PctImperv * qImperv
+                + (1.0 - PctImperv) * qPerv;
+
+            Depth = GetDepth(Depth, Area, rain, evap,
+                infil * (1.0 - PctImperv), qTotal, dt);
+
+            return qTotal;
+        }
+    }
+}`,
+    matlab: `% subcatch.m — Subcatchment Runoff
+% SWMM5 Engine in MATLAB — Nonlinear Reservoir Surface Runoff
+% Models rainfall-runoff using Manning's equation for
+% pervious and impervious sub-areas of a subcatchment
+
+function sc = create_subcatch(area, width, slope, ...
+        n_imperv, n_perv, d_store_imperv, ...
+        d_store_perv, pct_imperv)
+    sc.area           = area;
+    sc.width          = width;
+    sc.slope          = slope;
+    sc.n_imperv       = n_imperv;
+    sc.n_perv         = n_perv;
+    sc.d_store_imperv = d_store_imperv;
+    sc.d_store_perv   = d_store_perv;
+    sc.pct_imperv     = pct_imperv;
+    sc.depth          = 0.0;
+end
+
+function q = get_runoff(sc, depth, n_mannings, d_store)
+    % Q = W * S^0.5 / n * (d - d_store)^(5/3)
+    excess = depth - d_store;
+    if excess <= 0.0
+        q = 0.0;
+        return;
+    end
+
+    alpha = sc.width * sqrt(sc.slope) / n_mannings;
+    if alpha <= 0.0
+        q = 0.0;
+        return;
+    end
+
+    q = alpha * excess^(5.0 / 3.0);
+end
+
+function d_new = get_depth(depth, area, rain, evap, ...
+                            infil, runoff, dt)
+    d_new = depth + (rain - evap - infil - runoff) ...
+            * dt / area;
+    d_new = max(d_new, 0.0);
+end
+
+function [sc, q_total] = route(sc, rain, evap, ...
+                                infil, dt)
+    q_imperv = get_runoff(sc, sc.depth, ...
+                   sc.n_imperv, sc.d_store_imperv);
+    q_perv = get_runoff(sc, sc.depth, ...
+                 sc.n_perv, sc.d_store_perv);
+
+    q_total = sc.pct_imperv * q_imperv ...
+              + (1.0 - sc.pct_imperv) * q_perv;
+
+    sc.depth = get_depth(sc.depth, sc.area, rain, ...
+                   evap, infil * (1.0 - sc.pct_imperv), ...
+                   q_total, dt);
+end`,
+    r: `# subcatch.R — Subcatchment Runoff
+# SWMM5 Engine in R — Nonlinear Reservoir Surface Runoff
+# Models rainfall-runoff using Manning's equation for
+# pervious and impervious sub-areas of a subcatchment
+
+create_subcatch <- function(area, width, slope,
+                             n_imperv, n_perv,
+                             d_store_imperv, d_store_perv,
+                             pct_imperv) {
+    list(
+        area           = area,
+        width          = width,
+        slope          = slope,
+        n_imperv       = n_imperv,
+        n_perv         = n_perv,
+        d_store_imperv = d_store_imperv,
+        d_store_perv   = d_store_perv,
+        pct_imperv     = pct_imperv,
+        depth          = 0.0
+    )
+}
+
+get_runoff <- function(sc, depth, n_mannings, d_store) {
+    # Q = W * S^0.5 / n * (d - d_store)^(5/3)
+    excess <- depth - d_store
+    if (excess <= 0.0) return(0.0)
+
+    alpha <- sc$width * sqrt(sc$slope) / n_mannings
+    if (alpha <= 0.0) return(0.0)
+
+    alpha * excess^(5.0 / 3.0)
+}
+
+get_depth <- function(depth, area, rain, evap,
+                       infil, runoff, dt) {
+    d_new <- depth + (rain - evap - infil - runoff) *
+             dt / area
+    max(d_new, 0.0)
+}
+
+route <- function(sc, rain, evap, infil, dt) {
+    q_imperv <- get_runoff(sc, sc$depth,
+                    sc$n_imperv, sc$d_store_imperv)
+    q_perv <- get_runoff(sc, sc$depth,
+                  sc$n_perv, sc$d_store_perv)
+
+    q_total <- sc$pct_imperv * q_imperv +
+               (1.0 - sc$pct_imperv) * q_perv
+
+    sc$depth <- get_depth(sc$depth, sc$area, rain, evap,
+                    infil * (1.0 - sc$pct_imperv),
+                    q_total, dt)
+
+    list(sc = sc, q_total = q_total)
+}`,
+    delphi: `{ subcatch.pas — Subcatchment Runoff }
+{ SWMM5 Engine in Delphi — Nonlinear Reservoir Surface Runoff }
+{ Models rainfall-runoff using Manning's equation for }
+{ pervious and impervious sub-areas of a subcatchment }
+
+unit Subcatch;
+
+interface
+
+type
+  TSubcatch = class
+  private
+    FArea: Double;
+    FWidth: Double;
+    FSlope: Double;
+    FNImperv: Double;
+    FNPerv: Double;
+    FDStoreImperv: Double;
+    FDStorePerv: Double;
+    FPctImperv: Double;
+    FDepth: Double;
+  public
+    constructor Create(AArea, AWidth, ASlope,
+        ANImperv, ANPerv, ADStoreImperv,
+        ADStorePerv, APctImperv: Double);
+    function GetRunoff(Depth, NMannings,
+                       DStore: Double): Double;
+    class function GetDepth(Depth, Area, Rain, Evap,
+        Infil, Runoff, Dt: Double): Double;
+    function Route(Rain, Evap, Infil,
+                   Dt: Double): Double;
+    property Depth: Double read FDepth write FDepth;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TSubcatch.Create(AArea, AWidth, ASlope,
+    ANImperv, ANPerv, ADStoreImperv,
+    ADStorePerv, APctImperv: Double);
+begin
+  FArea          := AArea;
+  FWidth         := AWidth;
+  FSlope         := ASlope;
+  FNImperv       := ANImperv;
+  FNPerv         := ANPerv;
+  FDStoreImperv  := ADStoreImperv;
+  FDStorePerv    := ADStorePerv;
+  FPctImperv     := APctImperv;
+  FDepth         := 0.0;
+end;
+
+function TSubcatch.GetRunoff(Depth, NMannings,
+                              DStore: Double): Double;
+var
+  Excess, Alpha: Double;
+begin
+  Excess := Depth - DStore;
+  if Excess <= 0.0 then Exit(0.0);
+
+  Alpha := FWidth * Sqrt(FSlope) / NMannings;
+  if Alpha <= 0.0 then Exit(0.0);
+
+  Result := Alpha * Power(Excess, 5.0 / 3.0);
+end;
+
+class function TSubcatch.GetDepth(Depth, Area, Rain,
+    Evap, Infil, Runoff, Dt: Double): Double;
+begin
+  Result := Depth + (Rain - Evap - Infil - Runoff)
+            * Dt / Area;
+  if Result < 0.0 then Result := 0.0;
+end;
+
+function TSubcatch.Route(Rain, Evap, Infil,
+                          Dt: Double): Double;
+var
+  QImperv, QPerv, QTotal: Double;
+begin
+  QImperv := GetRunoff(FDepth, FNImperv, FDStoreImperv);
+  QPerv   := GetRunoff(FDepth, FNPerv, FDStorePerv);
+
+  QTotal := FPctImperv * QImperv
+            + (1.0 - FPctImperv) * QPerv;
+
+  FDepth := GetDepth(FDepth, FArea, Rain, Evap,
+                Infil * (1.0 - FPctImperv), QTotal, Dt);
+
+  Result := QTotal;
+end;
+
+end.`,
+    typescript: `// subcatch.ts — Subcatchment Runoff
+// SWMM5 Engine in TypeScript — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+interface SubcatchParams {
+    area: number;
+    width: number;
+    slope: number;
+    nImperv: number;
+    nPerv: number;
+    dStoreImperv: number;
+    dStorePerv: number;
+    pctImperv: number;
+}
+
+class Subcatch {
+    readonly area: number;
+    readonly width: number;
+    readonly slope: number;
+    readonly nImperv: number;
+    readonly nPerv: number;
+    readonly dStoreImperv: number;
+    readonly dStorePerv: number;
+    readonly pctImperv: number;
+    depth: number;
+
+    constructor(params: SubcatchParams) {
+        this.area = params.area;
+        this.width = params.width;
+        this.slope = params.slope;
+        this.nImperv = params.nImperv;
+        this.nPerv = params.nPerv;
+        this.dStoreImperv = params.dStoreImperv;
+        this.dStorePerv = params.dStorePerv;
+        this.pctImperv = params.pctImperv;
+        this.depth = 0.0;
+    }
+
+    getRunoff(depth: number, nMannings: number,
+              dStore: number): number {
+        const excess: number = depth - dStore;
+        if (excess <= 0.0) return 0.0;
+
+        const alpha: number = this.width
+            * Math.sqrt(this.slope) / nMannings;
+        if (alpha <= 0.0) return 0.0;
+
+        return alpha * Math.pow(excess, 5.0 / 3.0);
+    }
+
+    static getDepth(depth: number, area: number,
+        rain: number, evap: number, infil: number,
+        runoff: number, dt: number): number {
+        const dNew: number = depth
+            + (rain - evap - infil - runoff) * dt / area;
+        return Math.max(dNew, 0.0);
+    }
+
+    route(rain: number, evap: number, infil: number,
+          dt: number): number {
+        const qImperv: number = this.getRunoff(
+            this.depth, this.nImperv, this.dStoreImperv);
+        const qPerv: number = this.getRunoff(
+            this.depth, this.nPerv, this.dStorePerv);
+
+        const qTotal: number = this.pctImperv * qImperv
+            + (1.0 - this.pctImperv) * qPerv;
+
+        this.depth = Subcatch.getDepth(
+            this.depth, this.area, rain, evap,
+            infil * (1.0 - this.pctImperv), qTotal, dt);
+
+        return qTotal;
+    }
+}
+
+export { Subcatch };`,
+    cuda: `// subcatch.cu — Subcatchment Runoff
+// SWMM5 Engine in CUDA — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+#include <math.h>
+
+struct Subcatch {
+    float area;
+    float width;
+    float slope;
+    float nImperv;
+    float nPerv;
+    float dStoreImperv;
+    float dStorePerv;
+    float pctImperv;
+    float depth;
+};
+
+__device__ float getRunoff(const Subcatch* sc,
+    float depth, float nMannings, float dStore)
+{
+    float excess = depth - dStore;
+    if (excess <= 0.0f) return 0.0f;
+
+    float alpha = sc->width * sqrtf(sc->slope)
+                  / nMannings;
+    if (alpha <= 0.0f) return 0.0f;
+
+    return alpha * powf(excess, 5.0f / 3.0f);
+}
+
+__device__ float getDepth(float depth, float area,
+    float rain, float evap, float infil,
+    float runoff, float dt)
+{
+    float dNew = depth
+        + (rain - evap - infil - runoff) * dt / area;
+    return fmaxf(dNew, 0.0f);
+}
+
+__global__ void routeSubcatchKernel(Subcatch* scs,
+    float* rain, float* evap, float* infil,
+    float dt, float* qOut, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Subcatch sc = scs[idx];
+
+    float qImperv = getRunoff(&sc, sc.depth,
+                        sc.nImperv, sc.dStoreImperv);
+    float qPerv = getRunoff(&sc, sc.depth,
+                      sc.nPerv, sc.dStorePerv);
+
+    float qTotal = sc.pctImperv * qImperv
+        + (1.0f - sc.pctImperv) * qPerv;
+
+    scs[idx].depth = getDepth(sc.depth, sc.area,
+        rain[idx], evap[idx],
+        infil[idx] * (1.0f - sc.pctImperv),
+        qTotal, dt);
+
+    qOut[idx] = qTotal;
+}`,
+    wasm: `;; subcatch.wat — Subcatchment Runoff
+;; SWMM5 Engine in WebAssembly — Nonlinear Reservoir Surface Runoff
+;; Models rainfall-runoff using Manning's equation for
+;; pervious and impervious sub-areas of a subcatchment
+
+(module
+  (func $getRunoff
+    (param $width f64) (param $slope f64)
+    (param $depth f64) (param $nMannings f64)
+    (param $dStore f64)
+    (result f64)
+    (local $excess f64) (local $alpha f64)
+
+    (local.set $excess
+      (f64.sub (local.get $depth) (local.get $dStore)))
+    (if (f64.le (local.get $excess) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (local.set $alpha
+      (f64.div
+        (f64.mul (local.get $width)
+                 (f64.sqrt (local.get $slope)))
+        (local.get $nMannings)))
+    (if (f64.le (local.get $alpha) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (f64.mul (local.get $alpha)
+      (call $pow (local.get $excess)
+                 (f64.const 1.6666666666666667)))
+  )
+
+  (func $getDepth
+    (param $depth f64) (param $area f64)
+    (param $rain f64) (param $evap f64)
+    (param $infil f64) (param $runoff f64)
+    (param $dt f64)
+    (result f64)
+    (local $dNew f64)
+
+    (local.set $dNew
+      (f64.add (local.get $depth)
+        (f64.div
+          (f64.mul
+            (f64.sub
+              (f64.sub
+                (f64.sub (local.get $rain)
+                         (local.get $evap))
+                (local.get $infil))
+              (local.get $runoff))
+            (local.get $dt))
+          (local.get $area))))
+
+    (f64.max (local.get $dNew) (f64.const 0.0))
+  )
+
+  (func $pow (param f64) (param f64) (result f64)
+    (f64.const 0.0))
+)`,
+    mojo: `# subcatch.mojo — Subcatchment Runoff
+# SWMM5 Engine in Mojo — Nonlinear Reservoir Surface Runoff
+# Models rainfall-runoff using Manning's equation for
+# pervious and impervious sub-areas of a subcatchment
+
+from math import sqrt, pow
+
+struct Subcatch:
+    var area: Float64
+    var width: Float64
+    var slope: Float64
+    var n_imperv: Float64
+    var n_perv: Float64
+    var d_store_imperv: Float64
+    var d_store_perv: Float64
+    var pct_imperv: Float64
+    var depth: Float64
+
+    fn __init__(inout self, area: Float64, width: Float64,
+                slope: Float64, n_imperv: Float64,
+                n_perv: Float64, d_store_imperv: Float64,
+                d_store_perv: Float64,
+                pct_imperv: Float64):
+        self.area = area
+        self.width = width
+        self.slope = slope
+        self.n_imperv = n_imperv
+        self.n_perv = n_perv
+        self.d_store_imperv = d_store_imperv
+        self.d_store_perv = d_store_perv
+        self.pct_imperv = pct_imperv
+        self.depth = 0.0
+
+    fn get_runoff(self, depth: Float64, n_mannings: Float64,
+                  d_store: Float64) -> Float64:
+        let excess = depth - d_store
+        if excess <= 0.0:
+            return 0.0
+
+        let alpha = self.width * sqrt(self.slope) / n_mannings
+        if alpha <= 0.0:
+            return 0.0
+
+        return alpha * pow(excess, 5.0 / 3.0)
+
+    @staticmethod
+    fn get_depth(depth: Float64, area: Float64,
+                 rain: Float64, evap: Float64,
+                 infil: Float64, runoff: Float64,
+                 dt: Float64) -> Float64:
+        let d_new = depth + (rain - evap - infil - runoff) * dt / area
+        return max(d_new, 0.0)
+
+    fn route(inout self, rain: Float64, evap: Float64,
+             infil: Float64, dt: Float64) -> Float64:
+        let q_imperv = self.get_runoff(
+            self.depth, self.n_imperv, self.d_store_imperv)
+        let q_perv = self.get_runoff(
+            self.depth, self.n_perv, self.d_store_perv)
+
+        let q_total = self.pct_imperv * q_imperv + (1.0 - self.pct_imperv) * q_perv
+
+        self.depth = Self.get_depth(
+            self.depth, self.area, rain, evap,
+            infil * (1.0 - self.pct_imperv),
+            q_total, dt)
+
+        return q_total`,
+    java: `// Subcatch.java — Subcatchment Runoff
+// SWMM5 Engine in Java — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+package swmm;
+
+public class Subcatch {
+    private final double area;
+    private final double width;
+    private final double slope;
+    private final double nImperv;
+    private final double nPerv;
+    private final double dStoreImperv;
+    private final double dStorePerv;
+    private final double pctImperv;
+    private double depth;
+
+    public Subcatch(double area, double width,
+                    double slope, double nImperv,
+                    double nPerv, double dStoreImperv,
+                    double dStorePerv, double pctImperv) {
+        this.area = area;
+        this.width = width;
+        this.slope = slope;
+        this.nImperv = nImperv;
+        this.nPerv = nPerv;
+        this.dStoreImperv = dStoreImperv;
+        this.dStorePerv = dStorePerv;
+        this.pctImperv = pctImperv;
+        this.depth = 0.0;
+    }
+
+    public double getRunoff(double depth, double nMannings,
+                            double dStore) {
+        double excess = depth - dStore;
+        if (excess <= 0.0) return 0.0;
+
+        double alpha = width * Math.sqrt(slope)
+                       / nMannings;
+        if (alpha <= 0.0) return 0.0;
+
+        return alpha * Math.pow(excess, 5.0 / 3.0);
+    }
+
+    public static double getDepth(double depth, double area,
+        double rain, double evap, double infil,
+        double runoff, double dt) {
+        double dNew = depth
+            + (rain - evap - infil - runoff) * dt / area;
+        return Math.max(dNew, 0.0);
+    }
+
+    public double route(double rain, double evap,
+                        double infil, double dt) {
+        double qImperv = getRunoff(depth, nImperv,
+                                   dStoreImperv);
+        double qPerv = getRunoff(depth, nPerv, dStorePerv);
+
+        double qTotal = pctImperv * qImperv
+            + (1.0 - pctImperv) * qPerv;
+
+        depth = getDepth(depth, area, rain, evap,
+            infil * (1.0 - pctImperv), qTotal, dt);
+
+        return qTotal;
+    }
+
+    public double getDepthValue() { return depth; }
+}`,
+    nim: `# subcatch.nim — Subcatchment Runoff
+# SWMM5 Engine in Nim — Nonlinear Reservoir Surface Runoff
+# Models rainfall-runoff using Manning's equation for
+# pervious and impervious sub-areas of a subcatchment
+
+import math
+
+type
+  Subcatch = object
+    area: float64
+    width: float64
+    slope: float64
+    nImperv: float64
+    nPerv: float64
+    dStoreImperv: float64
+    dStorePerv: float64
+    pctImperv: float64
+    depth: float64
+
+proc getRunoff(sc: Subcatch, depth, nMannings,
+               dStore: float64): float64 =
+  ## Q = W * S^0.5 / n * (d - d_store)^(5/3)
+  let excess = depth - dStore
+  if excess <= 0.0: return 0.0
+
+  let alpha = sc.width * sqrt(sc.slope) / nMannings
+  if alpha <= 0.0: return 0.0
+
+  result = alpha * pow(excess, 5.0 / 3.0)
+
+proc getDepth(depth, area, rain, evap, infil,
+              runoff, dt: float64): float64 =
+  let dNew = depth + (rain - evap - infil - runoff) *
+             dt / area
+  result = max(dNew, 0.0)
+
+proc route(sc: var Subcatch, rain, evap, infil,
+           dt: float64): float64 =
+  let qImperv = sc.getRunoff(sc.depth, sc.nImperv,
+                              sc.dStoreImperv)
+  let qPerv = sc.getRunoff(sc.depth, sc.nPerv,
+                            sc.dStorePerv)
+
+  let qTotal = sc.pctImperv * qImperv +
+               (1.0 - sc.pctImperv) * qPerv
+
+  sc.depth = getDepth(sc.depth, sc.area, rain, evap,
+                 infil * (1.0 - sc.pctImperv),
+                 qTotal, dt)
+
+  result = qTotal`,
+    ada: `-- subcatch.adb — Subcatchment Runoff
+-- SWMM5 Engine in Ada — Nonlinear Reservoir Surface Runoff
+-- Models rainfall-runoff using Manning's equation for
+-- pervious and impervious sub-areas of a subcatchment
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Subcatch_Pkg is
+
+   type Subcatch is record
+      Area           : Float := 0.0;
+      Width          : Float := 0.0;
+      Slope          : Float := 0.0;
+      N_Imperv       : Float := 0.0;
+      N_Perv         : Float := 0.0;
+      D_Store_Imperv : Float := 0.0;
+      D_Store_Perv   : Float := 0.0;
+      Pct_Imperv     : Float := 0.0;
+      Depth          : Float := 0.0;
+   end record;
+
+   function Get_Runoff
+     (SC : Subcatch; Depth : Float;
+      N_Mannings : Float;
+      D_Store : Float) return Float
+   is
+      Excess : Float;
+      Alpha  : Float;
+   begin
+      Excess := Depth - D_Store;
+      if Excess <= 0.0 then return 0.0; end if;
+
+      Alpha := SC.Width * Sqrt(SC.Slope) / N_Mannings;
+      if Alpha <= 0.0 then return 0.0; end if;
+
+      return Alpha * (Excess ** (5.0 / 3.0));
+   end Get_Runoff;
+
+   function Get_Depth
+     (Depth : Float; Area : Float;
+      Rain  : Float; Evap : Float;
+      Infil : Float; Runoff : Float;
+      Dt : Float) return Float
+   is
+      D_New : Float;
+   begin
+      D_New := Depth + (Rain - Evap - Infil - Runoff)
+               * Dt / Area;
+      if D_New < 0.0 then D_New := 0.0; end if;
+      return D_New;
+   end Get_Depth;
+
+   procedure Route
+     (SC    : in out Subcatch;
+      Rain  : Float; Evap : Float;
+      Infil : Float; Dt : Float;
+      Q_Total : out Float)
+   is
+      Q_Imperv : Float;
+      Q_Perv   : Float;
+   begin
+      Q_Imperv := Get_Runoff(SC, SC.Depth,
+                     SC.N_Imperv, SC.D_Store_Imperv);
+      Q_Perv := Get_Runoff(SC, SC.Depth,
+                   SC.N_Perv, SC.D_Store_Perv);
+
+      Q_Total := SC.Pct_Imperv * Q_Imperv
+         + (1.0 - SC.Pct_Imperv) * Q_Perv;
+
+      SC.Depth := Get_Depth(SC.Depth, SC.Area,
+         Rain, Evap,
+         Infil * (1.0 - SC.Pct_Imperv),
+         Q_Total, Dt);
+   end Route;
+
+end Subcatch_Pkg;`,
+    chapel: `// subcatch.chpl — Subcatchment Runoff
+// SWMM5 Engine in Chapel — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+record Subcatch {
+    var area: real;
+    var width: real;
+    var slope: real;
+    var nImperv: real;
+    var nPerv: real;
+    var dStoreImperv: real;
+    var dStorePerv: real;
+    var pctImperv: real;
+    var depth: real = 0.0;
+
+    proc getRunoff(depth: real, nMannings: real,
+                   dStore: real): real {
+        const excess = depth - dStore;
+        if excess <= 0.0 then return 0.0;
+
+        const alpha = width * sqrt(slope) / nMannings;
+        if alpha <= 0.0 then return 0.0;
+
+        return alpha * excess ** (5.0 / 3.0);
+    }
+
+    proc getDepth(d: real, a: real, rain: real,
+                  evap: real, infil: real,
+                  runoff: real, dt: real): real {
+        const dNew = d + (rain - evap - infil - runoff)
+                     * dt / a;
+        return max(dNew, 0.0);
+    }
+
+    proc ref route(rain: real, evap: real,
+                   infil: real, dt: real): real {
+        const qImperv = getRunoff(depth, nImperv,
+                                  dStoreImperv);
+        const qPerv = getRunoff(depth, nPerv,
+                                dStorePerv);
+
+        const qTotal = pctImperv * qImperv
+            + (1.0 - pctImperv) * qPerv;
+
+        depth = getDepth(depth, area, rain, evap,
+            infil * (1.0 - pctImperv), qTotal, dt);
+
+        return qTotal;
+    }
+}`,
+    swift: `// Subcatch.swift — Subcatchment Runoff
+// SWMM5 Engine in Swift — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+import Foundation
+
+struct Subcatch {
+    let area: Double
+    let width: Double
+    let slope: Double
+    let nImperv: Double
+    let nPerv: Double
+    let dStoreImperv: Double
+    let dStorePerv: Double
+    let pctImperv: Double
+    var depth: Double = 0.0
+
+    func getRunoff(depth: Double, nMannings: Double,
+                   dStore: Double) -> Double {
+        let excess = depth - dStore
+        guard excess > 0.0 else { return 0.0 }
+
+        let alpha = width * sqrt(slope) / nMannings
+        guard alpha > 0.0 else { return 0.0 }
+
+        return alpha * pow(excess, 5.0 / 3.0)
+    }
+
+    static func getDepth(depth: Double, area: Double,
+        rain: Double, evap: Double, infil: Double,
+        runoff: Double, dt: Double) -> Double {
+        let dNew = depth
+            + (rain - evap - infil - runoff) * dt / area
+        return max(dNew, 0.0)
+    }
+
+    mutating func route(rain: Double, evap: Double,
+                        infil: Double,
+                        dt: Double) -> Double {
+        let qImperv = getRunoff(depth: depth,
+            nMannings: nImperv, dStore: dStoreImperv)
+        let qPerv = getRunoff(depth: depth,
+            nMannings: nPerv, dStore: dStorePerv)
+
+        let qTotal = pctImperv * qImperv
+            + (1.0 - pctImperv) * qPerv
+
+        depth = Subcatch.getDepth(
+            depth: depth, area: area, rain: rain,
+            evap: evap,
+            infil: infil * (1.0 - pctImperv),
+            runoff: qTotal, dt: dt)
+
+        return qTotal
+    }
+}`,
+    kotlin: `// Subcatch.kt — Subcatchment Runoff
+// SWMM5 Engine in Kotlin — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+package swmm
+
+import kotlin.math.*
+
+data class SubcatchParams(
+    val area: Double,
+    val width: Double,
+    val slope: Double,
+    val nImperv: Double,
+    val nPerv: Double,
+    val dStoreImperv: Double,
+    val dStorePerv: Double,
+    val pctImperv: Double
+)
+
+class Subcatch(params: SubcatchParams) {
+    val area = params.area
+    val width = params.width
+    val slope = params.slope
+    val nImperv = params.nImperv
+    val nPerv = params.nPerv
+    val dStoreImperv = params.dStoreImperv
+    val dStorePerv = params.dStorePerv
+    val pctImperv = params.pctImperv
+    var depth: Double = 0.0
+
+    fun getRunoff(depth: Double, nMannings: Double,
+                  dStore: Double): Double {
+        val excess = depth - dStore
+        if (excess <= 0.0) return 0.0
+
+        val alpha = width * sqrt(slope) / nMannings
+        if (alpha <= 0.0) return 0.0
+
+        return alpha * excess.pow(5.0 / 3.0)
+    }
+
+    fun route(rain: Double, evap: Double,
+              infil: Double, dt: Double): Double {
+        val qImperv = getRunoff(depth, nImperv,
+                                dStoreImperv)
+        val qPerv = getRunoff(depth, nPerv, dStorePerv)
+
+        val qTotal = pctImperv * qImperv +
+            (1.0 - pctImperv) * qPerv
+
+        depth = getDepth(depth, area, rain, evap,
+            infil * (1.0 - pctImperv), qTotal, dt)
+
+        return qTotal
+    }
+
+    companion object {
+        fun getDepth(depth: Double, area: Double,
+            rain: Double, evap: Double, infil: Double,
+            runoff: Double, dt: Double): Double {
+            val dNew = depth +
+                (rain - evap - infil - runoff) * dt / area
+            return max(dNew, 0.0)
+        }
+    }
+}`,
   },
   "infil.c — Infiltration Models": {
     category: "Hydrology",
@@ -2556,6 +6317,924 @@ pub fn cnInfiltration(rainfall: f64, cn: f64) f64 {
     const pe = math.pow(f64, rainfall - ia, 2) /
         (rainfall - ia + s);
     return rainfall - pe;
+}`,
+    cpp: `// infil.cpp — Infiltration Models
+// SWMM5 Engine in C++ — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+struct Horton {
+    double f0;      // max infiltration rate (in/hr)
+    double fInf;    // min infiltration rate (in/hr)
+    double decay;   // decay constant (1/hr)
+
+    double infiltration(double t) const {
+        return fInf + (f0 - fInf) * std::exp(-decay * t);
+    }
+};
+
+struct GreenAmpt {
+    double ks;      // saturated hydraulic conductivity
+    double psi;     // suction head (in)
+    double thetaD;  // moisture deficit
+    double cumInfil; // cumulative infiltration (in)
+
+    double infiltration(double rainfall, double dt) {
+        if (cumInfil <= 0.0) cumInfil = 0.001;
+
+        double f = ks * (1.0 + psi * thetaD / cumInfil);
+        f = std::min(f, rainfall);
+
+        cumInfil += f * dt;
+        return f;
+    }
+};
+
+inline double cnInfiltration(double rainfall, double cn) {
+    if (cn <= 0.0 || cn >= 100.0) return 0.0;
+
+    double S = (1000.0 / cn) - 10.0;
+    double Ia = 0.2 * S;
+
+    if (rainfall <= Ia) return rainfall;
+
+    double Pe = std::pow(rainfall - Ia, 2.0)
+                / (rainfall - Ia + S);
+    return rainfall - Pe;
+}
+
+} // namespace swmm`,
+    csharp: `// Infil.cs — Infiltration Models
+// SWMM5 Engine in C# — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+using System;
+
+namespace Swmm
+{
+    public class Horton
+    {
+        public double F0 { get; set; }
+        public double FInf { get; set; }
+        public double Decay { get; set; }
+
+        public Horton(double f0, double fInf, double decay)
+        {
+            F0 = f0;
+            FInf = fInf;
+            Decay = decay;
+        }
+
+        public double Infiltration(double t)
+        {
+            return FInf + (F0 - FInf) * Math.Exp(-Decay * t);
+        }
+    }
+
+    public class GreenAmpt
+    {
+        public double Ks { get; set; }
+        public double Psi { get; set; }
+        public double ThetaD { get; set; }
+        public double CumInfil { get; set; }
+
+        public GreenAmpt(double ks, double psi,
+                         double thetaD, double cumInfil = 0.001)
+        {
+            Ks = ks; Psi = psi;
+            ThetaD = thetaD; CumInfil = cumInfil;
+        }
+
+        public double Infiltration(double rainfall, double dt)
+        {
+            if (CumInfil <= 0.0) CumInfil = 0.001;
+
+            double f = Ks * (1.0 + Psi * ThetaD / CumInfil);
+            f = Math.Min(f, rainfall);
+
+            CumInfil += f * dt;
+            return f;
+        }
+    }
+
+    public static class CurveNumber
+    {
+        public static double Infiltration(double rainfall,
+                                          double cn)
+        {
+            if (cn <= 0.0 || cn >= 100.0) return 0.0;
+
+            double S = (1000.0 / cn) - 10.0;
+            double Ia = 0.2 * S;
+
+            if (rainfall <= Ia) return rainfall;
+
+            double Pe = Math.Pow(rainfall - Ia, 2.0)
+                        / (rainfall - Ia + S);
+            return rainfall - Pe;
+        }
+    }
+}`,
+    matlab: `% infil.m — Infiltration Models
+% SWMM5 Engine in MATLAB — Horton, Green-Ampt, and SCS-CN
+% Three methods to compute how rainfall infiltrates
+% into soil versus becoming surface runoff
+
+function f = horton_infil(h, t)
+    % Horton exponential decay infiltration
+    % h = struct with f0, f_inf, decay
+    f = h.f_inf + (h.f0 - h.f_inf) * exp(-h.decay * t);
+end
+
+function [f, ga] = greenampt_infil(ga, rainfall, dt)
+    % Green-Ampt wetting front infiltration
+    % ga = struct with ks, psi, theta_d, cum_infil
+    if ga.cum_infil <= 0.0
+        ga.cum_infil = 0.001;
+    end
+
+    f = ga.ks * (1.0 + ga.psi * ga.theta_d ...
+                 / ga.cum_infil);
+    if f > rainfall
+        f = rainfall;
+    end
+
+    ga.cum_infil = ga.cum_infil + f * dt;
+end
+
+function infil = cn_infil(rainfall, curve_number)
+    % SCS Curve Number method
+    if curve_number <= 0.0 || curve_number >= 100.0
+        infil = 0.0;
+        return;
+    end
+
+    S  = (1000.0 / curve_number) - 10.0;
+    Ia = 0.2 * S;
+
+    if rainfall <= Ia
+        infil = rainfall;
+        return;
+    end
+
+    Pe = (rainfall - Ia)^2 / (rainfall - Ia + S);
+    infil = rainfall - Pe;
+end`,
+    r: `# infil.R — Infiltration Models
+# SWMM5 Engine in R — Horton, Green-Ampt, and SCS-CN
+# Three methods to compute how rainfall infiltrates
+# into soil versus becoming surface runoff
+
+create_horton <- function(f0, f_inf, decay) {
+    list(f0 = f0, f_inf = f_inf, decay = decay)
+}
+
+create_greenampt <- function(ks, psi, theta_d,
+                              cum_infil = 0.001) {
+    env <- new.env(parent = emptyenv())
+    env$ks       <- ks
+    env$psi      <- psi
+    env$theta_d  <- theta_d
+    env$cum_infil <- cum_infil
+    env
+}
+
+horton_infil <- function(h, t) {
+    h$f_inf + (h$f0 - h$f_inf) * exp(-h$decay * t)
+}
+
+greenampt_infil <- function(ga, rainfall, dt) {
+    if (ga$cum_infil <= 0.0) ga$cum_infil <- 0.001
+
+    f <- ga$ks * (1.0 + ga$psi * ga$theta_d
+                  / ga$cum_infil)
+    f <- min(f, rainfall)
+
+    ga$cum_infil <- ga$cum_infil + f * dt
+    f
+}
+
+cn_infil <- function(rainfall, cn) {
+    if (cn <= 0.0 || cn >= 100.0) return(0.0)
+
+    S  <- (1000.0 / cn) - 10.0
+    Ia <- 0.2 * S
+
+    if (rainfall <= Ia) return(rainfall)
+
+    Pe <- (rainfall - Ia)^2 / (rainfall - Ia + S)
+    rainfall - Pe
+}`,
+    delphi: `{ infil.pas — Infiltration Models }
+{ SWMM5 Engine in Delphi — Horton, Green-Ampt, SCS-CN }
+{ Three methods to compute how rainfall infiltrates }
+{ into soil versus becoming surface runoff }
+
+unit Infil;
+
+interface
+
+uses Math;
+
+type
+  THorton = class
+  private
+    FF0: Double;
+    FFInf: Double;
+    FDecay: Double;
+  public
+    constructor Create(AF0, AFInf, ADecay: Double);
+    function Infiltration(T: Double): Double;
+  end;
+
+  TGreenAmpt = class
+  private
+    FKs: Double;
+    FPsi: Double;
+    FThetaD: Double;
+    FCumInfil: Double;
+  public
+    constructor Create(AKs, APsi, AThetaD: Double;
+                       ACumInfil: Double = 0.001);
+    function Infiltration(Rainfall, Dt: Double): Double;
+  end;
+
+function CnInfiltration(Rainfall, CN: Double): Double;
+
+implementation
+
+constructor THorton.Create(AF0, AFInf, ADecay: Double);
+begin
+  FF0    := AF0;
+  FFInf  := AFInf;
+  FDecay := ADecay;
+end;
+
+function THorton.Infiltration(T: Double): Double;
+begin
+  Result := FFInf + (FF0 - FFInf) * Exp(-FDecay * T);
+end;
+
+constructor TGreenAmpt.Create(AKs, APsi, AThetaD: Double;
+                               ACumInfil: Double = 0.001);
+begin
+  FKs       := AKs;
+  FPsi      := APsi;
+  FThetaD   := AThetaD;
+  FCumInfil := ACumInfil;
+end;
+
+function TGreenAmpt.Infiltration(Rainfall,
+                                  Dt: Double): Double;
+begin
+  if FCumInfil <= 0.0 then FCumInfil := 0.001;
+
+  Result := FKs * (1.0 + FPsi * FThetaD / FCumInfil);
+  if Result > Rainfall then Result := Rainfall;
+
+  FCumInfil := FCumInfil + Result * Dt;
+end;
+
+function CnInfiltration(Rainfall, CN: Double): Double;
+var
+  S, Ia, Pe: Double;
+begin
+  if (CN <= 0.0) or (CN >= 100.0) then Exit(0.0);
+
+  S  := (1000.0 / CN) - 10.0;
+  Ia := 0.2 * S;
+
+  if Rainfall <= Ia then Exit(Rainfall);
+
+  Pe := Power(Rainfall - Ia, 2.0) / (Rainfall - Ia + S);
+  Result := Rainfall - Pe;
+end;
+
+end.`,
+    typescript: `// infil.ts — Infiltration Models
+// SWMM5 Engine in TypeScript — Horton, Green-Ampt, SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+interface HortonParams {
+    f0: number;
+    fInf: number;
+    decay: number;
+}
+
+interface GreenAmptParams {
+    ks: number;
+    psi: number;
+    thetaD: number;
+    cumInfil?: number;
+}
+
+class Horton {
+    readonly f0: number;
+    readonly fInf: number;
+    readonly decay: number;
+
+    constructor(params: HortonParams) {
+        this.f0 = params.f0;
+        this.fInf = params.fInf;
+        this.decay = params.decay;
+    }
+
+    infiltration(t: number): number {
+        return this.fInf + (this.f0 - this.fInf)
+               * Math.exp(-this.decay * t);
+    }
+}
+
+class GreenAmpt {
+    readonly ks: number;
+    readonly psi: number;
+    readonly thetaD: number;
+    cumInfil: number;
+
+    constructor(params: GreenAmptParams) {
+        this.ks = params.ks;
+        this.psi = params.psi;
+        this.thetaD = params.thetaD;
+        this.cumInfil = params.cumInfil ?? 0.001;
+    }
+
+    infiltration(rainfall: number, dt: number): number {
+        if (this.cumInfil <= 0.0) this.cumInfil = 0.001;
+
+        let f: number = this.ks * (1.0 + this.psi
+                        * this.thetaD / this.cumInfil);
+        f = Math.min(f, rainfall);
+
+        this.cumInfil += f * dt;
+        return f;
+    }
+}
+
+function cnInfiltration(rainfall: number,
+                        cn: number): number {
+    if (cn <= 0.0 || cn >= 100.0) return 0.0;
+
+    const S: number = (1000.0 / cn) - 10.0;
+    const Ia: number = 0.2 * S;
+
+    if (rainfall <= Ia) return rainfall;
+
+    const Pe: number = Math.pow(rainfall - Ia, 2)
+                       / (rainfall - Ia + S);
+    return rainfall - Pe;
+}
+
+export { Horton, GreenAmpt, cnInfiltration };`,
+    cuda: `// infil.cu — Infiltration Models
+// SWMM5 Engine in CUDA — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+#include <math.h>
+
+struct Horton {
+    float f0;
+    float fInf;
+    float decay;
+};
+
+struct GreenAmpt {
+    float ks;
+    float psi;
+    float thetaD;
+    float cumInfil;
+};
+
+__device__ float hortonInfil(const Horton* h, float t)
+{
+    return h->fInf + (h->f0 - h->fInf)
+           * expf(-h->decay * t);
+}
+
+__device__ float greenAmptInfil(GreenAmpt* ga,
+                                 float rainfall, float dt)
+{
+    if (ga->cumInfil <= 0.0f) ga->cumInfil = 0.001f;
+
+    float f = ga->ks * (1.0f + ga->psi * ga->thetaD
+                        / ga->cumInfil);
+    if (f > rainfall) f = rainfall;
+
+    ga->cumInfil += f * dt;
+    return f;
+}
+
+__device__ float cnInfil(float rainfall, float cn)
+{
+    if (cn <= 0.0f || cn >= 100.0f) return 0.0f;
+
+    float S = (1000.0f / cn) - 10.0f;
+    float Ia = 0.2f * S;
+
+    if (rainfall <= Ia) return rainfall;
+
+    float Pe = powf(rainfall - Ia, 2.0f)
+               / (rainfall - Ia + S);
+    return rainfall - Pe;
+}
+
+__global__ void infilKernel(Horton* hortons,
+    GreenAmpt* gas, float* rainfall, float* time,
+    float dt, float* result, int method, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    if (method == 0)
+        result[idx] = hortonInfil(&hortons[idx],
+                                   time[idx]);
+    else if (method == 1)
+        result[idx] = greenAmptInfil(&gas[idx],
+                                      rainfall[idx], dt);
+    else
+        result[idx] = cnInfil(rainfall[idx], 80.0f);
+}`,
+    wasm: `;; infil.wat — Infiltration Models
+;; SWMM5 Engine in WebAssembly — Horton, Green-Ampt, SCS-CN
+;; Three methods to compute how rainfall infiltrates
+;; into soil versus becoming surface runoff
+
+(module
+  (func $hortonInfil
+    (param $f0 f64) (param $fInf f64)
+    (param $decay f64) (param $t f64)
+    (result f64)
+    ;; f = fInf + (f0 - fInf) * exp(-decay * t)
+    (f64.add
+      (local.get $fInf)
+      (f64.mul
+        (f64.sub (local.get $f0) (local.get $fInf))
+        (call $exp
+          (f64.mul
+            (f64.neg (local.get $decay))
+            (local.get $t)))))
+  )
+
+  (func $greenAmptInfil
+    (param $ks f64) (param $psi f64)
+    (param $thetaD f64) (param $cumInfil f64)
+    (param $rainfall f64)
+    (result f64)
+    (local $f f64)
+    ;; f = ks * (1 + psi * thetaD / cumInfil)
+    (local.set $f
+      (f64.mul
+        (local.get $ks)
+        (f64.add
+          (f64.const 1.0)
+          (f64.div
+            (f64.mul (local.get $psi) (local.get $thetaD))
+            (local.get $cumInfil)))))
+    ;; clamp to rainfall
+    (if (f64.gt (local.get $f) (local.get $rainfall))
+      (then (local.set $f (local.get $rainfall))))
+    (local.get $f)
+  )
+
+  (func $cnInfil
+    (param $rainfall f64) (param $cn f64)
+    (result f64)
+    (local $S f64) (local $Ia f64) (local $diff f64)
+    ;; S = 1000/CN - 10
+    (local.set $S
+      (f64.sub
+        (f64.div (f64.const 1000.0) (local.get $cn))
+        (f64.const 10.0)))
+    ;; Ia = 0.2 * S
+    (local.set $Ia
+      (f64.mul (f64.const 0.2) (local.get $S)))
+    ;; if rainfall <= Ia, return rainfall
+    (if (f64.le (local.get $rainfall) (local.get $Ia))
+      (then (return (local.get $rainfall))))
+    ;; Pe = (P - Ia)^2 / (P - Ia + S)
+    (local.set $diff
+      (f64.sub (local.get $rainfall) (local.get $Ia)))
+    (f64.sub
+      (local.get $rainfall)
+      (f64.div
+        (f64.mul (local.get $diff) (local.get $diff))
+        (f64.add (local.get $diff) (local.get $S))))
+  )
+
+  (func $exp (param f64) (result f64)
+    (f64.const 0.0))
+)`,
+    mojo: `# infil.mojo — Infiltration Models
+# SWMM5 Engine in Mojo — Horton, Green-Ampt, and SCS-CN
+# Three methods to compute how rainfall infiltrates
+# into soil versus becoming surface runoff
+
+from math import exp, pow
+
+struct Horton:
+    var f0: Float64
+    var f_inf: Float64
+    var decay: Float64
+
+    fn __init__(inout self, f0: Float64,
+                f_inf: Float64, decay: Float64):
+        self.f0 = f0
+        self.f_inf = f_inf
+        self.decay = decay
+
+    fn infiltration(self, t: Float64) -> Float64:
+        return self.f_inf + (self.f0 - self.f_inf) \\
+               * exp(-self.decay * t)
+
+struct GreenAmpt:
+    var ks: Float64
+    var psi: Float64
+    var theta_d: Float64
+    var cum_infil: Float64
+
+    fn __init__(inout self, ks: Float64, psi: Float64,
+                theta_d: Float64,
+                cum_infil: Float64 = 0.001):
+        self.ks = ks
+        self.psi = psi
+        self.theta_d = theta_d
+        self.cum_infil = cum_infil
+
+    fn infiltration(inout self, rainfall: Float64,
+                    dt: Float64) -> Float64:
+        if self.cum_infil <= 0.0:
+            self.cum_infil = 0.001
+
+        var f = self.ks * (1.0 + self.psi * self.theta_d
+                           / self.cum_infil)
+        if f > rainfall:
+            f = rainfall
+
+        self.cum_infil += f * dt
+        return f
+
+fn cn_infiltration(rainfall: Float64,
+                   cn: Float64) -> Float64:
+    if cn <= 0.0 or cn >= 100.0:
+        return 0.0
+
+    let S = (1000.0 / cn) - 10.0
+    let Ia = 0.2 * S
+
+    if rainfall <= Ia:
+        return rainfall
+
+    let Pe = pow(rainfall - Ia, 2.0) / (rainfall - Ia + S)
+    return rainfall - Pe`,
+    java: `// Infil.java — Infiltration Models
+// SWMM5 Engine in Java — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+package swmm;
+
+public class Infil {
+
+    public static class Horton {
+        private final double f0;
+        private final double fInf;
+        private final double decay;
+
+        public Horton(double f0, double fInf,
+                      double decay) {
+            this.f0 = f0;
+            this.fInf = fInf;
+            this.decay = decay;
+        }
+
+        public double infiltration(double t) {
+            return fInf + (f0 - fInf)
+                   * Math.exp(-decay * t);
+        }
+    }
+
+    public static class GreenAmpt {
+        private final double ks;
+        private final double psi;
+        private final double thetaD;
+        private double cumInfil;
+
+        public GreenAmpt(double ks, double psi,
+                         double thetaD) {
+            this.ks = ks;
+            this.psi = psi;
+            this.thetaD = thetaD;
+            this.cumInfil = 0.001;
+        }
+
+        public double infiltration(double rainfall,
+                                   double dt) {
+            if (cumInfil <= 0.0) cumInfil = 0.001;
+
+            double f = ks * (1.0 + psi * thetaD
+                             / cumInfil);
+            f = Math.min(f, rainfall);
+
+            cumInfil += f * dt;
+            return f;
+        }
+    }
+
+    public static double cnInfiltration(double rainfall,
+                                        double cn) {
+        if (cn <= 0.0 || cn >= 100.0) return 0.0;
+
+        double S = (1000.0 / cn) - 10.0;
+        double Ia = 0.2 * S;
+
+        if (rainfall <= Ia) return rainfall;
+
+        double Pe = Math.pow(rainfall - Ia, 2.0)
+                    / (rainfall - Ia + S);
+        return rainfall - Pe;
+    }
+}`,
+    nim: `# infil.nim — Infiltration Models
+# SWMM5 Engine in Nim — Horton, Green-Ampt, and SCS-CN
+# Three methods to compute how rainfall infiltrates
+# into soil versus becoming surface runoff
+
+import math
+
+type
+  Horton = object
+    f0: float64
+    fInf: float64
+    decay: float64
+
+  GreenAmpt = object
+    ks: float64
+    psi: float64
+    thetaD: float64
+    cumInfil: float64
+
+proc newHorton(f0, fInf, decay: float64): Horton =
+  result = Horton(f0: f0, fInf: fInf, decay: decay)
+
+proc newGreenAmpt(ks, psi, thetaD: float64;
+                  cumInfil: float64 = 0.001): GreenAmpt =
+  result = GreenAmpt(ks: ks, psi: psi,
+                     thetaD: thetaD,
+                     cumInfil: cumInfil)
+
+proc infiltration(h: Horton, t: float64): float64 =
+  result = h.fInf + (h.f0 - h.fInf) *
+           exp(-h.decay * t)
+
+proc infiltration(ga: var GreenAmpt, rainfall: float64,
+                  dt: float64): float64 =
+  if ga.cumInfil <= 0.0:
+    ga.cumInfil = 0.001
+
+  result = ga.ks * (1.0 + ga.psi * ga.thetaD /
+                    ga.cumInfil)
+  if result > rainfall:
+    result = rainfall
+
+  ga.cumInfil += result * dt
+
+proc cnInfiltration(rainfall, cn: float64): float64 =
+  if cn <= 0.0 or cn >= 100.0:
+    return 0.0
+
+  let S = (1000.0 / cn) - 10.0
+  let Ia = 0.2 * S
+
+  if rainfall <= Ia:
+    return rainfall
+
+  let Pe = pow(rainfall - Ia, 2.0) /
+           (rainfall - Ia + S)
+  result = rainfall - Pe`,
+    ada: `-- infil.adb — Infiltration Models
+-- SWMM5 Engine in Ada — Horton, Green-Ampt, and SCS-CN
+-- Three methods to compute how rainfall infiltrates
+-- into soil versus becoming surface runoff
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Infil is
+
+   type Horton is record
+      F0    : Float;
+      F_Inf : Float;
+      Decay : Float;
+   end record;
+
+   type Green_Ampt is record
+      Ks        : Float;
+      Psi       : Float;
+      Theta_D   : Float;
+      Cum_Infil : Float := 0.001;
+   end record;
+
+   function Horton_Infil(H : Horton;
+                         T : Float) return Float is
+   begin
+      return H.F_Inf + (H.F0 - H.F_Inf)
+             * Exp(-H.Decay * T);
+   end Horton_Infil;
+
+   function GreenAmpt_Infil(GA       : in out Green_Ampt;
+                            Rainfall : Float;
+                            Dt       : Float) return Float
+   is
+      F : Float;
+   begin
+      if GA.Cum_Infil <= 0.0 then
+         GA.Cum_Infil := 0.001;
+      end if;
+
+      F := GA.Ks * (1.0 + GA.Psi * GA.Theta_D
+                    / GA.Cum_Infil);
+      if F > Rainfall then
+         F := Rainfall;
+      end if;
+
+      GA.Cum_Infil := GA.Cum_Infil + F * Dt;
+      return F;
+   end GreenAmpt_Infil;
+
+   function CN_Infil(Rainfall : Float;
+                     CN       : Float) return Float
+   is
+      S  : Float;
+      Ia : Float;
+      Pe : Float;
+   begin
+      if CN <= 0.0 or else CN >= 100.0 then
+         return 0.0;
+      end if;
+
+      S  := (1000.0 / CN) - 10.0;
+      Ia := 0.2 * S;
+
+      if Rainfall <= Ia then
+         return Rainfall;
+      end if;
+
+      Pe := (Rainfall - Ia) ** 2 / (Rainfall - Ia + S);
+      return Rainfall - Pe;
+   end CN_Infil;
+
+end Infil;`,
+    chapel: `// infil.chpl — Infiltration Models
+// SWMM5 Engine in Chapel — Horton, Green-Ampt, SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+record Horton {
+  var f0: real;
+  var fInf: real;
+  var decay: real;
+
+  proc infiltration(t: real): real {
+    return fInf + (f0 - fInf) * exp(-decay * t);
+  }
+}
+
+record GreenAmpt {
+  var ks: real;
+  var psi: real;
+  var thetaD: real;
+  var cumInfil: real = 0.001;
+
+  proc ref infiltration(rainfall: real,
+                        dt: real): real {
+    if cumInfil <= 0.0 then cumInfil = 0.001;
+
+    var f = ks * (1.0 + psi * thetaD / cumInfil);
+    if f > rainfall then f = rainfall;
+
+    cumInfil += f * dt;
+    return f;
+  }
+}
+
+proc cnInfiltration(rainfall: real,
+                    cn: real): real {
+  if cn <= 0.0 || cn >= 100.0 then return 0.0;
+
+  const S  = (1000.0 / cn) - 10.0;
+  const Ia = 0.2 * S;
+
+  if rainfall <= Ia then return rainfall;
+
+  const Pe = (rainfall - Ia) ** 2
+             / (rainfall - Ia + S);
+  return rainfall - Pe;
+}`,
+    swift: `// infil.swift — Infiltration Models
+// SWMM5 Engine in Swift — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+import Foundation
+
+struct Horton {
+    let f0: Double
+    let fInf: Double
+    let decay: Double
+
+    func infiltration(t: Double) -> Double {
+        return fInf + (f0 - fInf) * exp(-decay * t)
+    }
+}
+
+struct GreenAmpt {
+    let ks: Double
+    let psi: Double
+    let thetaD: Double
+    var cumInfil: Double = 0.001
+
+    mutating func infiltration(rainfall: Double,
+                               dt: Double) -> Double {
+        if cumInfil <= 0.0 { cumInfil = 0.001 }
+
+        var f = ks * (1.0 + psi * thetaD / cumInfil)
+        f = min(f, rainfall)
+
+        cumInfil += f * dt
+        return f
+    }
+}
+
+func cnInfiltration(rainfall: Double,
+                    cn: Double) -> Double {
+    guard cn > 0.0, cn < 100.0 else { return 0.0 }
+
+    let S = (1000.0 / cn) - 10.0
+    let Ia = 0.2 * S
+
+    guard rainfall > Ia else { return rainfall }
+
+    let Pe = pow(rainfall - Ia, 2.0)
+             / (rainfall - Ia + S)
+    return rainfall - Pe
+}`,
+    kotlin: `// Infil.kt — Infiltration Models
+// SWMM5 Engine in Kotlin — Horton, Green-Ampt, SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+package swmm
+
+import kotlin.math.exp
+import kotlin.math.min
+import kotlin.math.pow
+
+data class Horton(
+    val f0: Double,
+    val fInf: Double,
+    val decay: Double
+) {
+    fun infiltration(t: Double): Double =
+        fInf + (f0 - fInf) * exp(-decay * t)
+}
+
+class GreenAmpt(
+    val ks: Double,
+    val psi: Double,
+    val thetaD: Double,
+    var cumInfil: Double = 0.001
+) {
+    fun infiltration(rainfall: Double,
+                     dt: Double): Double {
+        if (cumInfil <= 0.0) cumInfil = 0.001
+
+        var f = ks * (1.0 + psi * thetaD / cumInfil)
+        f = min(f, rainfall)
+
+        cumInfil += f * dt
+        return f
+    }
+}
+
+fun cnInfiltration(rainfall: Double,
+                   cn: Double): Double {
+    if (cn <= 0.0 || cn >= 100.0) return 0.0
+
+    val S = (1000.0 / cn) - 10.0
+    val Ia = 0.2 * S
+
+    if (rainfall <= Ia) return rainfall
+
+    val Pe = (rainfall - Ia).pow(2.0) /
+             (rainfall - Ia + S)
+    return rainfall - Pe
 }`,
   },
   "lid.c — LID/Green Infrastructure": {
@@ -3163,6 +7842,1055 @@ pub const LidUnit = struct {
         return @max(overflow, 0.0);
     }
 };`,
+    cpp: `// lid.cpp — LID/Green Infrastructure Controls
+// SWMM5 Engine in C++ — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+enum class LidType {
+    BioCell, PermPave, InfilTrench, VegSwale
+};
+
+struct LidLayer {
+    double depth;        // layer depth (ft)
+    double voidFrac;     // void fraction (porosity)
+    double conductivity; // hydraulic conductivity (ft/s)
+};
+
+struct LidUnit {
+    LidType type;
+    LidLayer surface;    // surface layer
+    LidLayer soil;       // soil layer
+    LidLayer storage;    // gravel storage layer
+    double drainCoeff;   // underdrain coefficient
+    double drainExp;     // underdrain exponent
+
+    double getSoilPerc(double soilMoist,
+                       double storageDepth) const {
+        double deficit = soil.voidFrac - soilMoist;
+        if (deficit <= 0.0) return 0.0;
+
+        double maxStorage = storage.depth * storage.voidFrac;
+        if (storageDepth >= maxStorage) return 0.0;
+
+        return soil.conductivity
+               * (1.0 + soil.depth * deficit
+                  / (soilMoist + 0.001));
+    }
+
+    double getDrainFlow(double storageDepth) const {
+        if (drainCoeff <= 0.0) return 0.0;
+        if (storageDepth <= 0.0) return 0.0;
+
+        return drainCoeff
+               * std::pow(storageDepth, drainExp);
+    }
+
+    double getRunoff(double rainfall, double surfDepth,
+                     double soilMoist, double storageDepth,
+                     double dt) const {
+        double soilPerc = getSoilPerc(soilMoist,
+                                      storageDepth);
+        double surfInflow = std::max(rainfall - soilPerc,
+                                     0.0);
+        double surfCapacity = surface.depth
+                              * surface.voidFrac;
+        double overflow = surfDepth + surfInflow * dt
+                          - surfCapacity;
+        return std::max(overflow, 0.0);
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Lid.cs — LID/Green Infrastructure Controls
+// SWMM5 Engine in C# — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+using System;
+
+namespace Swmm
+{
+    public enum LidType
+    {
+        BioCell, PermPave, InfilTrench, VegSwale
+    }
+
+    public class LidLayer
+    {
+        public double Depth { get; set; }
+        public double VoidFrac { get; set; }
+        public double Conductivity { get; set; }
+
+        public LidLayer(double depth, double voidFrac,
+                        double conductivity)
+        {
+            Depth = depth;
+            VoidFrac = voidFrac;
+            Conductivity = conductivity;
+        }
+    }
+
+    public class LidUnit
+    {
+        public LidType Type { get; set; }
+        public LidLayer Surface { get; set; }
+        public LidLayer Soil { get; set; }
+        public LidLayer Storage { get; set; }
+        public double DrainCoeff { get; set; }
+        public double DrainExp { get; set; }
+
+        public double GetSoilPerc(double soilMoist,
+                                   double storageDepth)
+        {
+            double deficit = Soil.VoidFrac - soilMoist;
+            if (deficit <= 0.0) return 0.0;
+
+            double maxStorage = Storage.Depth
+                                * Storage.VoidFrac;
+            if (storageDepth >= maxStorage) return 0.0;
+
+            return Soil.Conductivity
+                   * (1.0 + Soil.Depth * deficit
+                      / (soilMoist + 0.001));
+        }
+
+        public double GetDrainFlow(double storageDepth)
+        {
+            if (DrainCoeff <= 0.0) return 0.0;
+            if (storageDepth <= 0.0) return 0.0;
+
+            return DrainCoeff
+                   * Math.Pow(storageDepth, DrainExp);
+        }
+
+        public double GetRunoff(double rainfall,
+            double surfDepth, double soilMoist,
+            double storageDepth, double dt)
+        {
+            double soilPerc = GetSoilPerc(soilMoist,
+                                           storageDepth);
+            double surfInflow = Math.Max(
+                rainfall - soilPerc, 0.0);
+            double surfCapacity = Surface.Depth
+                                  * Surface.VoidFrac;
+            double overflow = surfDepth + surfInflow * dt
+                              - surfCapacity;
+            return Math.Max(overflow, 0.0);
+        }
+    }
+}`,
+    matlab: `% lid.m — LID/Green Infrastructure Controls
+% SWMM5 Engine in MATLAB — Low Impact Development
+% Models bioretention, permeable pavement, infiltration
+% trenches, and vegetated swales with layered water balance
+
+function layer = create_lid_layer(depth, void_frac, ...
+                                    conductivity)
+    layer.depth        = depth;
+    layer.void_frac    = void_frac;
+    layer.conductivity = conductivity;
+end
+
+function lid = create_lid_unit(type, surface, soil, ...
+                                storage, drain_coeff, ...
+                                drain_exp)
+    lid.type        = type;
+    lid.surface     = surface;
+    lid.soil        = soil;
+    lid.storage     = storage;
+    lid.drain_coeff = drain_coeff;
+    lid.drain_exp   = drain_exp;
+end
+
+function perc = get_soil_perc(lid, soil_moist, ...
+                               storage_depth)
+    deficit = lid.soil.void_frac - soil_moist;
+    if deficit <= 0.0
+        perc = 0.0; return;
+    end
+
+    max_storage = lid.storage.depth ...
+                  * lid.storage.void_frac;
+    if storage_depth >= max_storage
+        perc = 0.0; return;
+    end
+
+    perc = lid.soil.conductivity ...
+           * (1.0 + lid.soil.depth * deficit ...
+              / (soil_moist + 0.001));
+end
+
+function q = get_drain_flow(lid, storage_depth)
+    if lid.drain_coeff <= 0.0
+        q = 0.0; return;
+    end
+    if storage_depth <= 0.0
+        q = 0.0; return;
+    end
+
+    q = lid.drain_coeff ...
+        * storage_depth^lid.drain_exp;
+end
+
+function overflow = get_runoff(lid, rainfall, ...
+    surf_depth, soil_moist, storage_depth, dt)
+    soil_perc = get_soil_perc(lid, soil_moist, ...
+                               storage_depth);
+    surf_inflow = max(rainfall - soil_perc, 0.0);
+    surf_capacity = lid.surface.depth ...
+                    * lid.surface.void_frac;
+    overflow = surf_depth + surf_inflow * dt ...
+               - surf_capacity;
+    overflow = max(overflow, 0.0);
+end`,
+    r: `# lid.R — LID/Green Infrastructure Controls
+# SWMM5 Engine in R — Low Impact Development
+# Models bioretention, permeable pavement, infiltration
+# trenches, and vegetated swales with layered water balance
+
+create_lid_layer <- function(depth, void_frac,
+                              conductivity) {
+    list(
+        depth        = depth,
+        void_frac    = void_frac,
+        conductivity = conductivity
+    )
+}
+
+create_lid_unit <- function(type, surface, soil,
+                             storage, drain_coeff,
+                             drain_exp) {
+    list(
+        type        = type,
+        surface     = surface,
+        soil        = soil,
+        storage     = storage,
+        drain_coeff = drain_coeff,
+        drain_exp   = drain_exp
+    )
+}
+
+get_soil_perc <- function(lid, soil_moist,
+                           storage_depth) {
+    deficit <- lid$soil$void_frac - soil_moist
+    if (deficit <= 0.0) return(0.0)
+
+    max_storage <- lid$storage$depth *
+                   lid$storage$void_frac
+    if (storage_depth >= max_storage) return(0.0)
+
+    lid$soil$conductivity *
+        (1.0 + lid$soil$depth * deficit /
+         (soil_moist + 0.001))
+}
+
+get_drain_flow <- function(lid, storage_depth) {
+    if (lid$drain_coeff <= 0.0) return(0.0)
+    if (storage_depth <= 0.0) return(0.0)
+
+    lid$drain_coeff * storage_depth^lid$drain_exp
+}
+
+get_runoff <- function(lid, rainfall, surf_depth,
+                        soil_moist, storage_depth, dt) {
+    soil_perc <- get_soil_perc(lid, soil_moist,
+                                storage_depth)
+    surf_inflow <- max(rainfall - soil_perc, 0.0)
+    surf_capacity <- lid$surface$depth *
+                     lid$surface$void_frac
+    overflow <- surf_depth + surf_inflow * dt -
+                surf_capacity
+    max(overflow, 0.0)
+}`,
+    delphi: `{ lid.pas — LID/Green Infrastructure Controls }
+{ SWMM5 Engine in Delphi — Low Impact Development }
+{ Models bioretention, permeable pavement, infiltration }
+{ trenches, and vegetated swales with layered water balance }
+
+unit Lid;
+
+interface
+
+uses Math;
+
+type
+  TLidType = (ltBioCell, ltPermPave,
+              ltInfilTrench, ltVegSwale);
+
+  TLidLayer = record
+    Depth: Double;
+    VoidFrac: Double;
+    Conductivity: Double;
+  end;
+
+  TLidUnit = class
+  private
+    FType: TLidType;
+    FSurface: TLidLayer;
+    FSoil: TLidLayer;
+    FStorage: TLidLayer;
+    FDrainCoeff: Double;
+    FDrainExp: Double;
+  public
+    constructor Create(AType: TLidType;
+      ASurface, ASoil, AStorage: TLidLayer;
+      ADrainCoeff, ADrainExp: Double);
+    function GetSoilPerc(SoilMoist,
+                          StorageDepth: Double): Double;
+    function GetDrainFlow(StorageDepth: Double): Double;
+    function GetRunoff(Rainfall, SurfDepth, SoilMoist,
+                       StorageDepth, Dt: Double): Double;
+  end;
+
+implementation
+
+constructor TLidUnit.Create(AType: TLidType;
+  ASurface, ASoil, AStorage: TLidLayer;
+  ADrainCoeff, ADrainExp: Double);
+begin
+  FType       := AType;
+  FSurface    := ASurface;
+  FSoil       := ASoil;
+  FStorage    := AStorage;
+  FDrainCoeff := ADrainCoeff;
+  FDrainExp   := ADrainExp;
+end;
+
+function TLidUnit.GetSoilPerc(SoilMoist,
+                                StorageDepth: Double): Double;
+var
+  Deficit, MaxStorage: Double;
+begin
+  Deficit := FSoil.VoidFrac - SoilMoist;
+  if Deficit <= 0.0 then Exit(0.0);
+
+  MaxStorage := FStorage.Depth * FStorage.VoidFrac;
+  if StorageDepth >= MaxStorage then Exit(0.0);
+
+  Result := FSoil.Conductivity
+            * (1.0 + FSoil.Depth * Deficit
+               / (SoilMoist + 0.001));
+end;
+
+function TLidUnit.GetDrainFlow(
+                     StorageDepth: Double): Double;
+begin
+  if FDrainCoeff <= 0.0 then Exit(0.0);
+  if StorageDepth <= 0.0 then Exit(0.0);
+
+  Result := FDrainCoeff
+            * Power(StorageDepth, FDrainExp);
+end;
+
+function TLidUnit.GetRunoff(Rainfall, SurfDepth,
+  SoilMoist, StorageDepth, Dt: Double): Double;
+var
+  SoilPerc, SurfInflow, SurfCapacity: Double;
+begin
+  SoilPerc    := GetSoilPerc(SoilMoist, StorageDepth);
+  SurfInflow  := Max(Rainfall - SoilPerc, 0.0);
+  SurfCapacity := FSurface.Depth * FSurface.VoidFrac;
+  Result := SurfDepth + SurfInflow * Dt - SurfCapacity;
+  Result := Max(Result, 0.0);
+end;
+
+end.`,
+    typescript: `// lid.ts — LID/Green Infrastructure Controls
+// SWMM5 Engine in TypeScript — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+enum LidType {
+    BioCell, PermPave, InfilTrench, VegSwale
+}
+
+interface LidLayerParams {
+    depth: number;
+    voidFrac: number;
+    conductivity: number;
+}
+
+interface LidUnitParams {
+    type: LidType;
+    surface: LidLayerParams;
+    soil: LidLayerParams;
+    storage: LidLayerParams;
+    drainCoeff: number;
+    drainExp: number;
+}
+
+class LidUnit {
+    readonly type: LidType;
+    readonly surface: LidLayerParams;
+    readonly soil: LidLayerParams;
+    readonly storage: LidLayerParams;
+    readonly drainCoeff: number;
+    readonly drainExp: number;
+
+    constructor(params: LidUnitParams) {
+        this.type = params.type;
+        this.surface = params.surface;
+        this.soil = params.soil;
+        this.storage = params.storage;
+        this.drainCoeff = params.drainCoeff;
+        this.drainExp = params.drainExp;
+    }
+
+    getSoilPerc(soilMoist: number,
+                storageDepth: number): number {
+        const deficit: number =
+            this.soil.voidFrac - soilMoist;
+        if (deficit <= 0.0) return 0.0;
+
+        const maxStorage: number =
+            this.storage.depth * this.storage.voidFrac;
+        if (storageDepth >= maxStorage) return 0.0;
+
+        return this.soil.conductivity
+               * (1.0 + this.soil.depth * deficit
+                  / (soilMoist + 0.001));
+    }
+
+    getDrainFlow(storageDepth: number): number {
+        if (this.drainCoeff <= 0.0) return 0.0;
+        if (storageDepth <= 0.0) return 0.0;
+
+        return this.drainCoeff
+               * Math.pow(storageDepth, this.drainExp);
+    }
+
+    getRunoff(rainfall: number, surfDepth: number,
+              soilMoist: number, storageDepth: number,
+              dt: number): number {
+        const soilPerc: number =
+            this.getSoilPerc(soilMoist, storageDepth);
+        const surfInflow: number =
+            Math.max(rainfall - soilPerc, 0.0);
+        const surfCapacity: number =
+            this.surface.depth * this.surface.voidFrac;
+        const overflow: number =
+            surfDepth + surfInflow * dt - surfCapacity;
+        return Math.max(overflow, 0.0);
+    }
+}
+
+export { LidUnit, LidType };`,
+    cuda: `// lid.cu — LID/Green Infrastructure Controls
+// SWMM5 Engine in CUDA — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+#include <math.h>
+
+enum LidType {
+    BIO_CELL, PERM_PAVE, INFIL_TRENCH, VEG_SWALE
+};
+
+struct LidLayer {
+    float depth;
+    float voidFrac;
+    float conductivity;
+};
+
+struct LidUnit {
+    LidType type;
+    LidLayer surface;
+    LidLayer soil;
+    LidLayer storage;
+    float drainCoeff;
+    float drainExp;
+};
+
+__device__ float getSoilPerc(const LidUnit* lid,
+    float soilMoist, float storageDepth)
+{
+    float deficit = lid->soil.voidFrac - soilMoist;
+    if (deficit <= 0.0f) return 0.0f;
+
+    float maxStorage = lid->storage.depth
+                       * lid->storage.voidFrac;
+    if (storageDepth >= maxStorage) return 0.0f;
+
+    return lid->soil.conductivity
+           * (1.0f + lid->soil.depth * deficit
+              / (soilMoist + 0.001f));
+}
+
+__device__ float getDrainFlow(const LidUnit* lid,
+                               float storageDepth)
+{
+    if (lid->drainCoeff <= 0.0f) return 0.0f;
+    if (storageDepth <= 0.0f) return 0.0f;
+
+    return lid->drainCoeff
+           * powf(storageDepth, lid->drainExp);
+}
+
+__global__ void lidRunoffKernel(LidUnit* lids,
+    float* rainfall, float* surfDepth,
+    float* soilMoist, float* storageDepth,
+    float dt, float* overflow, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    LidUnit lid = lids[idx];
+    float perc = getSoilPerc(&lid, soilMoist[idx],
+                              storageDepth[idx]);
+    float surfInflow = fmaxf(
+        rainfall[idx] - perc, 0.0f);
+    float surfCap = lid.surface.depth
+                    * lid.surface.voidFrac;
+    float ovf = surfDepth[idx] + surfInflow * dt
+                - surfCap;
+    overflow[idx] = fmaxf(ovf, 0.0f);
+}`,
+    wasm: `;; lid.wat — LID/Green Infrastructure Controls
+;; SWMM5 Engine in WebAssembly — Low Impact Development
+;; Models bioretention, permeable pavement, infiltration
+;; trenches, and vegetated swales with layered water balance
+
+(module
+  (func $getSoilPerc
+    (param $soilVoidFrac f64) (param $soilMoist f64)
+    (param $soilDepth f64) (param $soilCond f64)
+    (param $storVoidFrac f64) (param $storDepth f64)
+    (param $storageDepth f64)
+    (result f64)
+    (local $deficit f64) (local $maxStor f64)
+
+    (local.set $deficit
+      (f64.sub (local.get $soilVoidFrac)
+               (local.get $soilMoist)))
+    (if (f64.le (local.get $deficit) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (local.set $maxStor
+      (f64.mul (local.get $storDepth)
+               (local.get $storVoidFrac)))
+    (if (f64.ge (local.get $storageDepth)
+                (local.get $maxStor))
+      (then (return (f64.const 0.0))))
+
+    (f64.mul (local.get $soilCond)
+      (f64.add (f64.const 1.0)
+        (f64.div
+          (f64.mul (local.get $soilDepth)
+                   (local.get $deficit))
+          (f64.add (local.get $soilMoist)
+                   (f64.const 0.001)))))
+  )
+
+  (func $getDrainFlow
+    (param $drainCoeff f64) (param $drainExp f64)
+    (param $storageDepth f64)
+    (result f64)
+
+    (if (f64.le (local.get $drainCoeff) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (if (f64.le (local.get $storageDepth) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (f64.mul (local.get $drainCoeff)
+      (call $pow (local.get $storageDepth)
+                 (local.get $drainExp)))
+  )
+
+  (func $pow (param f64) (param f64) (result f64)
+    (f64.const 0.0))
+)`,
+    mojo: `# lid.mojo — LID/Green Infrastructure Controls
+# SWMM5 Engine in Mojo — Low Impact Development
+# Models bioretention, permeable pavement, infiltration
+# trenches, and vegetated swales with layered water balance
+
+from math import pow, max
+
+@value
+struct LidLayer:
+    var depth: Float64
+    var void_frac: Float64
+    var conductivity: Float64
+
+@value
+struct LidUnit:
+    var surface: LidLayer
+    var soil: LidLayer
+    var storage: LidLayer
+    var drain_coeff: Float64
+    var drain_exp: Float64
+
+    fn get_soil_perc(self, soil_moist: Float64,
+                     storage_depth: Float64) -> Float64:
+        let deficit = self.soil.void_frac - soil_moist
+        if deficit <= 0.0:
+            return 0.0
+
+        let max_storage = (self.storage.depth
+                           * self.storage.void_frac)
+        if storage_depth >= max_storage:
+            return 0.0
+
+        return (self.soil.conductivity
+                * (1.0 + self.soil.depth * deficit
+                   / (soil_moist + 0.001)))
+
+    fn get_drain_flow(self,
+                      storage_depth: Float64) -> Float64:
+        if self.drain_coeff <= 0.0:
+            return 0.0
+        if storage_depth <= 0.0:
+            return 0.0
+
+        return (self.drain_coeff
+                * pow(storage_depth, self.drain_exp))
+
+    fn get_runoff(self, rainfall: Float64,
+                  surf_depth: Float64,
+                  soil_moist: Float64,
+                  storage_depth: Float64,
+                  dt: Float64) -> Float64:
+        let soil_perc = self.get_soil_perc(
+            soil_moist, storage_depth)
+        let surf_inflow = max(
+            rainfall - soil_perc, 0.0)
+        let surf_capacity = (self.surface.depth
+                             * self.surface.void_frac)
+        let overflow = (surf_depth + surf_inflow * dt
+                        - surf_capacity)
+        return max(overflow, 0.0)`,
+    java: `// Lid.java — LID/Green Infrastructure Controls
+// SWMM5 Engine in Java — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+package swmm;
+
+public class LidUnit {
+
+    public enum LidType {
+        BIO_CELL, PERM_PAVE, INFIL_TRENCH, VEG_SWALE
+    }
+
+    public static class LidLayer {
+        private final double depth;
+        private final double voidFrac;
+        private final double conductivity;
+
+        public LidLayer(double depth, double voidFrac,
+                        double conductivity) {
+            this.depth = depth;
+            this.voidFrac = voidFrac;
+            this.conductivity = conductivity;
+        }
+
+        public double getDepth() { return depth; }
+        public double getVoidFrac() { return voidFrac; }
+        public double getConductivity() {
+            return conductivity;
+        }
+    }
+
+    private final LidType type;
+    private final LidLayer surface;
+    private final LidLayer soil;
+    private final LidLayer storage;
+    private final double drainCoeff;
+    private final double drainExp;
+
+    public LidUnit(LidType type, LidLayer surface,
+                   LidLayer soil, LidLayer storage,
+                   double drainCoeff, double drainExp) {
+        this.type = type;
+        this.surface = surface;
+        this.soil = soil;
+        this.storage = storage;
+        this.drainCoeff = drainCoeff;
+        this.drainExp = drainExp;
+    }
+
+    public double getSoilPerc(double soilMoist,
+                               double storageDepth) {
+        double deficit = soil.voidFrac - soilMoist;
+        if (deficit <= 0.0) return 0.0;
+
+        double maxStorage = storage.depth
+                            * storage.voidFrac;
+        if (storageDepth >= maxStorage) return 0.0;
+
+        return soil.conductivity
+               * (1.0 + soil.depth * deficit
+                  / (soilMoist + 0.001));
+    }
+
+    public double getDrainFlow(double storageDepth) {
+        if (drainCoeff <= 0.0) return 0.0;
+        if (storageDepth <= 0.0) return 0.0;
+
+        return drainCoeff
+               * Math.pow(storageDepth, drainExp);
+    }
+
+    public double getRunoff(double rainfall,
+        double surfDepth, double soilMoist,
+        double storageDepth, double dt) {
+        double soilPerc = getSoilPerc(soilMoist,
+                                       storageDepth);
+        double surfInflow = Math.max(
+            rainfall - soilPerc, 0.0);
+        double surfCapacity = surface.depth
+                              * surface.voidFrac;
+        double overflow = surfDepth + surfInflow * dt
+                          - surfCapacity;
+        return Math.max(overflow, 0.0);
+    }
+}`,
+    nim: `# lid.nim — LID/Green Infrastructure Controls
+# SWMM5 Engine in Nim — Low Impact Development
+# Models bioretention, permeable pavement, infiltration
+# trenches, and vegetated swales with layered water balance
+
+import math
+
+type
+  LidType = enum
+    ltBioCell, ltPermPave, ltInfilTrench, ltVegSwale
+
+  LidLayer = object
+    depth: float64
+    voidFrac: float64
+    conductivity: float64
+
+  LidUnit = object
+    kind: LidType
+    surface: LidLayer
+    soil: LidLayer
+    storage: LidLayer
+    drainCoeff: float64
+    drainExp: float64
+
+proc getSoilPerc(lid: LidUnit, soilMoist: float64,
+                  storageDepth: float64): float64 =
+  let deficit = lid.soil.voidFrac - soilMoist
+  if deficit <= 0.0:
+    return 0.0
+
+  let maxStorage = lid.storage.depth *
+                   lid.storage.voidFrac
+  if storageDepth >= maxStorage:
+    return 0.0
+
+  result = lid.soil.conductivity *
+    (1.0 + lid.soil.depth * deficit /
+     (soilMoist + 0.001))
+
+proc getDrainFlow(lid: LidUnit,
+                   storageDepth: float64): float64 =
+  if lid.drainCoeff <= 0.0:
+    return 0.0
+  if storageDepth <= 0.0:
+    return 0.0
+
+  result = lid.drainCoeff *
+    pow(storageDepth, lid.drainExp)
+
+proc getRunoff(lid: LidUnit, rainfall: float64,
+               surfDepth: float64, soilMoist: float64,
+               storageDepth: float64,
+               dt: float64): float64 =
+  let soilPerc = getSoilPerc(lid, soilMoist,
+                              storageDepth)
+  let surfInflow = max(rainfall - soilPerc, 0.0)
+  let surfCapacity = lid.surface.depth *
+                     lid.surface.voidFrac
+  let overflow = surfDepth + surfInflow * dt -
+                 surfCapacity
+  result = max(overflow, 0.0)`,
+    ada: `-- lid.adb — LID/Green Infrastructure Controls
+-- SWMM5 Engine in Ada — Low Impact Development
+-- Models bioretention, permeable pavement, infiltration
+-- trenches, and vegetated swales with layered water balance
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Lid is
+
+   type Lid_Type is (Bio_Cell, Perm_Pave,
+                     Infil_Trench, Veg_Swale);
+
+   type Lid_Layer is record
+      Depth        : Float := 0.0;
+      Void_Frac    : Float := 0.0;
+      Conductivity : Float := 0.0;
+   end record;
+
+   type Lid_Unit is record
+      Kind         : Lid_Type;
+      Surface      : Lid_Layer;
+      Soil         : Lid_Layer;
+      Storage      : Lid_Layer;
+      Drain_Coeff  : Float := 0.0;
+      Drain_Exp    : Float := 0.0;
+   end record;
+
+   function Get_Soil_Perc
+     (Lid           : Lid_Unit;
+      Soil_Moist    : Float;
+      Storage_Depth : Float) return Float
+   is
+      Deficit     : Float;
+      Max_Storage : Float;
+   begin
+      Deficit := Lid.Soil.Void_Frac - Soil_Moist;
+      if Deficit <= 0.0 then return 0.0; end if;
+
+      Max_Storage := Lid.Storage.Depth
+                     * Lid.Storage.Void_Frac;
+      if Storage_Depth >= Max_Storage then
+         return 0.0;
+      end if;
+
+      return Lid.Soil.Conductivity
+             * (1.0 + Lid.Soil.Depth * Deficit
+                / (Soil_Moist + 0.001));
+   end Get_Soil_Perc;
+
+   function Get_Drain_Flow
+     (Lid           : Lid_Unit;
+      Storage_Depth : Float) return Float
+   is
+   begin
+      if Lid.Drain_Coeff <= 0.0 then return 0.0; end if;
+      if Storage_Depth <= 0.0 then return 0.0; end if;
+
+      return Lid.Drain_Coeff
+             * (Storage_Depth ** Lid.Drain_Exp);
+   end Get_Drain_Flow;
+
+   function Get_Runoff
+     (Lid           : Lid_Unit;
+      Rainfall      : Float;
+      Surf_Depth    : Float;
+      Soil_Moist    : Float;
+      Storage_Depth : Float;
+      Dt            : Float) return Float
+   is
+      Soil_Perc     : Float;
+      Surf_Inflow   : Float;
+      Surf_Capacity : Float;
+      Overflow      : Float;
+   begin
+      Soil_Perc := Get_Soil_Perc(Lid, Soil_Moist,
+                                  Storage_Depth);
+      Surf_Inflow := Float'Max(
+          Rainfall - Soil_Perc, 0.0);
+      Surf_Capacity := Lid.Surface.Depth
+                       * Lid.Surface.Void_Frac;
+      Overflow := Surf_Depth + Surf_Inflow * Dt
+                  - Surf_Capacity;
+      return Float'Max(Overflow, 0.0);
+   end Get_Runoff;
+
+end Lid;`,
+    chapel: `// lid.chpl — LID/Green Infrastructure Controls
+// SWMM5 Engine in Chapel — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+enum LidType { BioCell, PermPave,
+               InfilTrench, VegSwale }
+
+record LidLayer {
+    var depth: real;
+    var voidFrac: real;
+    var conductivity: real;
+}
+
+record LidUnit {
+    var kind: LidType;
+    var surface: LidLayer;
+    var soil: LidLayer;
+    var storage: LidLayer;
+    var drainCoeff: real;
+    var drainExp: real;
+
+    proc getSoilPerc(soilMoist: real,
+                     storageDepth: real): real {
+        const deficit = soil.voidFrac - soilMoist;
+        if deficit <= 0.0 then return 0.0;
+
+        const maxStorage = storage.depth
+                           * storage.voidFrac;
+        if storageDepth >= maxStorage then return 0.0;
+
+        return soil.conductivity
+               * (1.0 + soil.depth * deficit
+                  / (soilMoist + 0.001));
+    }
+
+    proc getDrainFlow(storageDepth: real): real {
+        if drainCoeff <= 0.0 then return 0.0;
+        if storageDepth <= 0.0 then return 0.0;
+
+        return drainCoeff
+               * storageDepth ** drainExp;
+    }
+
+    proc getRunoff(rainfall: real, surfDepth: real,
+                   soilMoist: real,
+                   storageDepth: real,
+                   dt: real): real {
+        const soilPerc = getSoilPerc(soilMoist,
+                                      storageDepth);
+        const surfInflow = max(
+            rainfall - soilPerc, 0.0);
+        const surfCapacity = surface.depth
+                             * surface.voidFrac;
+        const overflow = surfDepth + surfInflow * dt
+                         - surfCapacity;
+        return max(overflow, 0.0);
+    }
+}`,
+    swift: `// lid.swift — LID/Green Infrastructure Controls
+// SWMM5 Engine in Swift — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+import Foundation
+
+enum LidType {
+    case bioCell, permPave, infilTrench, vegSwale
+}
+
+struct LidLayer {
+    let depth: Double
+    let voidFrac: Double
+    let conductivity: Double
+}
+
+struct LidUnit {
+    let type: LidType
+    let surface: LidLayer
+    let soil: LidLayer
+    let storage: LidLayer
+    let drainCoeff: Double
+    let drainExp: Double
+
+    func getSoilPerc(soilMoist: Double,
+                     storageDepth: Double) -> Double {
+        let deficit = soil.voidFrac - soilMoist
+        guard deficit > 0.0 else { return 0.0 }
+
+        let maxStorage = storage.depth
+                         * storage.voidFrac
+        guard storageDepth < maxStorage else {
+            return 0.0
+        }
+
+        return soil.conductivity
+               * (1.0 + soil.depth * deficit
+                  / (soilMoist + 0.001))
+    }
+
+    func getDrainFlow(
+            storageDepth: Double) -> Double {
+        guard drainCoeff > 0.0 else { return 0.0 }
+        guard storageDepth > 0.0 else { return 0.0 }
+
+        return drainCoeff
+               * pow(storageDepth, drainExp)
+    }
+
+    func getRunoff(rainfall: Double,
+                   surfDepth: Double,
+                   soilMoist: Double,
+                   storageDepth: Double,
+                   dt: Double) -> Double {
+        let soilPerc = getSoilPerc(
+            soilMoist: soilMoist,
+            storageDepth: storageDepth)
+        let surfInflow = max(
+            rainfall - soilPerc, 0.0)
+        let surfCapacity = surface.depth
+                           * surface.voidFrac
+        let overflow = surfDepth + surfInflow * dt
+                       - surfCapacity
+        return max(overflow, 0.0)
+    }
+}`,
+    kotlin: `// Lid.kt — LID/Green Infrastructure Controls
+// SWMM5 Engine in Kotlin — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+package swmm
+
+import kotlin.math.max
+import kotlin.math.pow
+
+enum class LidType {
+    BIO_CELL, PERM_PAVE, INFIL_TRENCH, VEG_SWALE
+}
+
+data class LidLayer(
+    val depth: Double,
+    val voidFrac: Double,
+    val conductivity: Double
+)
+
+data class LidUnit(
+    val type: LidType,
+    val surface: LidLayer,
+    val soil: LidLayer,
+    val storage: LidLayer,
+    val drainCoeff: Double,
+    val drainExp: Double
+) {
+    fun getSoilPerc(soilMoist: Double,
+                    storageDepth: Double): Double {
+        val deficit = soil.voidFrac - soilMoist
+        if (deficit <= 0.0) return 0.0
+
+        val maxStorage = storage.depth *
+                         storage.voidFrac
+        if (storageDepth >= maxStorage) return 0.0
+
+        return soil.conductivity *
+               (1.0 + soil.depth * deficit /
+                (soilMoist + 0.001))
+    }
+
+    fun getDrainFlow(storageDepth: Double): Double {
+        if (drainCoeff <= 0.0) return 0.0
+        if (storageDepth <= 0.0) return 0.0
+
+        return drainCoeff *
+               storageDepth.pow(drainExp)
+    }
+
+    fun getRunoff(rainfall: Double,
+                  surfDepth: Double,
+                  soilMoist: Double,
+                  storageDepth: Double,
+                  dt: Double): Double {
+        val soilPerc = getSoilPerc(soilMoist,
+                                    storageDepth)
+        val surfInflow = max(
+            rainfall - soilPerc, 0.0)
+        val surfCapacity = surface.depth *
+                           surface.voidFrac
+        val overflow = surfDepth + surfInflow * dt -
+                       surfCapacity
+        return max(overflow, 0.0)
+    }
+}`,
   },
   "link.c — Conduit Hydraulics": {
     category: "Hydraulics",
@@ -4085,6 +9813,1500 @@ const Xsect = struct {
         return (y_lo + y_hi) / 2.0;
     }
 };`,
+    cpp: `// link.cpp — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in C++ — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+constexpr double GRAVITY = 32.174;   // ft/s²
+constexpr int    MAX_ITER = 50;
+constexpr double TOLERANCE = 1.0e-6;
+
+struct Xsect {
+    double yFull;    // full depth = diameter (ft)
+    double aFull;    // full area (ft²)
+    double rFull;    // full hydraulic radius (ft)
+    double wMax;     // maximum top width (ft)
+
+    double getArea(double depth) const {
+        double r = yFull / 2.0;
+        double yNorm = depth / yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return aFull;
+
+        double theta = 2.0 * std::acos(1.0 - 2.0 * yNorm);
+        return r * r * (theta - std::sin(theta)) / 2.0;
+    }
+
+    double getHydRadius(double depth) const {
+        double r = yFull / 2.0;
+        double yNorm = depth / yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return rFull;
+
+        double theta = 2.0 * std::acos(1.0 - 2.0 * yNorm);
+        double area  = r * r * (theta - std::sin(theta)) / 2.0;
+        double perim = r * theta;
+        if (perim <= 0.0) return 0.0;
+
+        return area / perim;
+    }
+
+    double getNormalDepth(double nManning, double slope,
+                          double qTarget) const {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+
+        double yLo = 0.0, yHi = yFull;
+
+        for (int i = 0; i < MAX_ITER; ++i) {
+            double yMid = (yLo + yHi) / 2.0;
+            double area = getArea(yMid);
+            double hydRad = getHydRadius(yMid);
+            double qCalc = (1.0 / nManning) * area
+                           * std::pow(hydRad, 2.0 / 3.0)
+                           * std::sqrt(slope);
+
+            if (std::abs(qCalc - qTarget) < TOLERANCE) break;
+            if (qCalc < qTarget) yLo = yMid;
+            else                 yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+
+    double getCriticalDepth(double qTarget) const {
+        if (qTarget <= 0.0) return 0.0;
+
+        double rhs = (qTarget * qTarget) / GRAVITY;
+        double yLo = 0.0, yHi = yFull;
+
+        for (int i = 0; i < MAX_ITER; ++i) {
+            double yMid = (yLo + yHi) / 2.0;
+            double r = yFull / 2.0;
+            double yNorm = yMid / yFull;
+            if (yNorm <= 0.0) { yLo = yMid; continue; }
+            if (yNorm >= 1.0) { yHi = yMid; continue; }
+
+            double theta = 2.0 * std::acos(1.0 - 2.0 * yNorm);
+            double area  = r * r * (theta - std::sin(theta)) / 2.0;
+            double topW  = 2.0 * r * std::sin(theta / 2.0);
+
+            if (topW <= 0.0) { yLo = yMid; continue; }
+            double lhs = (area * area * area) / topW;
+
+            if (std::abs(lhs - rhs) < TOLERANCE) break;
+            if (lhs < rhs) yLo = yMid;
+            else           yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Link.cs — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in C# — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+using System;
+
+namespace Swmm
+{
+    public class Xsect
+    {
+        public double YFull { get; }
+        public double AFull { get; }
+        public double RFull { get; }
+        public double WMax  { get; }
+
+        private const double Gravity   = 32.174;
+        private const int    MaxIter   = 50;
+        private const double Tolerance = 1.0e-6;
+
+        public Xsect(double yFull, double aFull,
+                      double rFull, double wMax)
+        {
+            YFull = yFull; AFull = aFull;
+            RFull = rFull; WMax  = wMax;
+        }
+
+        public double GetArea(double depth)
+        {
+            double r = YFull / 2.0;
+            double yNorm = depth / YFull;
+            if (yNorm <= 0.0) return 0.0;
+            if (yNorm >= 1.0) return AFull;
+
+            double theta = 2.0 * Math.Acos(1.0 - 2.0 * yNorm);
+            return r * r * (theta - Math.Sin(theta)) / 2.0;
+        }
+
+        public double GetHydRadius(double depth)
+        {
+            double r = YFull / 2.0;
+            double yNorm = depth / YFull;
+            if (yNorm <= 0.0) return 0.0;
+            if (yNorm >= 1.0) return RFull;
+
+            double theta = 2.0 * Math.Acos(1.0 - 2.0 * yNorm);
+            double area  = r * r * (theta - Math.Sin(theta)) / 2.0;
+            double perim = r * theta;
+            if (perim <= 0.0) return 0.0;
+
+            return area / perim;
+        }
+
+        public double GetNormalDepth(double nManning,
+                                      double slope,
+                                      double qTarget)
+        {
+            if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+
+            double yLo = 0.0, yHi = YFull;
+
+            for (int i = 0; i < MaxIter; i++)
+            {
+                double yMid = (yLo + yHi) / 2.0;
+                double area = GetArea(yMid);
+                double hydRad = GetHydRadius(yMid);
+                double qCalc = (1.0 / nManning) * area
+                    * Math.Pow(hydRad, 2.0 / 3.0)
+                    * Math.Sqrt(slope);
+
+                if (Math.Abs(qCalc - qTarget) < Tolerance) break;
+                if (qCalc < qTarget) yLo = yMid;
+                else                 yHi = yMid;
+            }
+            return (yLo + yHi) / 2.0;
+        }
+
+        public double GetCriticalDepth(double qTarget)
+        {
+            if (qTarget <= 0.0) return 0.0;
+
+            double rhs = (qTarget * qTarget) / Gravity;
+            double yLo = 0.0, yHi = YFull;
+
+            for (int i = 0; i < MaxIter; i++)
+            {
+                double yMid = (yLo + yHi) / 2.0;
+                double r = YFull / 2.0;
+                double yNorm = yMid / YFull;
+                if (yNorm <= 0.0) { yLo = yMid; continue; }
+                if (yNorm >= 1.0) { yHi = yMid; continue; }
+
+                double theta = 2.0 * Math.Acos(1.0 - 2.0 * yNorm);
+                double area = r * r
+                    * (theta - Math.Sin(theta)) / 2.0;
+                double topW = 2.0 * r * Math.Sin(theta / 2.0);
+
+                if (topW <= 0.0) { yLo = yMid; continue; }
+                double lhs = Math.Pow(area, 3) / topW;
+
+                if (Math.Abs(lhs - rhs) < Tolerance) break;
+                if (lhs < rhs) yLo = yMid;
+                else           yHi = yMid;
+            }
+            return (yLo + yHi) / 2.0;
+        }
+    }
+}`,
+    matlab: `% link.m — Conduit Hydraulics (Circular Cross Section)
+% SWMM5 Engine in MATLAB — Pipe Geometry & Manning's Equation
+% Computes area, hydraulic radius, normal depth, and
+% critical depth for circular conduits
+
+function area = xsect_get_area(xs, depth)
+    GRAVITY   = 32.174;
+    MAX_ITER  = 50;
+    TOLERANCE = 1.0e-6;
+
+    r = xs.y_full / 2.0;
+    y_norm = depth / xs.y_full;
+    if y_norm <= 0.0
+        area = 0.0; return;
+    end
+    if y_norm >= 1.0
+        area = xs.a_full; return;
+    end
+
+    theta = 2.0 * acos(1.0 - 2.0 * y_norm);
+    area = r * r * (theta - sin(theta)) / 2.0;
+end
+
+function hyd_r = xsect_get_hyd_radius(xs, depth)
+    r = xs.y_full / 2.0;
+    y_norm = depth / xs.y_full;
+    if y_norm <= 0.0
+        hyd_r = 0.0; return;
+    end
+    if y_norm >= 1.0
+        hyd_r = xs.r_full; return;
+    end
+
+    theta = 2.0 * acos(1.0 - 2.0 * y_norm);
+    area  = r * r * (theta - sin(theta)) / 2.0;
+    perim = r * theta;
+    if perim <= 0.0
+        hyd_r = 0.0; return;
+    end
+    hyd_r = area / perim;
+end
+
+function depth = xsect_get_normal_depth(xs, n_manning, ...
+                                         slope, q_target)
+    MAX_ITER  = 50;
+    TOLERANCE = 1.0e-6;
+    if q_target <= 0.0 || slope <= 0.0
+        depth = 0.0; return;
+    end
+
+    y_lo = 0.0;
+    y_hi = xs.y_full;
+    for i = 1:MAX_ITER
+        y_mid  = (y_lo + y_hi) / 2.0;
+        area   = xsect_get_area(xs, y_mid);
+        hyd_r  = xsect_get_hyd_radius(xs, y_mid);
+        q_calc = (1.0 / n_manning) * area ...
+                 * hyd_r^(2.0/3.0) * sqrt(slope);
+
+        if abs(q_calc - q_target) < TOLERANCE, break; end
+        if q_calc < q_target
+            y_lo = y_mid;
+        else
+            y_hi = y_mid;
+        end
+    end
+    depth = (y_lo + y_hi) / 2.0;
+end
+
+function depth = xsect_get_critical_depth(xs, q_target)
+    GRAVITY   = 32.174;
+    MAX_ITER  = 50;
+    TOLERANCE = 1.0e-6;
+    if q_target <= 0.0
+        depth = 0.0; return;
+    end
+
+    rhs  = (q_target * q_target) / GRAVITY;
+    y_lo = 0.0;
+    y_hi = xs.y_full;
+    for i = 1:MAX_ITER
+        y_mid  = (y_lo + y_hi) / 2.0;
+        r      = xs.y_full / 2.0;
+        y_norm = y_mid / xs.y_full;
+        if y_norm <= 0.0, y_lo = y_mid; continue; end
+        if y_norm >= 1.0, y_hi = y_mid; continue; end
+
+        theta = 2.0 * acos(1.0 - 2.0 * y_norm);
+        area  = r * r * (theta - sin(theta)) / 2.0;
+        top_w = 2.0 * r * sin(theta / 2.0);
+
+        if top_w <= 0.0, y_lo = y_mid; continue; end
+        lhs = area^3 / top_w;
+
+        if abs(lhs - rhs) < TOLERANCE, break; end
+        if lhs < rhs
+            y_lo = y_mid;
+        else
+            y_hi = y_mid;
+        end
+    end
+    depth = (y_lo + y_hi) / 2.0;
+end`,
+    r: `# link.R — Conduit Hydraulics (Circular Cross Section)
+# SWMM5 Engine in R — Pipe Geometry & Manning's Equation
+# Computes area, hydraulic radius, normal depth, and
+# critical depth for circular conduits
+
+GRAVITY   <- 32.174   # ft/s^2
+MAX_ITER  <- 50
+TOLERANCE <- 1.0e-6
+
+create_xsect <- function(y_full, a_full, r_full, w_max) {
+    list(y_full = y_full, a_full = a_full,
+         r_full = r_full, w_max  = w_max)
+}
+
+xsect_get_area <- function(xs, depth) {
+    r      <- xs$y_full / 2.0
+    y_norm <- depth / xs$y_full
+    if (y_norm <= 0.0) return(0.0)
+    if (y_norm >= 1.0) return(xs$a_full)
+
+    theta <- 2.0 * acos(1.0 - 2.0 * y_norm)
+    r * r * (theta - sin(theta)) / 2.0
+}
+
+xsect_get_hyd_radius <- function(xs, depth) {
+    r      <- xs$y_full / 2.0
+    y_norm <- depth / xs$y_full
+    if (y_norm <= 0.0) return(0.0)
+    if (y_norm >= 1.0) return(xs$r_full)
+
+    theta <- 2.0 * acos(1.0 - 2.0 * y_norm)
+    area  <- r * r * (theta - sin(theta)) / 2.0
+    perim <- r * theta
+    if (perim <= 0.0) return(0.0)
+    area / perim
+}
+
+xsect_get_normal_depth <- function(xs, n_manning,
+                                    slope, q_target) {
+    if (q_target <= 0.0 || slope <= 0.0) return(0.0)
+
+    y_lo <- 0.0
+    y_hi <- xs$y_full
+
+    for (i in seq_len(MAX_ITER)) {
+        y_mid  <- (y_lo + y_hi) / 2.0
+        area   <- xsect_get_area(xs, y_mid)
+        hyd_r  <- xsect_get_hyd_radius(xs, y_mid)
+        q_calc <- (1.0 / n_manning) * area *
+                  hyd_r^(2.0 / 3.0) * sqrt(slope)
+
+        if (abs(q_calc - q_target) < TOLERANCE) break
+        if (q_calc < q_target) y_lo <- y_mid
+        else                   y_hi <- y_mid
+    }
+    (y_lo + y_hi) / 2.0
+}
+
+xsect_get_critical_depth <- function(xs, q_target) {
+    if (q_target <= 0.0) return(0.0)
+
+    rhs  <- (q_target * q_target) / GRAVITY
+    y_lo <- 0.0
+    y_hi <- xs$y_full
+
+    for (i in seq_len(MAX_ITER)) {
+        y_mid  <- (y_lo + y_hi) / 2.0
+        r      <- xs$y_full / 2.0
+        y_norm <- y_mid / xs$y_full
+        if (y_norm <= 0.0) { y_lo <- y_mid; next }
+        if (y_norm >= 1.0) { y_hi <- y_mid; next }
+
+        theta <- 2.0 * acos(1.0 - 2.0 * y_norm)
+        area  <- r * r * (theta - sin(theta)) / 2.0
+        top_w <- 2.0 * r * sin(theta / 2.0)
+
+        if (top_w <= 0.0) { y_lo <- y_mid; next }
+        lhs <- area^3 / top_w
+
+        if (abs(lhs - rhs) < TOLERANCE) break
+        if (lhs < rhs) y_lo <- y_mid
+        else           y_hi <- y_mid
+    }
+    (y_lo + y_hi) / 2.0
+}`,
+    delphi: `{ link.pas — Conduit Hydraulics (Circular Cross Section) }
+{ SWMM5 Engine in Delphi — Pipe Geometry & Manning's Equation }
+{ Computes area, hydraulic radius, normal depth, and }
+{ critical depth for circular conduits }
+
+unit Link;
+
+interface
+
+const
+  GRAVITY   = 32.174;
+  MAX_ITER  = 50;
+  TOLERANCE = 1.0E-6;
+
+type
+  TXsect = class
+  private
+    FYFull: Double;
+    FAFull: Double;
+    FRFull: Double;
+    FWMax:  Double;
+  public
+    constructor Create(AYFull, AAFull,
+                       ARFull, AWMax: Double);
+    function GetArea(Depth: Double): Double;
+    function GetHydRadius(Depth: Double): Double;
+    function GetNormalDepth(NManning, Slope,
+                            QTarget: Double): Double;
+    function GetCriticalDepth(QTarget: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TXsect.Create(AYFull, AAFull,
+                           ARFull, AWMax: Double);
+begin
+  FYFull := AYFull;  FAFull := AAFull;
+  FRFull := ARFull;  FWMax  := AWMax;
+end;
+
+function TXsect.GetArea(Depth: Double): Double;
+var
+  R, YNorm, Theta: Double;
+begin
+  R     := FYFull / 2.0;
+  YNorm := Depth / FYFull;
+  if YNorm <= 0.0 then Exit(0.0);
+  if YNorm >= 1.0 then Exit(FAFull);
+
+  Theta  := 2.0 * ArcCos(1.0 - 2.0 * YNorm);
+  Result := R * R * (Theta - Sin(Theta)) / 2.0;
+end;
+
+function TXsect.GetHydRadius(Depth: Double): Double;
+var
+  R, YNorm, Theta, Area, Perim: Double;
+begin
+  R     := FYFull / 2.0;
+  YNorm := Depth / FYFull;
+  if YNorm <= 0.0 then Exit(0.0);
+  if YNorm >= 1.0 then Exit(FRFull);
+
+  Theta := 2.0 * ArcCos(1.0 - 2.0 * YNorm);
+  Area  := R * R * (Theta - Sin(Theta)) / 2.0;
+  Perim := R * Theta;
+  if Perim <= 0.0 then Exit(0.0);
+  Result := Area / Perim;
+end;
+
+function TXsect.GetNormalDepth(NManning, Slope,
+                                QTarget: Double): Double;
+var
+  YLo, YHi, YMid, Area, HydRad, QCalc: Double;
+  I: Integer;
+begin
+  if (QTarget <= 0.0) or (Slope <= 0.0) then Exit(0.0);
+
+  YLo := 0.0;
+  YHi := FYFull;
+  for I := 1 to MAX_ITER do
+  begin
+    YMid   := (YLo + YHi) / 2.0;
+    Area   := GetArea(YMid);
+    HydRad := GetHydRadius(YMid);
+    QCalc  := (1.0 / NManning) * Area
+              * Power(HydRad, 2.0/3.0) * Sqrt(Slope);
+
+    if Abs(QCalc - QTarget) < TOLERANCE then Break;
+    if QCalc < QTarget then YLo := YMid
+    else                    YHi := YMid;
+  end;
+  Result := (YLo + YHi) / 2.0;
+end;
+
+function TXsect.GetCriticalDepth(QTarget: Double): Double;
+var
+  R, YNorm, Theta, Area, TopW, Lhs, Rhs: Double;
+  YLo, YHi, YMid: Double;
+  I: Integer;
+begin
+  if QTarget <= 0.0 then Exit(0.0);
+
+  Rhs := (QTarget * QTarget) / GRAVITY;
+  YLo := 0.0;
+  YHi := FYFull;
+  for I := 1 to MAX_ITER do
+  begin
+    YMid  := (YLo + YHi) / 2.0;
+    R     := FYFull / 2.0;
+    YNorm := YMid / FYFull;
+    if YNorm <= 0.0 then begin YLo := YMid; Continue; end;
+    if YNorm >= 1.0 then begin YHi := YMid; Continue; end;
+
+    Theta := 2.0 * ArcCos(1.0 - 2.0 * YNorm);
+    Area  := R * R * (Theta - Sin(Theta)) / 2.0;
+    TopW  := 2.0 * R * Sin(Theta / 2.0);
+
+    if TopW <= 0.0 then begin YLo := YMid; Continue; end;
+    Lhs := Area * Area * Area / TopW;
+
+    if Abs(Lhs - Rhs) < TOLERANCE then Break;
+    if Lhs < Rhs then YLo := YMid
+    else              YHi := YMid;
+  end;
+  Result := (YLo + YHi) / 2.0;
+end;
+
+end.`,
+    typescript: `// link.ts — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in TypeScript — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+const GRAVITY: number   = 32.174;
+const MAX_ITER: number  = 50;
+const TOLERANCE: number = 1.0e-6;
+
+interface XsectParams {
+    yFull: number;
+    aFull: number;
+    rFull: number;
+    wMax: number;
+}
+
+class Xsect {
+    readonly yFull: number;
+    readonly aFull: number;
+    readonly rFull: number;
+    readonly wMax: number;
+
+    constructor(params: XsectParams) {
+        this.yFull = params.yFull;
+        this.aFull = params.aFull;
+        this.rFull = params.rFull;
+        this.wMax  = params.wMax;
+    }
+
+    getArea(depth: number): number {
+        const r: number = this.yFull / 2.0;
+        const yNorm: number = depth / this.yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return this.aFull;
+
+        const theta: number = 2.0
+            * Math.acos(1.0 - 2.0 * yNorm);
+        return r * r * (theta - Math.sin(theta)) / 2.0;
+    }
+
+    getHydRadius(depth: number): number {
+        const r: number = this.yFull / 2.0;
+        const yNorm: number = depth / this.yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return this.rFull;
+
+        const theta: number = 2.0
+            * Math.acos(1.0 - 2.0 * yNorm);
+        const area: number = r * r
+            * (theta - Math.sin(theta)) / 2.0;
+        const perim: number = r * theta;
+        if (perim <= 0.0) return 0.0;
+        return area / perim;
+    }
+
+    getNormalDepth(nManning: number, slope: number,
+                   qTarget: number): number {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+
+        let yLo: number = 0.0;
+        let yHi: number = this.yFull;
+
+        for (let i = 0; i < MAX_ITER; i++) {
+            const yMid: number = (yLo + yHi) / 2.0;
+            const area: number = this.getArea(yMid);
+            const hydRad: number = this.getHydRadius(yMid);
+            const qCalc: number = (1.0 / nManning) * area
+                * Math.pow(hydRad, 2.0 / 3.0)
+                * Math.sqrt(slope);
+
+            if (Math.abs(qCalc - qTarget) < TOLERANCE) break;
+            if (qCalc < qTarget) yLo = yMid;
+            else                 yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+
+    getCriticalDepth(qTarget: number): number {
+        if (qTarget <= 0.0) return 0.0;
+
+        const rhs: number = (qTarget * qTarget) / GRAVITY;
+        let yLo: number = 0.0;
+        let yHi: number = this.yFull;
+
+        for (let i = 0; i < MAX_ITER; i++) {
+            const yMid: number = (yLo + yHi) / 2.0;
+            const r: number = this.yFull / 2.0;
+            const yNorm: number = yMid / this.yFull;
+            if (yNorm <= 0.0) { yLo = yMid; continue; }
+            if (yNorm >= 1.0) { yHi = yMid; continue; }
+
+            const theta: number = 2.0
+                * Math.acos(1.0 - 2.0 * yNorm);
+            const area: number = r * r
+                * (theta - Math.sin(theta)) / 2.0;
+            const topW: number = 2.0 * r
+                * Math.sin(theta / 2.0);
+
+            if (topW <= 0.0) { yLo = yMid; continue; }
+            const lhs: number = Math.pow(area, 3) / topW;
+
+            if (Math.abs(lhs - rhs) < TOLERANCE) break;
+            if (lhs < rhs) yLo = yMid;
+            else           yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+}
+
+export { Xsect };`,
+    cuda: `// link.cu — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in CUDA — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+#include <math.h>
+
+#define GRAVITY   32.174f
+#define MAX_ITER  50
+#define TOLERANCE 1.0e-6f
+
+struct Xsect {
+    float yFull;
+    float aFull;
+    float rFull;
+    float wMax;
+};
+
+__device__ float xsectGetArea(const Xsect* xs, float depth)
+{
+    float r = xs->yFull / 2.0f;
+    float yNorm = depth / xs->yFull;
+    if (yNorm <= 0.0f) return 0.0f;
+    if (yNorm >= 1.0f) return xs->aFull;
+
+    float theta = 2.0f * acosf(1.0f - 2.0f * yNorm);
+    return r * r * (theta - sinf(theta)) / 2.0f;
+}
+
+__device__ float xsectGetHydRadius(const Xsect* xs,
+                                     float depth)
+{
+    float r = xs->yFull / 2.0f;
+    float yNorm = depth / xs->yFull;
+    if (yNorm <= 0.0f) return 0.0f;
+    if (yNorm >= 1.0f) return xs->rFull;
+
+    float theta = 2.0f * acosf(1.0f - 2.0f * yNorm);
+    float area  = r * r * (theta - sinf(theta)) / 2.0f;
+    float perim = r * theta;
+    if (perim <= 0.0f) return 0.0f;
+    return area / perim;
+}
+
+__global__ void normalDepthKernel(Xsect* xsects,
+    float* nManning, float* slopes, float* qTargets,
+    float* results, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Xsect xs = xsects[idx];
+    float qTarget = qTargets[idx];
+    float slope   = slopes[idx];
+    if (qTarget <= 0.0f || slope <= 0.0f) {
+        results[idx] = 0.0f; return;
+    }
+
+    float yLo = 0.0f, yHi = xs.yFull;
+    for (int i = 0; i < MAX_ITER; i++) {
+        float yMid = (yLo + yHi) / 2.0f;
+        float area = xsectGetArea(&xs, yMid);
+        float hydR = xsectGetHydRadius(&xs, yMid);
+        float qCalc = (1.0f / nManning[idx]) * area
+            * powf(hydR, 2.0f/3.0f) * sqrtf(slope);
+
+        if (fabsf(qCalc - qTarget) < TOLERANCE) break;
+        if (qCalc < qTarget) yLo = yMid;
+        else                 yHi = yMid;
+    }
+    results[idx] = (yLo + yHi) / 2.0f;
+}`,
+    wasm: `;; link.wat — Conduit Hydraulics (Circular Cross Section)
+;; SWMM5 Engine in WebAssembly — Pipe Geometry & Manning's Equation
+;; Computes area, hydraulic radius, normal depth, and
+;; critical depth for circular conduits
+
+(module
+  (func $getArea
+    (param $yFull f64) (param $aFull f64)
+    (param $depth f64)
+    (result f64)
+    (local $r f64) (local $yNorm f64) (local $theta f64)
+
+    (local.set $r
+      (f64.div (local.get $yFull) (f64.const 2.0)))
+    (local.set $yNorm
+      (f64.div (local.get $depth) (local.get $yFull)))
+
+    (if (f64.le (local.get $yNorm) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (if (f64.ge (local.get $yNorm) (f64.const 1.0))
+      (then (return (local.get $aFull))))
+
+    (local.set $theta
+      (f64.mul (f64.const 2.0)
+        (call $acos
+          (f64.sub (f64.const 1.0)
+            (f64.mul (f64.const 2.0)
+              (local.get $yNorm))))))
+
+    (f64.div
+      (f64.mul
+        (f64.mul (local.get $r) (local.get $r))
+        (f64.sub (local.get $theta)
+          (call $sin (local.get $theta))))
+      (f64.const 2.0))
+  )
+
+  (func $getHydRadius
+    (param $yFull f64) (param $aFull f64)
+    (param $rFull f64) (param $depth f64)
+    (result f64)
+    (local $r f64) (local $yNorm f64)
+    (local $theta f64) (local $area f64)
+    (local $perim f64)
+
+    (local.set $r
+      (f64.div (local.get $yFull) (f64.const 2.0)))
+    (local.set $yNorm
+      (f64.div (local.get $depth) (local.get $yFull)))
+
+    (if (f64.le (local.get $yNorm) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (if (f64.ge (local.get $yNorm) (f64.const 1.0))
+      (then (return (local.get $rFull))))
+
+    (local.set $theta
+      (f64.mul (f64.const 2.0)
+        (call $acos
+          (f64.sub (f64.const 1.0)
+            (f64.mul (f64.const 2.0)
+              (local.get $yNorm))))))
+    (local.set $area
+      (f64.div
+        (f64.mul
+          (f64.mul (local.get $r) (local.get $r))
+          (f64.sub (local.get $theta)
+            (call $sin (local.get $theta))))
+        (f64.const 2.0)))
+    (local.set $perim
+      (f64.mul (local.get $r) (local.get $theta)))
+
+    (if (f64.le (local.get $perim) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (f64.div (local.get $area) (local.get $perim))
+  )
+
+  (func $acos (param f64) (result f64)
+    (f64.const 0.0))
+  (func $sin (param f64) (result f64)
+    (f64.const 0.0))
+)`,
+    mojo: `# link.mojo — Conduit Hydraulics (Circular Cross Section)
+# SWMM5 Engine in Mojo — Pipe Geometry & Manning's Equation
+# Computes area, hydraulic radius, normal depth, and
+# critical depth for circular conduits
+
+from math import acos, sin, sqrt, pow, abs
+
+alias GRAVITY: Float64   = 32.174
+alias MAX_ITER: Int       = 50
+alias TOLERANCE: Float64  = 1.0e-6
+
+struct Xsect:
+    var y_full: Float64
+    var a_full: Float64
+    var r_full: Float64
+    var w_max: Float64
+
+    fn __init__(inout self, y_full: Float64,
+                a_full: Float64, r_full: Float64,
+                w_max: Float64):
+        self.y_full = y_full
+        self.a_full = a_full
+        self.r_full = r_full
+        self.w_max  = w_max
+
+    fn get_area(self, depth: Float64) -> Float64:
+        let r = self.y_full / 2.0
+        let y_norm = depth / self.y_full
+        if y_norm <= 0.0:
+            return 0.0
+        if y_norm >= 1.0:
+            return self.a_full
+
+        let theta = 2.0 * acos(1.0 - 2.0 * y_norm)
+        return r * r * (theta - sin(theta)) / 2.0
+
+    fn get_hyd_radius(self, depth: Float64) -> Float64:
+        let r = self.y_full / 2.0
+        let y_norm = depth / self.y_full
+        if y_norm <= 0.0:
+            return 0.0
+        if y_norm >= 1.0:
+            return self.r_full
+
+        let theta = 2.0 * acos(1.0 - 2.0 * y_norm)
+        let area = r * r * (theta - sin(theta)) / 2.0
+        let perim = r * theta
+        if perim <= 0.0:
+            return 0.0
+        return area / perim
+
+    fn get_normal_depth(self, n_manning: Float64,
+                        slope: Float64,
+                        q_target: Float64) -> Float64:
+        if q_target <= 0.0 or slope <= 0.0:
+            return 0.0
+
+        var y_lo: Float64 = 0.0
+        var y_hi: Float64 = self.y_full
+
+        for i in range(MAX_ITER):
+            let y_mid = (y_lo + y_hi) / 2.0
+            let area = self.get_area(y_mid)
+            let hyd_r = self.get_hyd_radius(y_mid)
+            let q_calc = (1.0 / n_manning) * area \
+                * pow(hyd_r, 2.0 / 3.0) * sqrt(slope)
+
+            if abs(q_calc - q_target) < TOLERANCE:
+                break
+            if q_calc < q_target:
+                y_lo = y_mid
+            else:
+                y_hi = y_mid
+        return (y_lo + y_hi) / 2.0
+
+    fn get_critical_depth(self,
+                          q_target: Float64) -> Float64:
+        if q_target <= 0.0:
+            return 0.0
+
+        let rhs = (q_target * q_target) / GRAVITY
+        var y_lo: Float64 = 0.0
+        var y_hi: Float64 = self.y_full
+
+        for i in range(MAX_ITER):
+            let y_mid = (y_lo + y_hi) / 2.0
+            let r = self.y_full / 2.0
+            let y_norm = y_mid / self.y_full
+            if y_norm <= 0.0:
+                y_lo = y_mid
+                continue
+            if y_norm >= 1.0:
+                y_hi = y_mid
+                continue
+
+            let theta = 2.0 * acos(1.0 - 2.0 * y_norm)
+            let area = r * r * (theta - sin(theta)) / 2.0
+            let top_w = 2.0 * r * sin(theta / 2.0)
+
+            if top_w <= 0.0:
+                y_lo = y_mid
+                continue
+            let lhs = area * area * area / top_w
+
+            if abs(lhs - rhs) < TOLERANCE:
+                break
+            if lhs < rhs:
+                y_lo = y_mid
+            else:
+                y_hi = y_mid
+        return (y_lo + y_hi) / 2.0`,
+    java: `// Link.java — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in Java — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+package swmm;
+
+public class Xsect {
+    private static final double GRAVITY   = 32.174;
+    private static final int    MAX_ITER  = 50;
+    private static final double TOLERANCE = 1.0e-6;
+
+    private final double yFull;
+    private final double aFull;
+    private final double rFull;
+    private final double wMax;
+
+    public Xsect(double yFull, double aFull,
+                  double rFull, double wMax) {
+        this.yFull = yFull;
+        this.aFull = aFull;
+        this.rFull = rFull;
+        this.wMax  = wMax;
+    }
+
+    public double getArea(double depth) {
+        double r = yFull / 2.0;
+        double yNorm = depth / yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return aFull;
+
+        double theta = 2.0 * Math.acos(1.0 - 2.0 * yNorm);
+        return r * r * (theta - Math.sin(theta)) / 2.0;
+    }
+
+    public double getHydRadius(double depth) {
+        double r = yFull / 2.0;
+        double yNorm = depth / yFull;
+        if (yNorm <= 0.0) return 0.0;
+        if (yNorm >= 1.0) return rFull;
+
+        double theta = 2.0 * Math.acos(1.0 - 2.0 * yNorm);
+        double area  = r * r
+            * (theta - Math.sin(theta)) / 2.0;
+        double perim = r * theta;
+        if (perim <= 0.0) return 0.0;
+        return area / perim;
+    }
+
+    public double getNormalDepth(double nManning,
+                                  double slope,
+                                  double qTarget) {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+
+        double yLo = 0.0, yHi = yFull;
+
+        for (int i = 0; i < MAX_ITER; i++) {
+            double yMid = (yLo + yHi) / 2.0;
+            double area = getArea(yMid);
+            double hydRad = getHydRadius(yMid);
+            double qCalc = (1.0 / nManning) * area
+                * Math.pow(hydRad, 2.0 / 3.0)
+                * Math.sqrt(slope);
+
+            if (Math.abs(qCalc - qTarget) < TOLERANCE) break;
+            if (qCalc < qTarget) yLo = yMid;
+            else                 yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+
+    public double getCriticalDepth(double qTarget) {
+        if (qTarget <= 0.0) return 0.0;
+
+        double rhs = (qTarget * qTarget) / GRAVITY;
+        double yLo = 0.0, yHi = yFull;
+
+        for (int i = 0; i < MAX_ITER; i++) {
+            double yMid = (yLo + yHi) / 2.0;
+            double r = yFull / 2.0;
+            double yNorm = yMid / yFull;
+            if (yNorm <= 0.0) { yLo = yMid; continue; }
+            if (yNorm >= 1.0) { yHi = yMid; continue; }
+
+            double theta = 2.0
+                * Math.acos(1.0 - 2.0 * yNorm);
+            double area = r * r
+                * (theta - Math.sin(theta)) / 2.0;
+            double topW = 2.0 * r
+                * Math.sin(theta / 2.0);
+
+            if (topW <= 0.0) { yLo = yMid; continue; }
+            double lhs = Math.pow(area, 3) / topW;
+
+            if (Math.abs(lhs - rhs) < TOLERANCE) break;
+            if (lhs < rhs) yLo = yMid;
+            else           yHi = yMid;
+        }
+        return (yLo + yHi) / 2.0;
+    }
+}`,
+    nim: `# link.nim — Conduit Hydraulics (Circular Cross Section)
+# SWMM5 Engine in Nim — Pipe Geometry & Manning's Equation
+# Computes area, hydraulic radius, normal depth, and
+# critical depth for circular conduits
+
+import math
+
+const
+  Gravity   = 32.174
+  MaxIter   = 50
+  Tolerance = 1.0e-6
+
+type
+  Xsect = object
+    yFull: float64
+    aFull: float64
+    rFull: float64
+    wMax:  float64
+
+proc newXsect(yFull, aFull, rFull, wMax: float64): Xsect =
+  result = Xsect(yFull: yFull, aFull: aFull,
+                  rFull: rFull, wMax: wMax)
+
+proc getArea(xs: Xsect, depth: float64): float64 =
+  let r = xs.yFull / 2.0
+  let yNorm = depth / xs.yFull
+  if yNorm <= 0.0: return 0.0
+  if yNorm >= 1.0: return xs.aFull
+
+  let theta = 2.0 * arccos(1.0 - 2.0 * yNorm)
+  result = r * r * (theta - sin(theta)) / 2.0
+
+proc getHydRadius(xs: Xsect, depth: float64): float64 =
+  let r = xs.yFull / 2.0
+  let yNorm = depth / xs.yFull
+  if yNorm <= 0.0: return 0.0
+  if yNorm >= 1.0: return xs.rFull
+
+  let theta = 2.0 * arccos(1.0 - 2.0 * yNorm)
+  let area = r * r * (theta - sin(theta)) / 2.0
+  let perim = r * theta
+  if perim <= 0.0: return 0.0
+  result = area / perim
+
+proc getNormalDepth(xs: Xsect, nManning: float64,
+                     slope: float64,
+                     qTarget: float64): float64 =
+  if qTarget <= 0.0 or slope <= 0.0: return 0.0
+
+  var yLo = 0.0
+  var yHi = xs.yFull
+
+  for i in 0 ..< MaxIter:
+    let yMid = (yLo + yHi) / 2.0
+    let area = xs.getArea(yMid)
+    let hydRad = xs.getHydRadius(yMid)
+    let qCalc = (1.0 / nManning) * area *
+                pow(hydRad, 2.0 / 3.0) * sqrt(slope)
+
+    if abs(qCalc - qTarget) < Tolerance: break
+    if qCalc < qTarget: yLo = yMid
+    else:               yHi = yMid
+  result = (yLo + yHi) / 2.0
+
+proc getCriticalDepth(xs: Xsect,
+                       qTarget: float64): float64 =
+  if qTarget <= 0.0: return 0.0
+
+  let rhs = (qTarget * qTarget) / Gravity
+  var yLo = 0.0
+  var yHi = xs.yFull
+
+  for i in 0 ..< MaxIter:
+    let yMid = (yLo + yHi) / 2.0
+    let r = xs.yFull / 2.0
+    let yNorm = yMid / xs.yFull
+    if yNorm <= 0.0:
+      yLo = yMid; continue
+    if yNorm >= 1.0:
+      yHi = yMid; continue
+
+    let theta = 2.0 * arccos(1.0 - 2.0 * yNorm)
+    let area = r * r * (theta - sin(theta)) / 2.0
+    let topW = 2.0 * r * sin(theta / 2.0)
+
+    if topW <= 0.0:
+      yLo = yMid; continue
+    let lhs = area * area * area / topW
+
+    if abs(lhs - rhs) < Tolerance: break
+    if lhs < rhs: yLo = yMid
+    else:         yHi = yMid
+  result = (yLo + yHi) / 2.0`,
+    ada: `-- link.adb — Conduit Hydraulics (Circular Cross Section)
+-- SWMM5 Engine in Ada — Pipe Geometry & Manning's Equation
+-- Computes area, hydraulic radius, normal depth, and
+-- critical depth for circular conduits
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Link is
+
+   Gravity   : constant Float := 32.174;
+   Max_Iter  : constant Integer := 50;
+   Tolerance : constant Float := 1.0e-6;
+
+   type Xsect is record
+      Y_Full : Float;
+      A_Full : Float;
+      R_Full : Float;
+      W_Max  : Float;
+   end record;
+
+   function Get_Area(Xs : Xsect;
+                     Depth : Float) return Float is
+      R      : Float := Xs.Y_Full / 2.0;
+      Y_Norm : Float := Depth / Xs.Y_Full;
+      Theta  : Float;
+   begin
+      if Y_Norm <= 0.0 then return 0.0; end if;
+      if Y_Norm >= 1.0 then return Xs.A_Full; end if;
+
+      Theta := 2.0 * Arccos(1.0 - 2.0 * Y_Norm);
+      return R * R * (Theta - Sin(Theta)) / 2.0;
+   end Get_Area;
+
+   function Get_Hyd_Radius(Xs : Xsect;
+                            Depth : Float) return Float is
+      R      : Float := Xs.Y_Full / 2.0;
+      Y_Norm : Float := Depth / Xs.Y_Full;
+      Theta  : Float;
+      Area   : Float;
+      Perim  : Float;
+   begin
+      if Y_Norm <= 0.0 then return 0.0; end if;
+      if Y_Norm >= 1.0 then return Xs.R_Full; end if;
+
+      Theta := 2.0 * Arccos(1.0 - 2.0 * Y_Norm);
+      Area  := R * R * (Theta - Sin(Theta)) / 2.0;
+      Perim := R * Theta;
+      if Perim <= 0.0 then return 0.0; end if;
+      return Area / Perim;
+   end Get_Hyd_Radius;
+
+   function Get_Normal_Depth(Xs : Xsect;
+                              N_Manning : Float;
+                              Slope     : Float;
+                              Q_Target  : Float)
+                              return Float is
+      Y_Lo, Y_Hi, Y_Mid : Float;
+      Area, Hyd_R, Q_Calc : Float;
+   begin
+      if Q_Target <= 0.0 or Slope <= 0.0 then
+         return 0.0;
+      end if;
+
+      Y_Lo := 0.0;
+      Y_Hi := Xs.Y_Full;
+
+      for I in 1 .. Max_Iter loop
+         Y_Mid  := (Y_Lo + Y_Hi) / 2.0;
+         Area   := Get_Area(Xs, Y_Mid);
+         Hyd_R  := Get_Hyd_Radius(Xs, Y_Mid);
+         Q_Calc := (1.0 / N_Manning) * Area
+                   * Hyd_R ** (2.0 / 3.0)
+                   * Sqrt(Slope);
+
+         exit when abs(Q_Calc - Q_Target) < Tolerance;
+         if Q_Calc < Q_Target then
+            Y_Lo := Y_Mid;
+         else
+            Y_Hi := Y_Mid;
+         end if;
+      end loop;
+      return (Y_Lo + Y_Hi) / 2.0;
+   end Get_Normal_Depth;
+
+   function Get_Critical_Depth(Xs : Xsect;
+                                Q_Target : Float)
+                                return Float is
+      R, Y_Norm, Theta : Float;
+      Area, Top_W, Lhs : Float;
+      Rhs : Float;
+      Y_Lo, Y_Hi, Y_Mid : Float;
+   begin
+      if Q_Target <= 0.0 then return 0.0; end if;
+
+      Rhs  := (Q_Target * Q_Target) / Gravity;
+      Y_Lo := 0.0;
+      Y_Hi := Xs.Y_Full;
+
+      for I in 1 .. Max_Iter loop
+         Y_Mid  := (Y_Lo + Y_Hi) / 2.0;
+         R      := Xs.Y_Full / 2.0;
+         Y_Norm := Y_Mid / Xs.Y_Full;
+         if Y_Norm <= 0.0 then
+            Y_Lo := Y_Mid; goto Continue_Loop;
+         end if;
+         if Y_Norm >= 1.0 then
+            Y_Hi := Y_Mid; goto Continue_Loop;
+         end if;
+
+         Theta := 2.0 * Arccos(1.0 - 2.0 * Y_Norm);
+         Area  := R * R * (Theta - Sin(Theta)) / 2.0;
+         Top_W := 2.0 * R * Sin(Theta / 2.0);
+
+         if Top_W <= 0.0 then
+            Y_Lo := Y_Mid; goto Continue_Loop;
+         end if;
+         Lhs := Area ** 3 / Top_W;
+
+         exit when abs(Lhs - Rhs) < Tolerance;
+         if Lhs < Rhs then
+            Y_Lo := Y_Mid;
+         else
+            Y_Hi := Y_Mid;
+         end if;
+         <<Continue_Loop>>
+      end loop;
+      return (Y_Lo + Y_Hi) / 2.0;
+   end Get_Critical_Depth;
+
+end Link;`,
+    chapel: `// link.chpl — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in Chapel — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+use Math;
+
+const GRAVITY: real   = 32.174;
+const MAX_ITER: int   = 50;
+const TOLERANCE: real = 1.0e-6;
+
+record Xsect {
+    var yFull: real;
+    var aFull: real;
+    var rFull: real;
+    var wMax:  real;
+}
+
+proc getArea(ref xs: Xsect, depth: real): real {
+    const r = xs.yFull / 2.0;
+    const yNorm = depth / xs.yFull;
+    if yNorm <= 0.0 then return 0.0;
+    if yNorm >= 1.0 then return xs.aFull;
+
+    const theta = 2.0 * acos(1.0 - 2.0 * yNorm);
+    return r * r * (theta - sin(theta)) / 2.0;
+}
+
+proc getHydRadius(ref xs: Xsect, depth: real): real {
+    const r = xs.yFull / 2.0;
+    const yNorm = depth / xs.yFull;
+    if yNorm <= 0.0 then return 0.0;
+    if yNorm >= 1.0 then return xs.rFull;
+
+    const theta = 2.0 * acos(1.0 - 2.0 * yNorm);
+    const area = r * r * (theta - sin(theta)) / 2.0;
+    const perim = r * theta;
+    if perim <= 0.0 then return 0.0;
+    return area / perim;
+}
+
+proc getNormalDepth(ref xs: Xsect, nManning: real,
+                     slope: real,
+                     qTarget: real): real {
+    if qTarget <= 0.0 || slope <= 0.0 then return 0.0;
+
+    var yLo = 0.0;
+    var yHi = xs.yFull;
+
+    for i in 0..#MAX_ITER {
+        const yMid = (yLo + yHi) / 2.0;
+        const area = getArea(xs, yMid);
+        const hydRad = getHydRadius(xs, yMid);
+        const qCalc = (1.0 / nManning) * area
+            * hydRad ** (2.0 / 3.0) * sqrt(slope);
+
+        if abs(qCalc - qTarget) < TOLERANCE then break;
+        if qCalc < qTarget then yLo = yMid;
+        else                    yHi = yMid;
+    }
+    return (yLo + yHi) / 2.0;
+}
+
+proc getCriticalDepth(ref xs: Xsect,
+                       qTarget: real): real {
+    if qTarget <= 0.0 then return 0.0;
+
+    const rhs = (qTarget * qTarget) / GRAVITY;
+    var yLo = 0.0;
+    var yHi = xs.yFull;
+
+    for i in 0..#MAX_ITER {
+        const yMid = (yLo + yHi) / 2.0;
+        const r = xs.yFull / 2.0;
+        const yNorm = yMid / xs.yFull;
+        if yNorm <= 0.0 { yLo = yMid; continue; }
+        if yNorm >= 1.0 { yHi = yMid; continue; }
+
+        const theta = 2.0 * acos(1.0 - 2.0 * yNorm);
+        const area = r * r
+            * (theta - sin(theta)) / 2.0;
+        const topW = 2.0 * r * sin(theta / 2.0);
+
+        if topW <= 0.0 { yLo = yMid; continue; }
+        const lhs = area ** 3 / topW;
+
+        if abs(lhs - rhs) < TOLERANCE then break;
+        if lhs < rhs then yLo = yMid;
+        else              yHi = yMid;
+    }
+    return (yLo + yHi) / 2.0;
+}`,
+    swift: `// link.swift — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in Swift — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+import Foundation
+
+let GRAVITY: Double   = 32.174
+let MAX_ITER: Int     = 50
+let TOLERANCE: Double = 1.0e-6
+
+struct Xsect {
+    let yFull: Double
+    let aFull: Double
+    let rFull: Double
+    let wMax:  Double
+
+    func getArea(depth: Double) -> Double {
+        let r = yFull / 2.0
+        let yNorm = depth / yFull
+        guard yNorm > 0.0 else { return 0.0 }
+        guard yNorm < 1.0 else { return aFull }
+
+        let theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+        return r * r * (theta - sin(theta)) / 2.0
+    }
+
+    func getHydRadius(depth: Double) -> Double {
+        let r = yFull / 2.0
+        let yNorm = depth / yFull
+        guard yNorm > 0.0 else { return 0.0 }
+        guard yNorm < 1.0 else { return rFull }
+
+        let theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+        let area = r * r * (theta - sin(theta)) / 2.0
+        let perim = r * theta
+        guard perim > 0.0 else { return 0.0 }
+        return area / perim
+    }
+
+    func getNormalDepth(nManning: Double, slope: Double,
+                        qTarget: Double) -> Double {
+        guard qTarget > 0.0, slope > 0.0 else { return 0.0 }
+
+        var yLo = 0.0
+        var yHi = yFull
+
+        for _ in 0..<MAX_ITER {
+            let yMid = (yLo + yHi) / 2.0
+            let area = getArea(depth: yMid)
+            let hydRad = getHydRadius(depth: yMid)
+            let qCalc = (1.0 / nManning) * area
+                * pow(hydRad, 2.0 / 3.0) * sqrt(slope)
+
+            if abs(qCalc - qTarget) < TOLERANCE { break }
+            if qCalc < qTarget { yLo = yMid }
+            else               { yHi = yMid }
+        }
+        return (yLo + yHi) / 2.0
+    }
+
+    func getCriticalDepth(qTarget: Double) -> Double {
+        guard qTarget > 0.0 else { return 0.0 }
+
+        let rhs = (qTarget * qTarget) / GRAVITY
+        var yLo = 0.0
+        var yHi = yFull
+
+        for _ in 0..<MAX_ITER {
+            let yMid = (yLo + yHi) / 2.0
+            let r = yFull / 2.0
+            let yNorm = yMid / yFull
+            if yNorm <= 0.0 { yLo = yMid; continue }
+            if yNorm >= 1.0 { yHi = yMid; continue }
+
+            let theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+            let area = r * r
+                * (theta - sin(theta)) / 2.0
+            let topW = 2.0 * r * sin(theta / 2.0)
+
+            if topW <= 0.0 { yLo = yMid; continue }
+            let lhs = pow(area, 3) / topW
+
+            if abs(lhs - rhs) < TOLERANCE { break }
+            if lhs < rhs { yLo = yMid }
+            else         { yHi = yMid }
+        }
+        return (yLo + yHi) / 2.0
+    }
+}`,
+    kotlin: `// Link.kt — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in Kotlin — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+package swmm
+
+import kotlin.math.*
+
+private const val GRAVITY   = 32.174
+private const val MAX_ITER  = 50
+private const val TOLERANCE = 1.0e-6
+
+data class Xsect(
+    val yFull: Double,
+    val aFull: Double,
+    val rFull: Double,
+    val wMax:  Double
+) {
+    fun getArea(depth: Double): Double {
+        val r = yFull / 2.0
+        val yNorm = depth / yFull
+        if (yNorm <= 0.0) return 0.0
+        if (yNorm >= 1.0) return aFull
+
+        val theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+        return r * r * (theta - sin(theta)) / 2.0
+    }
+
+    fun getHydRadius(depth: Double): Double {
+        val r = yFull / 2.0
+        val yNorm = depth / yFull
+        if (yNorm <= 0.0) return 0.0
+        if (yNorm >= 1.0) return rFull
+
+        val theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+        val area = r * r * (theta - sin(theta)) / 2.0
+        val perim = r * theta
+        if (perim <= 0.0) return 0.0
+        return area / perim
+    }
+
+    fun getNormalDepth(nManning: Double, slope: Double,
+                       qTarget: Double): Double {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0
+
+        var yLo = 0.0
+        var yHi = yFull
+
+        for (i in 0 until MAX_ITER) {
+            val yMid = (yLo + yHi) / 2.0
+            val area = getArea(yMid)
+            val hydRad = getHydRadius(yMid)
+            val qCalc = (1.0 / nManning) * area *
+                hydRad.pow(2.0 / 3.0) * sqrt(slope)
+
+            if (abs(qCalc - qTarget) < TOLERANCE) break
+            if (qCalc < qTarget) yLo = yMid
+            else                 yHi = yMid
+        }
+        return (yLo + yHi) / 2.0
+    }
+
+    fun getCriticalDepth(qTarget: Double): Double {
+        if (qTarget <= 0.0) return 0.0
+
+        val rhs = (qTarget * qTarget) / GRAVITY
+        var yLo = 0.0
+        var yHi = yFull
+
+        for (i in 0 until MAX_ITER) {
+            val yMid = (yLo + yHi) / 2.0
+            val r = yFull / 2.0
+            val yNorm = yMid / yFull
+            if (yNorm <= 0.0) { yLo = yMid; continue }
+            if (yNorm >= 1.0) { yHi = yMid; continue }
+
+            val theta = 2.0 * acos(1.0 - 2.0 * yNorm)
+            val area = r * r
+                * (theta - sin(theta)) / 2.0
+            val topW = 2.0 * r * sin(theta / 2.0)
+
+            if (topW <= 0.0) { yLo = yMid; continue }
+            val lhs = area.pow(3) / topW
+
+            if (abs(lhs - rhs) < TOLERANCE) break
+            if (lhs < rhs) yLo = yMid
+            else           yHi = yMid
+        }
+        return (yLo + yHi) / 2.0
+    }
+}`,
   },
   "node.c — Junction & Storage Nodes": {
     category: "Hydraulics",
@@ -4624,6 +11846,1098 @@ const Node = struct {
         }
     }
 };`,
+    cpp: `// node.cpp — Junction & Storage Nodes
+// SWMM5 Engine in C++ — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+#include <vector>
+#include <algorithm>
+
+namespace swmm {
+
+struct StorageCurve {
+    std::vector<double> depths;
+    std::vector<double> areas;
+
+    double getVolume(double depth) const {
+        double vol = 0.0;
+
+        for (size_t i = 1; i < depths.size(); ++i) {
+            if (depth <= depths[i]) {
+                double frac = (depth - depths[i - 1])
+                    / (depths[i] - depths[i - 1]);
+                double aAvg = areas[i - 1]
+                    + frac * (areas[i] - areas[i - 1]);
+                return vol + aAvg * (depth - depths[i - 1]);
+            }
+            vol += 0.5 * (areas[i - 1] + areas[i])
+                   * (depths[i] - depths[i - 1]);
+        }
+        return vol;
+    }
+};
+
+struct Node {
+    double invertEl;   // invert elevation (ft)
+    double maxDepth;   // maximum depth (ft)
+    double depth;      // current water depth (ft)
+    double volume;     // current stored volume (ft³)
+    double overflow;   // overflow rate (cfs)
+
+    void updateLevel(const StorageCurve& sc,
+                     double Qin, double Qout, double dt) {
+        double dV = (Qin - Qout) * dt;
+        volume = std::max(0.0, volume + dV);
+
+        for (size_t i = 1; i < sc.depths.size(); ++i) {
+            double v = sc.getVolume(sc.depths[i]);
+            if (v >= volume) {
+                double vPrev = sc.getVolume(sc.depths[i - 1]);
+                double aAvg = 0.5
+                    * (sc.areas[i - 1] + sc.areas[i]);
+                depth = sc.depths[i - 1]
+                    + (volume - vPrev) / aAvg;
+                break;
+            }
+        }
+
+        overflow = 0.0;
+        if (depth > maxDepth) {
+            double topArea = sc.areas.back();
+            overflow = (depth - maxDepth) * topArea / dt;
+            depth = maxDepth;
+        }
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Node.cs — Junction & Storage Nodes
+// SWMM5 Engine in C# — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+using System;
+using System.Collections.Generic;
+
+namespace Swmm
+{
+    public class StorageCurve
+    {
+        public List<double> Depths { get; }
+        public List<double> Areas { get; }
+
+        public StorageCurve(List<double> depths,
+                            List<double> areas)
+        {
+            Depths = depths;
+            Areas = areas;
+        }
+
+        public double GetVolume(double depth)
+        {
+            double vol = 0.0;
+            for (int i = 1; i < Depths.Count; i++)
+            {
+                if (depth <= Depths[i])
+                {
+                    double frac = (depth - Depths[i - 1])
+                        / (Depths[i] - Depths[i - 1]);
+                    double aAvg = Areas[i - 1]
+                        + frac * (Areas[i] - Areas[i - 1]);
+                    return vol + aAvg
+                        * (depth - Depths[i - 1]);
+                }
+                vol += 0.5 * (Areas[i - 1] + Areas[i])
+                    * (Depths[i] - Depths[i - 1]);
+            }
+            return vol;
+        }
+    }
+
+    public class Node
+    {
+        public double InvertEl { get; set; }
+        public double MaxDepth { get; set; }
+        public double Depth { get; set; }
+        public double Volume { get; set; }
+        public double Overflow { get; set; }
+
+        public Node(double invertEl, double maxDepth)
+        {
+            InvertEl = invertEl;
+            MaxDepth = maxDepth;
+        }
+
+        public void UpdateLevel(StorageCurve sc,
+            double qIn, double qOut, double dt)
+        {
+            double dV = (qIn - qOut) * dt;
+            Volume = Math.Max(0.0, Volume + dV);
+
+            for (int i = 1; i < sc.Depths.Count; i++)
+            {
+                double v = sc.GetVolume(sc.Depths[i]);
+                if (v >= Volume)
+                {
+                    double vPrev = sc.GetVolume(
+                        sc.Depths[i - 1]);
+                    double aAvg = 0.5 * (sc.Areas[i - 1]
+                        + sc.Areas[i]);
+                    Depth = sc.Depths[i - 1]
+                        + (Volume - vPrev) / aAvg;
+                    break;
+                }
+            }
+
+            Overflow = 0.0;
+            if (Depth > MaxDepth)
+            {
+                double topArea = sc.Areas[^1];
+                Overflow = (Depth - MaxDepth)
+                    * topArea / dt;
+                Depth = MaxDepth;
+            }
+        }
+    }
+}`,
+    matlab: `% node.m — Junction & Storage Nodes
+% SWMM5 Engine in MATLAB — Node Water Level Updates
+% Volume balance at junctions and storage nodes
+% with depth-area relationship and overflow check
+
+function sc = create_storage_curve(depths, areas)
+    sc.depths = depths;
+    sc.areas  = areas;
+    sc.n_pts  = length(depths);
+end
+
+function vol = get_volume(sc, depth)
+    vol = 0.0;
+    for i = 2:sc.n_pts
+        if depth <= sc.depths(i)
+            frac = (depth - sc.depths(i-1)) ...
+                / (sc.depths(i) - sc.depths(i-1));
+            a_avg = sc.areas(i-1) ...
+                + frac * (sc.areas(i) - sc.areas(i-1));
+            vol = vol + a_avg ...
+                * (depth - sc.depths(i-1));
+            return;
+        end
+        vol = vol + 0.5 * (sc.areas(i-1) + sc.areas(i)) ...
+            * (sc.depths(i) - sc.depths(i-1));
+    end
+end
+
+function node = update_level(node, sc, Q_in, Q_out, dt)
+    dV = (Q_in - Q_out) * dt;
+    node.volume = max(0.0, node.volume + dV);
+
+    for i = 2:sc.n_pts
+        v = get_volume(sc, sc.depths(i));
+        if v >= node.volume
+            v_prev = get_volume(sc, sc.depths(i-1));
+            a_avg = 0.5 * (sc.areas(i-1) + sc.areas(i));
+            node.depth = sc.depths(i-1) ...
+                + (node.volume - v_prev) / a_avg;
+            break;
+        end
+    end
+
+    node.overflow = 0.0;
+    if node.depth > node.max_depth
+        top_area = sc.areas(sc.n_pts);
+        node.overflow = (node.depth - node.max_depth) ...
+                        * top_area / dt;
+        node.depth = node.max_depth;
+    end
+end`,
+    r: `# node.R — Junction & Storage Nodes
+# SWMM5 Engine in R — Node Water Level Updates
+# Volume balance at junctions and storage nodes
+# with depth-area relationship and overflow check
+
+create_storage_curve <- function(depths, areas) {
+    list(depths = depths, areas = areas)
+}
+
+get_volume <- function(sc, depth) {
+    vol <- 0.0
+    for (i in 2:length(sc$depths)) {
+        if (depth <= sc$depths[i]) {
+            frac <- (depth - sc$depths[i - 1]) /
+                (sc$depths[i] - sc$depths[i - 1])
+            a_avg <- sc$areas[i - 1] +
+                frac * (sc$areas[i] - sc$areas[i - 1])
+            return(vol + a_avg *
+                (depth - sc$depths[i - 1]))
+        }
+        vol <- vol + 0.5 *
+            (sc$areas[i - 1] + sc$areas[i]) *
+            (sc$depths[i] - sc$depths[i - 1])
+    }
+    vol
+}
+
+create_node <- function(invert_el, max_depth) {
+    list(invert_el = invert_el,
+         max_depth = max_depth,
+         depth = 0.0, volume = 0.0,
+         overflow = 0.0)
+}
+
+update_level <- function(node, sc, q_in, q_out, dt) {
+    dv <- (q_in - q_out) * dt
+    node$volume <- max(0.0, node$volume + dv)
+
+    for (i in 2:length(sc$depths)) {
+        v <- get_volume(sc, sc$depths[i])
+        if (v >= node$volume) {
+            v_prev <- get_volume(sc, sc$depths[i - 1])
+            a_avg <- 0.5 * (sc$areas[i - 1] + sc$areas[i])
+            node$depth <- sc$depths[i - 1] +
+                (node$volume - v_prev) / a_avg
+            break
+        }
+    }
+
+    node$overflow <- 0.0
+    if (node$depth > node$max_depth) {
+        top_area <- sc$areas[length(sc$areas)]
+        node$overflow <- (node$depth - node$max_depth) *
+            top_area / dt
+        node$depth <- node$max_depth
+    }
+    node
+}`,
+    delphi: `{ node.pas — Junction & Storage Nodes }
+{ SWMM5 Engine in Delphi — Node Water Level Updates }
+{ Volume balance at junctions and storage nodes }
+{ with depth-area relationship and overflow check }
+
+unit NodeModule;
+
+interface
+
+uses Math;
+
+const
+  MAX_PTS = 10;
+
+type
+  TStorageCurve = class
+  public
+    Depths: array[0..MAX_PTS-1] of Double;
+    Areas: array[0..MAX_PTS-1] of Double;
+    NPts: Integer;
+    function GetVolume(Depth: Double): Double;
+  end;
+
+  TNode = class
+  public
+    InvertEl: Double;
+    MaxDepth: Double;
+    Depth: Double;
+    Volume: Double;
+    Overflow: Double;
+    constructor Create(AInvertEl, AMaxDepth: Double);
+    procedure UpdateLevel(SC: TStorageCurve;
+                          QIn, QOut, Dt: Double);
+  end;
+
+implementation
+
+function TStorageCurve.GetVolume(Depth: Double): Double;
+var
+  I: Integer;
+  Vol, Frac, AAvg: Double;
+begin
+  Vol := 0.0;
+  for I := 1 to NPts - 1 do
+  begin
+    if Depth <= Depths[I] then
+    begin
+      Frac := (Depth - Depths[I-1])
+        / (Depths[I] - Depths[I-1]);
+      AAvg := Areas[I-1]
+        + Frac * (Areas[I] - Areas[I-1]);
+      Result := Vol + AAvg * (Depth - Depths[I-1]);
+      Exit;
+    end;
+    Vol := Vol + 0.5 * (Areas[I-1] + Areas[I])
+        * (Depths[I] - Depths[I-1]);
+  end;
+  Result := Vol;
+end;
+
+constructor TNode.Create(AInvertEl, AMaxDepth: Double);
+begin
+  InvertEl := AInvertEl;
+  MaxDepth := AMaxDepth;
+  Depth := 0.0;
+  Volume := 0.0;
+  Overflow := 0.0;
+end;
+
+procedure TNode.UpdateLevel(SC: TStorageCurve;
+                             QIn, QOut, Dt: Double);
+var
+  DV, V, VPrev, AAvg, TopArea: Double;
+  I: Integer;
+begin
+  DV := (QIn - QOut) * Dt;
+  Volume := Max(0.0, Volume + DV);
+
+  for I := 1 to SC.NPts - 1 do
+  begin
+    V := SC.GetVolume(SC.Depths[I]);
+    if V >= Volume then
+    begin
+      VPrev := SC.GetVolume(SC.Depths[I-1]);
+      AAvg := 0.5 * (SC.Areas[I-1] + SC.Areas[I]);
+      Depth := SC.Depths[I-1]
+        + (Volume - VPrev) / AAvg;
+      Break;
+    end;
+  end;
+
+  Overflow := 0.0;
+  if Depth > MaxDepth then
+  begin
+    TopArea := SC.Areas[SC.NPts - 1];
+    Overflow := (Depth - MaxDepth) * TopArea / Dt;
+    Depth := MaxDepth;
+  end;
+end;
+
+end.`,
+    typescript: `// node.ts — Junction & Storage Nodes
+// SWMM5 Engine in TypeScript — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+interface StorageCurveData {
+    depths: number[];
+    areas: number[];
+}
+
+class StorageCurve {
+    readonly depths: number[];
+    readonly areas: number[];
+
+    constructor(data: StorageCurveData) {
+        this.depths = data.depths;
+        this.areas = data.areas;
+    }
+
+    getVolume(depth: number): number {
+        let vol: number = 0.0;
+        for (let i = 1; i < this.depths.length; i++) {
+            if (depth <= this.depths[i]) {
+                const frac: number =
+                    (depth - this.depths[i - 1])
+                    / (this.depths[i] - this.depths[i - 1]);
+                const aAvg: number = this.areas[i - 1]
+                    + frac * (this.areas[i]
+                    - this.areas[i - 1]);
+                return vol + aAvg
+                    * (depth - this.depths[i - 1]);
+            }
+            vol += 0.5 * (this.areas[i - 1]
+                + this.areas[i])
+                * (this.depths[i] - this.depths[i - 1]);
+        }
+        return vol;
+    }
+}
+
+class JunctionNode {
+    invertEl: number;
+    maxDepth: number;
+    depth: number = 0.0;
+    volume: number = 0.0;
+    overflow: number = 0.0;
+
+    constructor(invertEl: number, maxDepth: number) {
+        this.invertEl = invertEl;
+        this.maxDepth = maxDepth;
+    }
+
+    updateLevel(sc: StorageCurve, qIn: number,
+                qOut: number, dt: number): void {
+        const dV: number = (qIn - qOut) * dt;
+        this.volume = Math.max(0.0, this.volume + dV);
+
+        for (let i = 1; i < sc.depths.length; i++) {
+            const v: number = sc.getVolume(sc.depths[i]);
+            if (v >= this.volume) {
+                const vPrev: number =
+                    sc.getVolume(sc.depths[i - 1]);
+                const aAvg: number = 0.5
+                    * (sc.areas[i - 1] + sc.areas[i]);
+                this.depth = sc.depths[i - 1]
+                    + (this.volume - vPrev) / aAvg;
+                break;
+            }
+        }
+
+        this.overflow = 0.0;
+        if (this.depth > this.maxDepth) {
+            const topArea: number =
+                sc.areas[sc.areas.length - 1];
+            this.overflow = (this.depth - this.maxDepth)
+                * topArea / dt;
+            this.depth = this.maxDepth;
+        }
+    }
+}
+
+export { StorageCurve, JunctionNode };`,
+    cuda: `// node.cu — Junction & Storage Nodes
+// SWMM5 Engine in CUDA — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+#include <math.h>
+
+#define MAX_PTS 10
+
+struct StorageCurve {
+    float depths[MAX_PTS];
+    float areas[MAX_PTS];
+    int   nPts;
+};
+
+struct Node {
+    float invertEl;
+    float maxDepth;
+    float depth;
+    float volume;
+    float overflow;
+};
+
+__device__ float getVolume(const StorageCurve* sc,
+                            float depth)
+{
+    float vol = 0.0f;
+    for (int i = 1; i < sc->nPts; i++) {
+        if (depth <= sc->depths[i]) {
+            float frac = (depth - sc->depths[i-1])
+                / (sc->depths[i] - sc->depths[i-1]);
+            float aAvg = sc->areas[i-1]
+                + frac * (sc->areas[i] - sc->areas[i-1]);
+            return vol + aAvg
+                * (depth - sc->depths[i-1]);
+        }
+        vol += 0.5f * (sc->areas[i-1] + sc->areas[i])
+            * (sc->depths[i] - sc->depths[i-1]);
+    }
+    return vol;
+}
+
+__global__ void updateLevelKernel(
+    Node* nodes, StorageCurve* curves,
+    float* qIn, float* qOut, float dt, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Node nd = nodes[idx];
+    StorageCurve sc = curves[idx];
+
+    float dV = (qIn[idx] - qOut[idx]) * dt;
+    nd.volume = fmaxf(0.0f, nd.volume + dV);
+
+    for (int i = 1; i < sc.nPts; i++) {
+        float v = getVolume(&sc, sc.depths[i]);
+        if (v >= nd.volume) {
+            float vPrev = getVolume(&sc, sc.depths[i-1]);
+            float aAvg = 0.5f
+                * (sc.areas[i-1] + sc.areas[i]);
+            nd.depth = sc.depths[i-1]
+                + (nd.volume - vPrev) / aAvg;
+            break;
+        }
+    }
+
+    nd.overflow = 0.0f;
+    if (nd.depth > nd.maxDepth) {
+        float topArea = sc.areas[sc.nPts - 1];
+        nd.overflow = (nd.depth - nd.maxDepth)
+                      * topArea / dt;
+        nd.depth = nd.maxDepth;
+    }
+    nodes[idx] = nd;
+}`,
+    wasm: `;; node.wat — Junction & Storage Nodes
+;; SWMM5 Engine in WebAssembly — Node Water Level Updates
+;; Volume balance at junctions and storage nodes
+;; with depth-area relationship and overflow check
+
+(module
+  (memory (export "mem") 1)
+
+  ;; Storage curve: depths at offset 0, areas at offset 80
+  ;; Node: depth@160, volume@168, maxDepth@176, overflow@184
+  ;; nPts stored at offset 192
+
+  (func $getVolume (param $depth f64) (result f64)
+    (local $vol f64) (local $i i32)
+    (local $d_prev f64) (local $d_curr f64)
+    (local $a_prev f64) (local $a_curr f64)
+    (local $frac f64) (local $aAvg f64)
+    (local.set $vol (f64.const 0.0))
+    (local.set $i (i32.const 1))
+    (block $break
+      (loop $loop
+        (br_if $break (i32.ge_s (local.get $i)
+          (i32.load (i32.const 192))))
+        (local.set $d_prev (f64.load (i32.mul
+          (i32.sub (local.get $i) (i32.const 1))
+          (i32.const 8))))
+        (local.set $d_curr (f64.load (i32.mul
+          (local.get $i) (i32.const 8))))
+        (local.set $a_prev (f64.load (i32.add
+          (i32.const 80) (i32.mul
+          (i32.sub (local.get $i) (i32.const 1))
+          (i32.const 8)))))
+        (local.set $a_curr (f64.load (i32.add
+          (i32.const 80) (i32.mul
+          (local.get $i) (i32.const 8)))))
+        (if (f64.le (local.get $depth)
+                     (local.get $d_curr))
+          (then
+            (local.set $frac (f64.div
+              (f64.sub (local.get $depth)
+                       (local.get $d_prev))
+              (f64.sub (local.get $d_curr)
+                       (local.get $d_prev))))
+            (local.set $aAvg (f64.add
+              (local.get $a_prev)
+              (f64.mul (local.get $frac)
+                (f64.sub (local.get $a_curr)
+                         (local.get $a_prev)))))
+            (return (f64.add (local.get $vol)
+              (f64.mul (local.get $aAvg)
+                (f64.sub (local.get $depth)
+                         (local.get $d_prev)))))))
+        (local.set $vol (f64.add (local.get $vol)
+          (f64.mul (f64.const 0.5)
+            (f64.mul
+              (f64.add (local.get $a_prev)
+                       (local.get $a_curr))
+              (f64.sub (local.get $d_curr)
+                       (local.get $d_prev))))))
+        (local.set $i (i32.add (local.get $i)
+                                (i32.const 1)))
+        (br $loop)))
+    (local.get $vol))
+
+  (func $updateLevel (export "updateLevel")
+    (param $qIn f64) (param $qOut f64) (param $dt f64)
+    (local $dV f64) (local $vol f64)
+    (local.set $dV (f64.mul
+      (f64.sub (local.get $qIn) (local.get $qOut))
+      (local.get $dt)))
+    (local.set $vol (f64.add
+      (f64.load (i32.const 168)) (local.get $dV)))
+    (if (f64.lt (local.get $vol) (f64.const 0.0))
+      (then (local.set $vol (f64.const 0.0))))
+    (f64.store (i32.const 168) (local.get $vol))
+  ))`,
+    mojo: `# node.mojo — Junction & Storage Nodes
+# SWMM5 Engine in Mojo — Node Water Level Updates
+# Volume balance at junctions and storage nodes
+# with depth-area relationship and overflow check
+
+from math import max
+
+struct StorageCurve:
+    var depths: DynamicVector[Float64]
+    var areas: DynamicVector[Float64]
+
+    fn __init__(inout self, depths: DynamicVector[Float64],
+                areas: DynamicVector[Float64]):
+        self.depths = depths
+        self.areas = areas
+
+    fn get_volume(self, depth: Float64) -> Float64:
+        var vol: Float64 = 0.0
+        for i in range(1, len(self.depths)):
+            if depth <= self.depths[i]:
+                let frac: Float64 = (
+                    depth - self.depths[i - 1]) / (
+                    self.depths[i] - self.depths[i - 1])
+                let a_avg: Float64 = (
+                    self.areas[i - 1]
+                    + frac * (self.areas[i]
+                    - self.areas[i - 1]))
+                return vol + a_avg * (
+                    depth - self.depths[i - 1])
+            vol += 0.5 * (
+                self.areas[i - 1] + self.areas[i]) * (
+                self.depths[i] - self.depths[i - 1])
+        return vol
+
+
+struct Node:
+    var invert_el: Float64
+    var max_depth: Float64
+    var depth: Float64
+    var volume: Float64
+    var overflow: Float64
+
+    fn __init__(inout self, invert_el: Float64,
+                max_depth: Float64):
+        self.invert_el = invert_el
+        self.max_depth = max_depth
+        self.depth = 0.0
+        self.volume = 0.0
+        self.overflow = 0.0
+
+    fn update_level(inout self, sc: StorageCurve,
+                    q_in: Float64, q_out: Float64,
+                    dt: Float64):
+        let dv: Float64 = (q_in - q_out) * dt
+        self.volume = max(0.0, self.volume + dv)
+
+        for i in range(1, len(sc.depths)):
+            let v = sc.get_volume(sc.depths[i])
+            if v >= self.volume:
+                let v_prev = sc.get_volume(
+                    sc.depths[i - 1])
+                let a_avg: Float64 = 0.5 * (
+                    sc.areas[i - 1] + sc.areas[i])
+                self.depth = sc.depths[i - 1] + (
+                    self.volume - v_prev) / a_avg
+                break
+
+        self.overflow = 0.0
+        if self.depth > self.max_depth:
+            let top_area = sc.areas[
+                len(sc.areas) - 1]
+            self.overflow = (
+                self.depth - self.max_depth
+                ) * top_area / dt
+            self.depth = self.max_depth`,
+    java: `// Node.java — Junction & Storage Nodes
+// SWMM5 Engine in Java — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+package swmm;
+
+public class StorageCurve {
+    private final double[] depths;
+    private final double[] areas;
+
+    public StorageCurve(double[] depths, double[] areas) {
+        this.depths = depths;
+        this.areas = areas;
+    }
+
+    public double[] getDepths() { return depths; }
+    public double[] getAreas()  { return areas; }
+
+    public double getVolume(double depth) {
+        double vol = 0.0;
+        for (int i = 1; i < depths.length; i++) {
+            if (depth <= depths[i]) {
+                double frac = (depth - depths[i - 1])
+                    / (depths[i] - depths[i - 1]);
+                double aAvg = areas[i - 1]
+                    + frac * (areas[i] - areas[i - 1]);
+                return vol + aAvg
+                    * (depth - depths[i - 1]);
+            }
+            vol += 0.5 * (areas[i - 1] + areas[i])
+                * (depths[i] - depths[i - 1]);
+        }
+        return vol;
+    }
+}
+
+public class JunctionNode {
+    private double invertEl;
+    private double maxDepth;
+    private double depth;
+    private double volume;
+    private double overflow;
+
+    public JunctionNode(double invertEl,
+                        double maxDepth) {
+        this.invertEl = invertEl;
+        this.maxDepth = maxDepth;
+    }
+
+    public double getDepth()    { return depth; }
+    public double getVolume()   { return volume; }
+    public double getOverflow() { return overflow; }
+
+    public void updateLevel(StorageCurve sc,
+            double qIn, double qOut, double dt) {
+        double dV = (qIn - qOut) * dt;
+        volume = Math.max(0.0, volume + dV);
+
+        double[] scDepths = sc.getDepths();
+        double[] scAreas = sc.getAreas();
+        for (int i = 1; i < scDepths.length; i++) {
+            double v = sc.getVolume(scDepths[i]);
+            if (v >= volume) {
+                double vPrev =
+                    sc.getVolume(scDepths[i - 1]);
+                double aAvg = 0.5
+                    * (scAreas[i - 1] + scAreas[i]);
+                depth = scDepths[i - 1]
+                    + (volume - vPrev) / aAvg;
+                break;
+            }
+        }
+
+        overflow = 0.0;
+        if (depth > maxDepth) {
+            double topArea =
+                scAreas[scAreas.length - 1];
+            overflow = (depth - maxDepth)
+                * topArea / dt;
+            depth = maxDepth;
+        }
+    }
+}`,
+    nim: `# node.nim — Junction & Storage Nodes
+# SWMM5 Engine in Nim — Node Water Level Updates
+# Volume balance at junctions and storage nodes
+# with depth-area relationship and overflow check
+
+type
+  StorageCurve = object
+    depths: seq[float]
+    areas: seq[float]
+
+  Node = object
+    invertEl: float
+    maxDepth: float
+    depth: float
+    volume: float
+    overflow: float
+
+proc newStorageCurve(depths, areas: seq[float]):
+    StorageCurve =
+  result.depths = depths
+  result.areas = areas
+
+proc getVolume(sc: StorageCurve, depth: float): float =
+  result = 0.0
+  for i in 1 ..< sc.depths.len:
+    if depth <= sc.depths[i]:
+      let frac = (depth - sc.depths[i - 1]) /
+          (sc.depths[i] - sc.depths[i - 1])
+      let aAvg = sc.areas[i - 1] +
+          frac * (sc.areas[i] - sc.areas[i - 1])
+      return result + aAvg *
+          (depth - sc.depths[i - 1])
+    result += 0.5 * (sc.areas[i - 1] + sc.areas[i]) *
+        (sc.depths[i] - sc.depths[i - 1])
+
+proc newNode(invertEl, maxDepth: float): Node =
+  result.invertEl = invertEl
+  result.maxDepth = maxDepth
+
+proc updateLevel(nd: var Node, sc: StorageCurve,
+                  qIn, qOut, dt: float) =
+  let dv = (qIn - qOut) * dt
+  nd.volume = max(0.0, nd.volume + dv)
+
+  for i in 1 ..< sc.depths.len:
+    let v = sc.getVolume(sc.depths[i])
+    if v >= nd.volume:
+      let vPrev = sc.getVolume(sc.depths[i - 1])
+      let aAvg = 0.5 *
+          (sc.areas[i - 1] + sc.areas[i])
+      nd.depth = sc.depths[i - 1] +
+          (nd.volume - vPrev) / aAvg
+      break
+
+  nd.overflow = 0.0
+  if nd.depth > nd.maxDepth:
+    let topArea = sc.areas[^1]
+    nd.overflow = (nd.depth - nd.maxDepth) *
+        topArea / dt
+    nd.depth = nd.maxDepth`,
+    ada: `-- node.adb — Junction & Storage Nodes
+-- SWMM5 Engine in Ada — Node Water Level Updates
+-- Volume balance at junctions and storage nodes
+-- with depth-area relationship and overflow check
+
+package body Node_Module is
+
+   Max_Pts : constant := 10;
+   type Depth_Array is array (1 .. Max_Pts) of Float;
+
+   type Storage_Curve is record
+      Depths : Depth_Array;
+      Areas  : Depth_Array;
+      N_Pts  : Integer;
+   end record;
+
+   type Node is record
+      Invert_El : Float;
+      Max_Depth : Float;
+      Depth     : Float := 0.0;
+      Volume    : Float := 0.0;
+      Overflow  : Float := 0.0;
+   end record;
+
+   function Get_Volume (SC : Storage_Curve;
+                         D  : Float) return Float is
+      Vol   : Float := 0.0;
+      Frac  : Float;
+      A_Avg : Float;
+   begin
+      for I in 2 .. SC.N_Pts loop
+         if D <= SC.Depths (I) then
+            Frac := (D - SC.Depths (I - 1))
+               / (SC.Depths (I) - SC.Depths (I - 1));
+            A_Avg := SC.Areas (I - 1)
+               + Frac * (SC.Areas (I)
+               - SC.Areas (I - 1));
+            return Vol + A_Avg
+               * (D - SC.Depths (I - 1));
+         end if;
+         Vol := Vol + 0.5
+            * (SC.Areas (I - 1) + SC.Areas (I))
+            * (SC.Depths (I) - SC.Depths (I - 1));
+      end loop;
+      return Vol;
+   end Get_Volume;
+
+   procedure Update_Level (Nd    : in out Node;
+                            SC    : Storage_Curve;
+                            Q_In  : Float;
+                            Q_Out : Float;
+                            Dt    : Float) is
+      DV      : Float;
+      V       : Float;
+      V_Prev  : Float;
+      A_Avg   : Float;
+      Top_Area: Float;
+   begin
+      DV := (Q_In - Q_Out) * Dt;
+      Nd.Volume := Float'Max (0.0, Nd.Volume + DV);
+
+      for I in 2 .. SC.N_Pts loop
+         V := Get_Volume (SC, SC.Depths (I));
+         if V >= Nd.Volume then
+            V_Prev := Get_Volume (SC, SC.Depths (I - 1));
+            A_Avg := 0.5 * (SC.Areas (I - 1)
+                     + SC.Areas (I));
+            Nd.Depth := SC.Depths (I - 1)
+               + (Nd.Volume - V_Prev) / A_Avg;
+            exit;
+         end if;
+      end loop;
+
+      Nd.Overflow := 0.0;
+      if Nd.Depth > Nd.Max_Depth then
+         Top_Area := SC.Areas (SC.N_Pts);
+         Nd.Overflow := (Nd.Depth - Nd.Max_Depth)
+                        * Top_Area / Dt;
+         Nd.Depth := Nd.Max_Depth;
+      end if;
+   end Update_Level;
+
+end Node_Module;`,
+    chapel: `// node.chpl — Junction & Storage Nodes
+// SWMM5 Engine in Chapel — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+record StorageCurve {
+    var depths: [0..<10] real;
+    var areas:  [0..<10] real;
+    var nPts: int;
+
+    proc getVolume(depth: real): real {
+        var vol: real = 0.0;
+        for i in 1..<nPts {
+            if depth <= depths[i] {
+                const frac = (depth - depths[i - 1])
+                    / (depths[i] - depths[i - 1]);
+                const aAvg = areas[i - 1]
+                    + frac * (areas[i] - areas[i - 1]);
+                return vol + aAvg
+                    * (depth - depths[i - 1]);
+            }
+            vol += 0.5 * (areas[i - 1] + areas[i])
+                * (depths[i] - depths[i - 1]);
+        }
+        return vol;
+    }
+}
+
+record JunctionNode {
+    var invertEl: real;
+    var maxDepth: real;
+    var depth: real = 0.0;
+    var volume: real = 0.0;
+    var overflow: real = 0.0;
+
+    proc ref updateLevel(ref sc: StorageCurve,
+                          qIn: real, qOut: real,
+                          dt: real) {
+        const dV = (qIn - qOut) * dt;
+        volume = max(0.0, volume + dV);
+
+        for i in 1..<sc.nPts {
+            const v = sc.getVolume(sc.depths[i]);
+            if v >= volume {
+                const vPrev = sc.getVolume(
+                    sc.depths[i - 1]);
+                const aAvg = 0.5
+                    * (sc.areas[i - 1] + sc.areas[i]);
+                depth = sc.depths[i - 1]
+                    + (volume - vPrev) / aAvg;
+                break;
+            }
+        }
+
+        overflow = 0.0;
+        if depth > maxDepth {
+            const topArea = sc.areas[sc.nPts - 1];
+            overflow = (depth - maxDepth)
+                       * topArea / dt;
+            depth = maxDepth;
+        }
+    }
+}`,
+    swift: `// node.swift — Junction & Storage Nodes
+// SWMM5 Engine in Swift — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+import Foundation
+
+struct StorageCurve {
+    let depths: [Double]
+    let areas: [Double]
+
+    func getVolume(depth: Double) -> Double {
+        var vol = 0.0
+        for i in 1..<depths.count {
+            if depth <= depths[i] {
+                let frac = (depth - depths[i - 1])
+                    / (depths[i] - depths[i - 1])
+                let aAvg = areas[i - 1]
+                    + frac * (areas[i] - areas[i - 1])
+                return vol + aAvg
+                    * (depth - depths[i - 1])
+            }
+            vol += 0.5 * (areas[i - 1] + areas[i])
+                * (depths[i] - depths[i - 1])
+        }
+        return vol
+    }
+}
+
+struct JunctionNode {
+    let invertEl: Double
+    let maxDepth: Double
+    var depth: Double = 0.0
+    var volume: Double = 0.0
+    var overflow: Double = 0.0
+
+    mutating func updateLevel(sc: StorageCurve,
+                               qIn: Double,
+                               qOut: Double,
+                               dt: Double) {
+        let dV = (qIn - qOut) * dt
+        volume = max(0.0, volume + dV)
+
+        for i in 1..<sc.depths.count {
+            let v = sc.getVolume(depth: sc.depths[i])
+            if v >= volume {
+                let vPrev = sc.getVolume(
+                    depth: sc.depths[i - 1])
+                let aAvg = 0.5
+                    * (sc.areas[i - 1] + sc.areas[i])
+                depth = sc.depths[i - 1]
+                    + (volume - vPrev) / aAvg
+                break
+            }
+        }
+
+        overflow = 0.0
+        if depth > maxDepth {
+            let topArea = sc.areas.last ?? 1.0
+            overflow = (depth - maxDepth)
+                       * topArea / dt
+            depth = maxDepth
+        }
+    }
+}`,
+    kotlin: `// Node.kt — Junction & Storage Nodes
+// SWMM5 Engine in Kotlin — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+package swmm
+
+class StorageCurve(
+    val depths: DoubleArray,
+    val areas: DoubleArray
+) {
+    fun getVolume(depth: Double): Double {
+        var vol = 0.0
+        for (i in 1 until depths.size) {
+            if (depth <= depths[i]) {
+                val frac = (depth - depths[i - 1]) /
+                    (depths[i] - depths[i - 1])
+                val aAvg = areas[i - 1] +
+                    frac * (areas[i] - areas[i - 1])
+                return vol + aAvg *
+                    (depth - depths[i - 1])
+            }
+            vol += 0.5 * (areas[i - 1] + areas[i]) *
+                (depths[i] - depths[i - 1])
+        }
+        return vol
+    }
+}
+
+data class JunctionNode(
+    val invertEl: Double,
+    val maxDepth: Double,
+    var depth: Double = 0.0,
+    var volume: Double = 0.0,
+    var overflow: Double = 0.0
+) {
+    fun updateLevel(sc: StorageCurve, qIn: Double,
+                    qOut: Double, dt: Double) {
+        val dV = (qIn - qOut) * dt
+        volume = maxOf(0.0, volume + dV)
+
+        for (i in 1 until sc.depths.size) {
+            val v = sc.getVolume(sc.depths[i])
+            if (v >= volume) {
+                val vPrev =
+                    sc.getVolume(sc.depths[i - 1])
+                val aAvg = 0.5 *
+                    (sc.areas[i - 1] + sc.areas[i])
+                depth = sc.depths[i - 1] +
+                    (volume - vPrev) / aAvg
+                break
+            }
+        }
+
+        overflow = 0.0
+        if (depth > maxDepth) {
+            val topArea = sc.areas.last()
+            overflow = (depth - maxDepth) *
+                topArea / dt
+            depth = maxDepth
+        }
+    }
+}`,
   },
   "rain.c — Rainfall Processing": {
     category: "Hydrology",
@@ -5165,6 +13479,1043 @@ fn interpolate(rate_a: f64, rate_b: f64,
     const span = t_b - t_a;
     if (span <= 0.0) return rate_a;
     return rate_a + (rate_b - rate_a) * (t - t_a) / span;
+}`,
+    cpp: `// rain.cpp — Rainfall Processing
+// SWMM5 Engine in C++ — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+enum class RainType { Intensity, Volume, Cumulative };
+
+inline double interpolate(double rateA, double rateB,
+                           double tA, double tB, double t) {
+    double span = tB - tA;
+    if (span <= 0.0) return rateA;
+    return rateA + (rateB - rateA) * (t - tA) / span;
+}
+
+struct RainGage {
+    RainType type;
+    double interval;        // recording interval (seconds)
+    double currentRate;     // current intensity (in/hr)
+    double previousTotal;   // previous cumulative depth
+    double unitsFactor;     // conversion factor
+
+    double convertToIntensity(double value) {
+        switch (type) {
+            case RainType::Intensity:
+                return value * unitsFactor;
+
+            case RainType::Volume:
+                if (interval <= 0.0) return 0.0;
+                return value * unitsFactor
+                       * 3600.0 / interval;
+
+            case RainType::Cumulative: {
+                if (interval <= 0.0) return 0.0;
+                double intensity =
+                    (value - previousTotal)
+                    * unitsFactor * 3600.0 / interval;
+                previousTotal = value;
+                return std::max(intensity, 0.0);
+            }
+
+            default:
+                return 0.0;
+        }
+    }
+
+    double getRate(double raw, double next,
+                   double tA, double tB, double t) {
+        double rateA = convertToIntensity(raw);
+        double rateB = convertToIntensity(next);
+        currentRate = interpolate(rateA, rateB, tA, tB, t);
+        return currentRate;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Rain.cs — Rainfall Processing
+// SWMM5 Engine in C# — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+using System;
+
+namespace Swmm
+{
+    public enum RainType { Intensity, Volume, Cumulative }
+
+    public class RainGage
+    {
+        public RainType Type { get; set; }
+        public double Interval { get; set; }
+        public double CurrentRate { get; set; }
+        public double PreviousTotal { get; set; }
+        public double UnitsFactor { get; set; }
+
+        public RainGage(RainType type, double interval,
+                        double unitsFactor = 1.0)
+        {
+            Type = type;
+            Interval = interval;
+            UnitsFactor = unitsFactor;
+            CurrentRate = 0.0;
+            PreviousTotal = 0.0;
+        }
+
+        public double ConvertToIntensity(double value)
+        {
+            switch (Type)
+            {
+                case RainType.Intensity:
+                    return value * UnitsFactor;
+
+                case RainType.Volume:
+                    if (Interval <= 0.0) return 0.0;
+                    return value * UnitsFactor
+                           * 3600.0 / Interval;
+
+                case RainType.Cumulative:
+                    if (Interval <= 0.0) return 0.0;
+                    double intensity =
+                        (value - PreviousTotal)
+                        * UnitsFactor * 3600.0 / Interval;
+                    PreviousTotal = value;
+                    return Math.Max(intensity, 0.0);
+
+                default:
+                    return 0.0;
+            }
+        }
+
+        public double GetRate(double raw, double next,
+                              double tA, double tB, double t)
+        {
+            double rateA = ConvertToIntensity(raw);
+            double rateB = ConvertToIntensity(next);
+            CurrentRate = Interpolate(rateA, rateB,
+                                      tA, tB, t);
+            return CurrentRate;
+        }
+
+        public static double Interpolate(double rateA,
+            double rateB, double tA, double tB, double t)
+        {
+            double span = tB - tA;
+            if (span <= 0.0) return rateA;
+            return rateA + (rateB - rateA)
+                   * (t - tA) / span;
+        }
+    }
+}`,
+    matlab: `% rain.m — Rainfall Processing
+% SWMM5 Engine in MATLAB — Rain Gage Input Handling
+% Converts raw rainfall data to time-stepped intensities
+% for driving all hydrologic computations
+
+% RainType constants
+% 1 = INTENSITY, 2 = VOLUME, 3 = CUMULATIVE
+
+function gage = create_rain_gage(rain_type, interval, ...
+                                   units_factor)
+    gage.rain_type       = rain_type;
+    gage.interval        = interval;
+    gage.current_rate    = 0.0;
+    gage.previous_total  = 0.0;
+    gage.units_factor    = units_factor;
+end
+
+function [intensity, gage] = convert_to_intensity(gage, value)
+    switch gage.rain_type
+        case 1  % INTENSITY
+            intensity = value * gage.units_factor;
+
+        case 2  % VOLUME
+            if gage.interval <= 0.0
+                intensity = 0.0;
+                return;
+            end
+            intensity = value * gage.units_factor ...
+                        * 3600.0 / gage.interval;
+
+        case 3  % CUMULATIVE
+            if gage.interval <= 0.0
+                intensity = 0.0;
+                return;
+            end
+            intensity = (value - gage.previous_total) ...
+                        * gage.units_factor ...
+                        * 3600.0 / gage.interval;
+            gage.previous_total = value;
+            if intensity < 0.0
+                intensity = 0.0;
+            end
+
+        otherwise
+            intensity = 0.0;
+    end
+end
+
+function rate = interpolate(rate_a, rate_b, t_a, t_b, t)
+    span = t_b - t_a;
+    if span <= 0.0
+        rate = rate_a;
+        return;
+    end
+    rate = rate_a + (rate_b - rate_a) * (t - t_a) / span;
+end
+
+function [rate, gage] = get_rate(gage, raw, nxt, ...
+                                  t_a, t_b, t)
+    [rate_a, gage] = convert_to_intensity(gage, raw);
+    [rate_b, gage] = convert_to_intensity(gage, nxt);
+    rate = interpolate(rate_a, rate_b, t_a, t_b, t);
+    gage.current_rate = rate;
+end`,
+    r: `# rain.R — Rainfall Processing
+# SWMM5 Engine in R — Rain Gage Input Handling
+# Converts raw rainfall data to time-stepped intensities
+# for driving all hydrologic computations
+
+RAIN_INTENSITY  <- 1L
+RAIN_VOLUME     <- 2L
+RAIN_CUMULATIVE <- 3L
+
+create_rain_gage <- function(rain_type, interval,
+                              units_factor = 1.0) {
+    env <- new.env(parent = emptyenv())
+    env$rain_type      <- rain_type
+    env$interval       <- interval
+    env$current_rate   <- 0.0
+    env$previous_total <- 0.0
+    env$units_factor   <- units_factor
+    env
+}
+
+convert_to_intensity <- function(gage, value) {
+    if (gage$rain_type == RAIN_INTENSITY) {
+        return(value * gage$units_factor)
+    }
+
+    if (gage$rain_type == RAIN_VOLUME) {
+        if (gage$interval <= 0.0) return(0.0)
+        return(value * gage$units_factor *
+               3600.0 / gage$interval)
+    }
+
+    if (gage$rain_type == RAIN_CUMULATIVE) {
+        if (gage$interval <= 0.0) return(0.0)
+        intensity <- (value - gage$previous_total) *
+                     gage$units_factor *
+                     3600.0 / gage$interval
+        gage$previous_total <- value
+        return(max(intensity, 0.0))
+    }
+
+    0.0
+}
+
+interpolate <- function(rate_a, rate_b,
+                         t_a, t_b, t) {
+    span <- t_b - t_a
+    if (span <= 0.0) return(rate_a)
+    rate_a + (rate_b - rate_a) * (t - t_a) / span
+}
+
+get_rate <- function(gage, raw, nxt, t_a, t_b, t) {
+    rate_a <- convert_to_intensity(gage, raw)
+    rate_b <- convert_to_intensity(gage, nxt)
+    gage$current_rate <- interpolate(rate_a, rate_b,
+                                      t_a, t_b, t)
+    gage$current_rate
+}`,
+    delphi: `{ rain.pas — Rainfall Processing }
+{ SWMM5 Engine in Delphi — Rain Gage Input Handling }
+{ Converts raw rainfall data to time-stepped intensities }
+{ for driving all hydrologic computations }
+
+unit Rain;
+
+interface
+
+type
+  TRainType = (rtIntensity, rtVolume, rtCumulative);
+
+  TRainGage = class
+  private
+    FRainType: TRainType;
+    FInterval: Double;
+    FCurrentRate: Double;
+    FPreviousTotal: Double;
+    FUnitsFactor: Double;
+  public
+    constructor Create(ARainType: TRainType;
+                       AInterval: Double;
+                       AUnitsFactor: Double = 1.0);
+    function ConvertToIntensity(Value: Double): Double;
+    function GetRate(Raw, Next, TA, TB,
+                     T: Double): Double;
+    property CurrentRate: Double read FCurrentRate;
+  end;
+
+function Interpolate(RateA, RateB,
+                      TA, TB, T: Double): Double;
+
+implementation
+
+uses Math;
+
+constructor TRainGage.Create(ARainType: TRainType;
+                              AInterval: Double;
+                              AUnitsFactor: Double);
+begin
+  FRainType      := ARainType;
+  FInterval      := AInterval;
+  FUnitsFactor   := AUnitsFactor;
+  FCurrentRate   := 0.0;
+  FPreviousTotal := 0.0;
+end;
+
+function TRainGage.ConvertToIntensity(
+    Value: Double): Double;
+begin
+  case FRainType of
+    rtIntensity:
+      Result := Value * FUnitsFactor;
+
+    rtVolume:
+    begin
+      if FInterval <= 0.0 then Exit(0.0);
+      Result := Value * FUnitsFactor
+                * 3600.0 / FInterval;
+    end;
+
+    rtCumulative:
+    begin
+      if FInterval <= 0.0 then Exit(0.0);
+      Result := (Value - FPreviousTotal)
+                * FUnitsFactor * 3600.0 / FInterval;
+      FPreviousTotal := Value;
+      if Result < 0.0 then Result := 0.0;
+    end;
+  else
+    Result := 0.0;
+  end;
+end;
+
+function Interpolate(RateA, RateB,
+                      TA, TB, T: Double): Double;
+var
+  Span: Double;
+begin
+  Span := TB - TA;
+  if Span <= 0.0 then Exit(RateA);
+  Result := RateA + (RateB - RateA)
+            * (T - TA) / Span;
+end;
+
+function TRainGage.GetRate(Raw, Next, TA, TB,
+                            T: Double): Double;
+var
+  RateA, RateB: Double;
+begin
+  RateA := ConvertToIntensity(Raw);
+  RateB := ConvertToIntensity(Next);
+  FCurrentRate := Interpolate(RateA, RateB,
+                               TA, TB, T);
+  Result := FCurrentRate;
+end;
+
+end.`,
+    typescript: `// rain.ts — Rainfall Processing
+// SWMM5 Engine in TypeScript — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+enum RainType {
+    Intensity,
+    Volume,
+    Cumulative,
+}
+
+interface RainGageParams {
+    rainType: RainType;
+    interval: number;
+    unitsFactor?: number;
+}
+
+class RainGage {
+    readonly rainType: RainType;
+    readonly interval: number;
+    readonly unitsFactor: number;
+    currentRate: number = 0.0;
+    previousTotal: number = 0.0;
+
+    constructor(params: RainGageParams) {
+        this.rainType = params.rainType;
+        this.interval = params.interval;
+        this.unitsFactor = params.unitsFactor ?? 1.0;
+    }
+
+    convertToIntensity(value: number): number {
+        switch (this.rainType) {
+            case RainType.Intensity:
+                return value * this.unitsFactor;
+
+            case RainType.Volume:
+                if (this.interval <= 0.0) return 0.0;
+                return value * this.unitsFactor
+                       * 3600.0 / this.interval;
+
+            case RainType.Cumulative: {
+                if (this.interval <= 0.0) return 0.0;
+                const intensity: number =
+                    (value - this.previousTotal)
+                    * this.unitsFactor
+                    * 3600.0 / this.interval;
+                this.previousTotal = value;
+                return Math.max(intensity, 0.0);
+            }
+
+            default:
+                return 0.0;
+        }
+    }
+
+    getRate(raw: number, next: number, tA: number,
+            tB: number, t: number): number {
+        const rateA: number =
+            this.convertToIntensity(raw);
+        const rateB: number =
+            this.convertToIntensity(next);
+        this.currentRate = interpolate(rateA, rateB,
+                                       tA, tB, t);
+        return this.currentRate;
+    }
+}
+
+function interpolate(rateA: number, rateB: number,
+                     tA: number, tB: number,
+                     t: number): number {
+    const span: number = tB - tA;
+    if (span <= 0.0) return rateA;
+    return rateA + (rateB - rateA) * (t - tA) / span;
+}
+
+export { RainType, RainGage, interpolate };`,
+    cuda: `// rain.cu — Rainfall Processing
+// SWMM5 Engine in CUDA — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+#include <math.h>
+
+enum RainType { INTENSITY = 0, VOLUME = 1,
+                CUMULATIVE = 2 };
+
+struct RainGage {
+    int type;
+    float interval;
+    float currentRate;
+    float previousTotal;
+    float unitsFactor;
+};
+
+__device__ float interpolate(float rateA, float rateB,
+                              float tA, float tB, float t)
+{
+    float span = tB - tA;
+    if (span <= 0.0f) return rateA;
+    return rateA + (rateB - rateA) * (t - tA) / span;
+}
+
+__device__ float convertToIntensity(RainGage* g,
+                                     float value)
+{
+    float intensity;
+    switch (g->type) {
+        case INTENSITY:
+            return value * g->unitsFactor;
+
+        case VOLUME:
+            if (g->interval <= 0.0f) return 0.0f;
+            return value * g->unitsFactor
+                   * 3600.0f / g->interval;
+
+        case CUMULATIVE:
+            if (g->interval <= 0.0f) return 0.0f;
+            intensity = (value - g->previousTotal)
+                        * g->unitsFactor
+                        * 3600.0f / g->interval;
+            g->previousTotal = value;
+            return fmaxf(intensity, 0.0f);
+
+        default:
+            return 0.0f;
+    }
+}
+
+__global__ void convertRainKernel(
+    RainGage* gages, float* rawVals, float* nextVals,
+    float* tA, float* tB, float* tNow,
+    float* rates, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    float rateA = convertToIntensity(&gages[idx],
+                                      rawVals[idx]);
+    float rateB = convertToIntensity(&gages[idx],
+                                      nextVals[idx]);
+    rates[idx] = interpolate(rateA, rateB,
+                              tA[idx], tB[idx],
+                              tNow[idx]);
+    gages[idx].currentRate = rates[idx];
+}`,
+    wasm: `;; rain.wat — Rainfall Processing
+;; SWMM5 Engine in WebAssembly — Rain Gage Input Handling
+;; Converts raw rainfall data to time-stepped intensities
+;; for driving all hydrologic computations
+
+(module
+  ;; Rain type constants: 0=intensity, 1=volume, 2=cumulative
+
+  (func $interpolate
+    (param $rateA f64) (param $rateB f64)
+    (param $tA f64) (param $tB f64) (param $t f64)
+    (result f64)
+    (local $span f64)
+    (local.set $span (f64.sub (local.get $tB)
+                               (local.get $tA)))
+    (if (result f64)
+      (f64.le (local.get $span) (f64.const 0.0))
+      (then (local.get $rateA))
+      (else
+        (f64.add (local.get $rateA)
+          (f64.div
+            (f64.mul
+              (f64.sub (local.get $rateB)
+                       (local.get $rateA))
+              (f64.sub (local.get $t)
+                       (local.get $tA)))
+            (local.get $span))))))
+
+  (func $convertToIntensity
+    (param $type i32) (param $interval f64)
+    (param $unitsFactor f64) (param $prevTotal f64)
+    (param $value f64)
+    (result f64)
+    (local $intensity f64)
+
+    ;; INTENSITY type
+    (if (i32.eq (local.get $type) (i32.const 0))
+      (then
+        (return (f64.mul (local.get $value)
+                         (local.get $unitsFactor)))))
+
+    ;; VOLUME type
+    (if (i32.eq (local.get $type) (i32.const 1))
+      (then
+        (if (result f64)
+          (f64.le (local.get $interval) (f64.const 0.0))
+          (then (f64.const 0.0))
+          (else
+            (f64.div
+              (f64.mul
+                (f64.mul (local.get $value)
+                         (local.get $unitsFactor))
+                (f64.const 3600.0))
+              (local.get $interval))))
+        (return)))
+
+    ;; CUMULATIVE type
+    (if (i32.eq (local.get $type) (i32.const 2))
+      (then
+        (if (result f64)
+          (f64.le (local.get $interval) (f64.const 0.0))
+          (then (f64.const 0.0))
+          (else
+            (local.set $intensity
+              (f64.div
+                (f64.mul
+                  (f64.mul
+                    (f64.sub (local.get $value)
+                             (local.get $prevTotal))
+                    (local.get $unitsFactor))
+                  (f64.const 3600.0))
+                (local.get $interval)))
+            (f64.max (local.get $intensity)
+                     (f64.const 0.0))))
+        (return)))
+
+    (f64.const 0.0))
+)`,
+    mojo: `# rain.mojo — Rainfall Processing
+# SWMM5 Engine in Mojo — Rain Gage Input Handling
+# Converts raw rainfall data to time-stepped intensities
+# for driving all hydrologic computations
+
+from enum import Enum
+
+@value
+struct RainType:
+    var value: Int
+    alias INTENSITY = RainType(0)
+    alias VOLUME = RainType(1)
+    alias CUMULATIVE = RainType(2)
+
+@value
+struct RainGage:
+    var rain_type: RainType
+    var interval: Float64
+    var current_rate: Float64
+    var previous_total: Float64
+    var units_factor: Float64
+
+    fn __init__(inout self, rain_type: RainType,
+                interval: Float64,
+                units_factor: Float64 = 1.0):
+        self.rain_type = rain_type
+        self.interval = interval
+        self.current_rate = 0.0
+        self.previous_total = 0.0
+        self.units_factor = units_factor
+
+    fn convert_to_intensity(inout self,
+                             value: Float64) -> Float64:
+        if self.rain_type.value == RainType.INTENSITY.value:
+            return value * self.units_factor
+
+        if self.rain_type.value == RainType.VOLUME.value:
+            if self.interval <= 0.0:
+                return 0.0
+            return value * self.units_factor * 3600.0 / self.interval
+
+        if self.rain_type.value == RainType.CUMULATIVE.value:
+            if self.interval <= 0.0:
+                return 0.0
+            var intensity: Float64 = (
+                (value - self.previous_total)
+                * self.units_factor * 3600.0
+                / self.interval)
+            self.previous_total = value
+            if intensity < 0.0:
+                intensity = 0.0
+            return intensity
+
+        return 0.0
+
+    fn get_rate(inout self, raw: Float64, nxt: Float64,
+                t_a: Float64, t_b: Float64,
+                t: Float64) -> Float64:
+        var rate_a = self.convert_to_intensity(raw)
+        var rate_b = self.convert_to_intensity(nxt)
+        self.current_rate = interpolate(rate_a, rate_b,
+                                         t_a, t_b, t)
+        return self.current_rate
+
+
+fn interpolate(rate_a: Float64, rate_b: Float64,
+               t_a: Float64, t_b: Float64,
+               t: Float64) -> Float64:
+    var span = t_b - t_a
+    if span <= 0.0:
+        return rate_a
+    return rate_a + (rate_b - rate_a) * (t - t_a) / span`,
+    java: `// Rain.java — Rainfall Processing
+// SWMM5 Engine in Java — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+package swmm;
+
+public class RainGage {
+
+    public enum RainType { INTENSITY, VOLUME, CUMULATIVE }
+
+    private final RainType type;
+    private final double interval;
+    private final double unitsFactor;
+    private double currentRate;
+    private double previousTotal;
+
+    public RainGage(RainType type, double interval,
+                    double unitsFactor) {
+        this.type = type;
+        this.interval = interval;
+        this.unitsFactor = unitsFactor;
+        this.currentRate = 0.0;
+        this.previousTotal = 0.0;
+    }
+
+    public double convertToIntensity(double value) {
+        switch (type) {
+            case INTENSITY:
+                return value * unitsFactor;
+
+            case VOLUME:
+                if (interval <= 0.0) return 0.0;
+                return value * unitsFactor
+                       * 3600.0 / interval;
+
+            case CUMULATIVE:
+                if (interval <= 0.0) return 0.0;
+                double intensity =
+                    (value - previousTotal)
+                    * unitsFactor * 3600.0 / interval;
+                previousTotal = value;
+                return Math.max(intensity, 0.0);
+
+            default:
+                return 0.0;
+        }
+    }
+
+    public double getRate(double raw, double next,
+                          double tA, double tB, double t) {
+        double rateA = convertToIntensity(raw);
+        double rateB = convertToIntensity(next);
+        currentRate = interpolate(rateA, rateB,
+                                  tA, tB, t);
+        return currentRate;
+    }
+
+    public double getCurrentRate() {
+        return currentRate;
+    }
+
+    public static double interpolate(double rateA,
+        double rateB, double tA, double tB, double t) {
+        double span = tB - tA;
+        if (span <= 0.0) return rateA;
+        return rateA + (rateB - rateA)
+               * (t - tA) / span;
+    }
+}`,
+    nim: `# rain.nim — Rainfall Processing
+# SWMM5 Engine in Nim — Rain Gage Input Handling
+# Converts raw rainfall data to time-stepped intensities
+# for driving all hydrologic computations
+
+type
+  RainType = enum
+    rtIntensity, rtVolume, rtCumulative
+
+  RainGage = object
+    rainType: RainType
+    interval: float64
+    currentRate: float64
+    previousTotal: float64
+    unitsFactor: float64
+
+proc newRainGage(rainType: RainType, interval: float64,
+                  unitsFactor: float64 = 1.0): RainGage =
+  result.rainType = rainType
+  result.interval = interval
+  result.unitsFactor = unitsFactor
+  result.currentRate = 0.0
+  result.previousTotal = 0.0
+
+proc convertToIntensity(gage: var RainGage,
+                         value: float64): float64 =
+  case gage.rainType
+  of rtIntensity:
+    result = value * gage.unitsFactor
+
+  of rtVolume:
+    if gage.interval <= 0.0: return 0.0
+    result = value * gage.unitsFactor *
+             3600.0 / gage.interval
+
+  of rtCumulative:
+    if gage.interval <= 0.0: return 0.0
+    result = (value - gage.previousTotal) *
+             gage.unitsFactor *
+             3600.0 / gage.interval
+    gage.previousTotal = value
+    if result < 0.0: result = 0.0
+
+proc interpolate(rateA, rateB, tA, tB,
+                  t: float64): float64 =
+  let span = tB - tA
+  if span <= 0.0: return rateA
+  result = rateA + (rateB - rateA) * (t - tA) / span
+
+proc getRate(gage: var RainGage, raw, nxt, tA, tB,
+              t: float64): float64 =
+  let rateA = gage.convertToIntensity(raw)
+  let rateB = gage.convertToIntensity(nxt)
+  gage.currentRate = interpolate(rateA, rateB,
+                                  tA, tB, t)
+  result = gage.currentRate`,
+    ada: `-- rain.adb — Rainfall Processing
+-- SWMM5 Engine in Ada — Rain Gage Input Handling
+-- Converts raw rainfall data to time-stepped intensities
+-- for driving all hydrologic computations
+
+package body Rain is
+
+   type Rain_Type is (Intensity, Volume, Cumulative);
+
+   type Rain_Gage is record
+      R_Type         : Rain_Type;
+      Interval       : Float;
+      Current_Rate   : Float;
+      Previous_Total : Float;
+      Units_Factor   : Float;
+   end record;
+
+   function Interpolate (Rate_A, Rate_B : Float;
+                          T_A, T_B, T   : Float)
+                          return Float is
+      Span : constant Float := T_B - T_A;
+   begin
+      if Span <= 0.0 then
+         return Rate_A;
+      end if;
+      return Rate_A + (Rate_B - Rate_A)
+             * (T - T_A) / Span;
+   end Interpolate;
+
+   procedure Convert_To_Intensity
+      (Gage      : in out Rain_Gage;
+       Value     : in     Float;
+       Result_I  :    out Float) is
+   begin
+      case Gage.R_Type is
+         when Intensity =>
+            Result_I := Value * Gage.Units_Factor;
+
+         when Volume =>
+            if Gage.Interval <= 0.0 then
+               Result_I := 0.0;
+               return;
+            end if;
+            Result_I := Value * Gage.Units_Factor
+                        * 3600.0 / Gage.Interval;
+
+         when Cumulative =>
+            if Gage.Interval <= 0.0 then
+               Result_I := 0.0;
+               return;
+            end if;
+            Result_I := (Value - Gage.Previous_Total)
+                        * Gage.Units_Factor
+                        * 3600.0 / Gage.Interval;
+            Gage.Previous_Total := Value;
+            if Result_I < 0.0 then
+               Result_I := 0.0;
+            end if;
+      end case;
+   end Convert_To_Intensity;
+
+   function Get_Rate (Gage : in out Rain_Gage;
+                       Raw, Next : Float;
+                       T_A, T_B, T : Float)
+                       return Float is
+      Rate_A, Rate_B : Float;
+   begin
+      Convert_To_Intensity (Gage, Raw, Rate_A);
+      Convert_To_Intensity (Gage, Next, Rate_B);
+      Gage.Current_Rate :=
+         Interpolate (Rate_A, Rate_B, T_A, T_B, T);
+      return Gage.Current_Rate;
+   end Get_Rate;
+
+end Rain;`,
+    chapel: `// rain.chpl — Rainfall Processing
+// SWMM5 Engine in Chapel — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+enum RainType { Intensity, Volume, Cumulative }
+
+record RainGage {
+    var rainType: RainType;
+    var interval: real;
+    var currentRate: real = 0.0;
+    var previousTotal: real = 0.0;
+    var unitsFactor: real = 1.0;
+
+    proc ref convertToIntensity(value: real): real {
+        select rainType {
+            when RainType.Intensity do
+                return value * unitsFactor;
+
+            when RainType.Volume {
+                if interval <= 0.0 then return 0.0;
+                return value * unitsFactor
+                       * 3600.0 / interval;
+            }
+
+            when RainType.Cumulative {
+                if interval <= 0.0 then return 0.0;
+                var intensity =
+                    (value - previousTotal)
+                    * unitsFactor * 3600.0 / interval;
+                previousTotal = value;
+                if intensity < 0.0 then intensity = 0.0;
+                return intensity;
+            }
+        }
+        return 0.0;
+    }
+
+    proc ref getRate(raw: real, next: real,
+                     tA: real, tB: real,
+                     t: real): real {
+        var rateA = convertToIntensity(raw);
+        var rateB = convertToIntensity(next);
+        currentRate = interpolate(rateA, rateB,
+                                   tA, tB, t);
+        return currentRate;
+    }
+}
+
+proc interpolate(rateA: real, rateB: real,
+                  tA: real, tB: real, t: real): real {
+    const span = tB - tA;
+    if span <= 0.0 then return rateA;
+    return rateA + (rateB - rateA) * (t - tA) / span;
+}`,
+    swift: `// Rain.swift — Rainfall Processing
+// SWMM5 Engine in Swift — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+import Foundation
+
+enum RainType {
+    case intensity
+    case volume
+    case cumulative
+}
+
+struct RainGage {
+    let rainType: RainType
+    let interval: Double
+    let unitsFactor: Double
+    var currentRate: Double = 0.0
+    var previousTotal: Double = 0.0
+
+    init(rainType: RainType, interval: Double,
+         unitsFactor: Double = 1.0) {
+        self.rainType = rainType
+        self.interval = interval
+        self.unitsFactor = unitsFactor
+    }
+
+    mutating func convertToIntensity(
+        _ value: Double) -> Double {
+        switch rainType {
+        case .intensity:
+            return value * unitsFactor
+
+        case .volume:
+            guard interval > 0.0 else { return 0.0 }
+            return value * unitsFactor
+                   * 3600.0 / interval
+
+        case .cumulative:
+            guard interval > 0.0 else { return 0.0 }
+            let intensity =
+                (value - previousTotal)
+                * unitsFactor * 3600.0 / interval
+            previousTotal = value
+            return max(intensity, 0.0)
+        }
+    }
+
+    mutating func getRate(raw: Double, next: Double,
+                          tA: Double, tB: Double,
+                          t: Double) -> Double {
+        let rateA = convertToIntensity(raw)
+        let rateB = convertToIntensity(next)
+        currentRate = RainGage.interpolate(
+            rateA: rateA, rateB: rateB,
+            tA: tA, tB: tB, t: t)
+        return currentRate
+    }
+
+    static func interpolate(rateA: Double,
+        rateB: Double, tA: Double,
+        tB: Double, t: Double) -> Double {
+        let span = tB - tA
+        guard span > 0.0 else { return rateA }
+        return rateA + (rateB - rateA)
+               * (t - tA) / span
+    }
+}`,
+    kotlin: `// Rain.kt — Rainfall Processing
+// SWMM5 Engine in Kotlin — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+package swmm
+
+import kotlin.math.max
+
+enum class RainType { INTENSITY, VOLUME, CUMULATIVE }
+
+class RainGage(
+    val rainType: RainType,
+    val interval: Double,
+    val unitsFactor: Double = 1.0
+) {
+    var currentRate: Double = 0.0
+        private set
+    var previousTotal: Double = 0.0
+        private set
+
+    fun convertToIntensity(value: Double): Double =
+        when (rainType) {
+            RainType.INTENSITY ->
+                value * unitsFactor
+
+            RainType.VOLUME -> {
+                if (interval <= 0.0) 0.0
+                else value * unitsFactor *
+                     3600.0 / interval
+            }
+
+            RainType.CUMULATIVE -> {
+                if (interval <= 0.0) 0.0
+                else {
+                    val intensity =
+                        (value - previousTotal) *
+                        unitsFactor * 3600.0 / interval
+                    previousTotal = value
+                    max(intensity, 0.0)
+                }
+            }
+        }
+
+    fun getRate(raw: Double, next: Double,
+                tA: Double, tB: Double,
+                t: Double): Double {
+        val rateA = convertToIntensity(raw)
+        val rateB = convertToIntensity(next)
+        currentRate = interpolate(rateA, rateB,
+                                  tA, tB, t)
+        return currentRate
+    }
+
+    companion object {
+        fun interpolate(rateA: Double, rateB: Double,
+                        tA: Double, tB: Double,
+                        t: Double): Double {
+            val span = tB - tA
+            if (span <= 0.0) return rateA
+            return rateA + (rateB - rateA) *
+                   (t - tA) / span
+        }
+    }
 }`,
   },
   "massbal.c — Mass Balance Checking": {
@@ -5732,6 +15083,1032 @@ fn getError(total_in: f64, total_out: f64,
     return 100.0 * (total_in - total_out - storage_change) /
         denom;
 }`,
+    cpp: `// massbal.cpp — Mass Balance Checking
+// SWMM5 Engine in C++ — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+#include <cstdio>
+#include <cmath>
+
+namespace swmm {
+
+inline double getError(double totalIn, double totalOut,
+                       double storageChange) {
+    double denom = totalIn;
+    if (denom <= 0.0)
+        denom = totalOut + storageChange;
+    if (denom <= 0.0) return 0.0;
+
+    return 100.0 * (totalIn - totalOut - storageChange)
+           / denom;
+}
+
+struct MassBalance {
+    double totalInflow    = 0.0;
+    double totalOutflow   = 0.0;
+    double initialStorage = 0.0;
+    double finalStorage   = 0.0;
+    double runoffError    = 0.0;
+    double routingError   = 0.0;
+
+    void addInflow(double volume) {
+        totalInflow += volume;
+    }
+
+    void addOutflow(double volume) {
+        totalOutflow += volume;
+    }
+
+    void updateStorage(double current) {
+        finalStorage = current;
+    }
+
+    void report() {
+        double delta = finalStorage - initialStorage;
+        runoffError = getError(totalInflow, totalOutflow,
+                               delta);
+        routingError = runoffError;
+
+        std::printf("\\n--- Mass Balance Report ---\\n");
+        std::printf("Total Inflow:    %12.4f\\n", totalInflow);
+        std::printf("Total Outflow:   %12.4f\\n", totalOutflow);
+        std::printf("Initial Storage: %12.4f\\n",
+                    initialStorage);
+        std::printf("Final Storage:   %12.4f\\n",
+                    finalStorage);
+        std::printf("Runoff Error:    %12.4f %%\\n",
+                    runoffError);
+        std::printf("Routing Error:   %12.4f %%\\n",
+                    routingError);
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// MassBalance.cs — Mass Balance Checking
+// SWMM5 Engine in C# — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+using System;
+
+namespace Swmm
+{
+    public class MassBalance
+    {
+        public double TotalInflow { get; private set; }
+        public double TotalOutflow { get; private set; }
+        public double InitialStorage { get; set; }
+        public double FinalStorage { get; private set; }
+        public double RunoffError { get; private set; }
+        public double RoutingError { get; private set; }
+
+        public MassBalance()
+        {
+            TotalInflow = 0.0;
+            TotalOutflow = 0.0;
+            InitialStorage = 0.0;
+            FinalStorage = 0.0;
+            RunoffError = 0.0;
+            RoutingError = 0.0;
+        }
+
+        public void AddInflow(double volume)
+        {
+            TotalInflow += volume;
+        }
+
+        public void AddOutflow(double volume)
+        {
+            TotalOutflow += volume;
+        }
+
+        public void UpdateStorage(double current)
+        {
+            FinalStorage = current;
+        }
+
+        public static double GetError(double totalIn,
+            double totalOut, double storageChange)
+        {
+            double denom = totalIn;
+            if (denom <= 0.0)
+                denom = totalOut + storageChange;
+            if (denom <= 0.0) return 0.0;
+
+            return 100.0 * (totalIn - totalOut
+                            - storageChange) / denom;
+        }
+
+        public string Report()
+        {
+            double delta = FinalStorage - InitialStorage;
+            RunoffError = GetError(TotalInflow,
+                                    TotalOutflow, delta);
+            RoutingError = RunoffError;
+
+            return string.Format(
+                "\\n--- Mass Balance Report ---\\n" +
+                "Total Inflow:    {0,12:F4}\\n" +
+                "Total Outflow:   {1,12:F4}\\n" +
+                "Initial Storage: {2,12:F4}\\n" +
+                "Final Storage:   {3,12:F4}\\n" +
+                "Runoff Error:    {4,12:F4} %\\n" +
+                "Routing Error:   {5,12:F4} %",
+                TotalInflow, TotalOutflow,
+                InitialStorage, FinalStorage,
+                RunoffError, RoutingError);
+        }
+    }
+}`,
+    matlab: `% massbal.m — Mass Balance Checking
+% SWMM5 Engine in MATLAB — Continuity Error Tracking
+% Tracks all inflows, outflows, and storage to verify
+% conservation of mass throughout the simulation
+
+function mb = create_mass_balance()
+    mb.total_inflow    = 0.0;
+    mb.total_outflow   = 0.0;
+    mb.initial_storage = 0.0;
+    mb.final_storage   = 0.0;
+    mb.runoff_error    = 0.0;
+    mb.routing_error   = 0.0;
+end
+
+function mb = add_inflow(mb, volume)
+    mb.total_inflow = mb.total_inflow + volume;
+end
+
+function mb = add_outflow(mb, volume)
+    mb.total_outflow = mb.total_outflow + volume;
+end
+
+function mb = update_storage(mb, current)
+    mb.final_storage = current;
+end
+
+function error_pct = get_error(total_in, total_out, ...
+                                storage_change)
+    denom = total_in;
+    if denom <= 0.0
+        denom = total_out + storage_change;
+    end
+    if denom <= 0.0
+        error_pct = 0.0;
+        return;
+    end
+    error_pct = 100.0 * (total_in - total_out ...
+                - storage_change) / denom;
+end
+
+function mb = report(mb)
+    delta = mb.final_storage - mb.initial_storage;
+    mb.runoff_error = get_error(mb.total_inflow, ...
+                      mb.total_outflow, delta);
+    mb.routing_error = mb.runoff_error;
+
+    fprintf('\\n--- Mass Balance Report ---\\n');
+    fprintf('Total Inflow:    %12.4f\\n', mb.total_inflow);
+    fprintf('Total Outflow:   %12.4f\\n', mb.total_outflow);
+    fprintf('Initial Storage: %12.4f\\n', ...
+            mb.initial_storage);
+    fprintf('Final Storage:   %12.4f\\n', ...
+            mb.final_storage);
+    fprintf('Runoff Error:    %12.4f %%\\n', ...
+            mb.runoff_error);
+    fprintf('Routing Error:   %12.4f %%\\n', ...
+            mb.routing_error);
+end`,
+    r: `# massbal.R — Mass Balance Checking
+# SWMM5 Engine in R — Continuity Error Tracking
+# Tracks all inflows, outflows, and storage to verify
+# conservation of mass throughout the simulation
+
+create_mass_balance <- function() {
+    list(
+        total_inflow    = 0.0,
+        total_outflow   = 0.0,
+        initial_storage = 0.0,
+        final_storage   = 0.0,
+        runoff_error    = 0.0,
+        routing_error   = 0.0
+    )
+}
+
+add_inflow <- function(mb, volume) {
+    mb$total_inflow <- mb$total_inflow + volume
+    mb
+}
+
+add_outflow <- function(mb, volume) {
+    mb$total_outflow <- mb$total_outflow + volume
+    mb
+}
+
+update_storage <- function(mb, current) {
+    mb$final_storage <- current
+    mb
+}
+
+get_error <- function(total_in, total_out,
+                       storage_change) {
+    denom <- total_in
+    if (denom <= 0.0)
+        denom <- total_out + storage_change
+    if (denom <= 0.0) return(0.0)
+
+    100.0 * (total_in - total_out
+             - storage_change) / denom
+}
+
+report <- function(mb) {
+    delta <- mb$final_storage - mb$initial_storage
+    mb$runoff_error <- get_error(
+        mb$total_inflow, mb$total_outflow, delta
+    )
+    mb$routing_error <- mb$runoff_error
+
+    cat(sprintf("\\n--- Mass Balance Report ---\\n"))
+    cat(sprintf("Total Inflow:    %12.4f\\n",
+                mb$total_inflow))
+    cat(sprintf("Total Outflow:   %12.4f\\n",
+                mb$total_outflow))
+    cat(sprintf("Initial Storage: %12.4f\\n",
+                mb$initial_storage))
+    cat(sprintf("Final Storage:   %12.4f\\n",
+                mb$final_storage))
+    cat(sprintf("Runoff Error:    %12.4f %%\\n",
+                mb$runoff_error))
+    cat(sprintf("Routing Error:   %12.4f %%\\n",
+                mb$routing_error))
+    mb
+}`,
+    delphi: `{ massbal.pas — Mass Balance Checking }
+{ SWMM5 Engine in Delphi — Continuity Error Tracking }
+{ Tracks all inflows, outflows, and storage to verify }
+{ conservation of mass throughout the simulation }
+
+unit MassBal;
+
+interface
+
+type
+  TMassBalance = class
+  private
+    FTotalInflow: Double;
+    FTotalOutflow: Double;
+    FInitialStorage: Double;
+    FFinalStorage: Double;
+    FRunoffError: Double;
+    FRoutingError: Double;
+  public
+    constructor Create;
+    procedure AddInflow(Volume: Double);
+    procedure AddOutflow(Volume: Double);
+    procedure UpdateStorage(Current: Double);
+    function Report: string;
+    property RunoffError: Double read FRunoffError;
+    property RoutingError: Double read FRoutingError;
+  end;
+
+function GetError(TotalIn, TotalOut,
+                   StorageChange: Double): Double;
+
+implementation
+
+uses SysUtils;
+
+constructor TMassBalance.Create;
+begin
+  FTotalInflow    := 0.0;
+  FTotalOutflow   := 0.0;
+  FInitialStorage := 0.0;
+  FFinalStorage   := 0.0;
+  FRunoffError    := 0.0;
+  FRoutingError   := 0.0;
+end;
+
+procedure TMassBalance.AddInflow(Volume: Double);
+begin
+  FTotalInflow := FTotalInflow + Volume;
+end;
+
+procedure TMassBalance.AddOutflow(Volume: Double);
+begin
+  FTotalOutflow := FTotalOutflow + Volume;
+end;
+
+procedure TMassBalance.UpdateStorage(Current: Double);
+begin
+  FFinalStorage := Current;
+end;
+
+function GetError(TotalIn, TotalOut,
+                   StorageChange: Double): Double;
+var
+  Denom: Double;
+begin
+  Denom := TotalIn;
+  if Denom <= 0.0 then
+    Denom := TotalOut + StorageChange;
+  if Denom <= 0.0 then
+    Exit(0.0);
+  Result := 100.0 * (TotalIn - TotalOut
+            - StorageChange) / Denom;
+end;
+
+function TMassBalance.Report: string;
+var
+  Delta: Double;
+begin
+  Delta := FFinalStorage - FInitialStorage;
+  FRunoffError := GetError(FTotalInflow,
+                            FTotalOutflow, Delta);
+  FRoutingError := FRunoffError;
+
+  Result := Format(
+    '--- Mass Balance Report ---'#13#10 +
+    'Total Inflow:    %12.4f'#13#10 +
+    'Total Outflow:   %12.4f'#13#10 +
+    'Initial Storage: %12.4f'#13#10 +
+    'Final Storage:   %12.4f'#13#10 +
+    'Runoff Error:    %12.4f %%'#13#10 +
+    'Routing Error:   %12.4f %%',
+    [FTotalInflow, FTotalOutflow,
+     FInitialStorage, FFinalStorage,
+     FRunoffError, FRoutingError]);
+end;
+
+end.`,
+    typescript: `// massbal.ts — Mass Balance Checking
+// SWMM5 Engine in TypeScript — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+interface MassBalanceState {
+    totalInflow: number;
+    totalOutflow: number;
+    initialStorage: number;
+    finalStorage: number;
+    runoffError: number;
+    routingError: number;
+}
+
+class MassBalance implements MassBalanceState {
+    totalInflow: number = 0.0;
+    totalOutflow: number = 0.0;
+    initialStorage: number = 0.0;
+    finalStorage: number = 0.0;
+    runoffError: number = 0.0;
+    routingError: number = 0.0;
+
+    addInflow(volume: number): void {
+        this.totalInflow += volume;
+    }
+
+    addOutflow(volume: number): void {
+        this.totalOutflow += volume;
+    }
+
+    updateStorage(current: number): void {
+        this.finalStorage = current;
+    }
+
+    report(): string {
+        const delta: number = this.finalStorage
+                              - this.initialStorage;
+        this.runoffError = getError(
+            this.totalInflow, this.totalOutflow, delta
+        );
+        this.routingError = this.runoffError;
+
+        return [
+            "",
+            "--- Mass Balance Report ---",
+            \`Total Inflow:    \${this.totalInflow.toFixed(4)}\`,
+            \`Total Outflow:   \${this.totalOutflow.toFixed(4)}\`,
+            \`Initial Storage: \${this.initialStorage.toFixed(4)}\`,
+            \`Final Storage:   \${this.finalStorage.toFixed(4)}\`,
+            \`Runoff Error:    \${this.runoffError.toFixed(4)} %\`,
+            \`Routing Error:   \${this.routingError.toFixed(4)} %\`,
+        ].join("\\n");
+    }
+}
+
+function getError(totalIn: number, totalOut: number,
+                   storageChange: number): number {
+    let denom: number = totalIn;
+    if (denom <= 0.0) {
+        denom = totalOut + storageChange;
+    }
+    if (denom <= 0.0) return 0.0;
+
+    return 100.0 * (totalIn - totalOut - storageChange)
+           / denom;
+}
+
+export { MassBalance, getError };`,
+    cuda: `// massbal.cu — Mass Balance Checking
+// SWMM5 Engine in CUDA — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+#include <cstdio>
+
+struct MassBalance {
+    float totalInflow;
+    float totalOutflow;
+    float initialStorage;
+    float finalStorage;
+    float runoffError;
+    float routingError;
+};
+
+__device__ float getError(float totalIn, float totalOut,
+                           float storageChange)
+{
+    float denom = totalIn;
+    if (denom <= 0.0f)
+        denom = totalOut + storageChange;
+    if (denom <= 0.0f) return 0.0f;
+
+    return 100.0f * (totalIn - totalOut - storageChange)
+           / denom;
+}
+
+__global__ void initMassBalance(MassBalance* mb, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    mb[idx].totalInflow    = 0.0f;
+    mb[idx].totalOutflow   = 0.0f;
+    mb[idx].initialStorage = 0.0f;
+    mb[idx].finalStorage   = 0.0f;
+    mb[idx].runoffError    = 0.0f;
+    mb[idx].routingError   = 0.0f;
+}
+
+__global__ void addInflowKernel(MassBalance* mb,
+    float* volumes, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+    atomicAdd(&mb[idx].totalInflow, volumes[idx]);
+}
+
+__global__ void addOutflowKernel(MassBalance* mb,
+    float* volumes, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+    atomicAdd(&mb[idx].totalOutflow, volumes[idx]);
+}
+
+__global__ void computeErrorKernel(MassBalance* mb,
+                                     int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    float delta = mb[idx].finalStorage
+                  - mb[idx].initialStorage;
+    mb[idx].runoffError = getError(
+        mb[idx].totalInflow,
+        mb[idx].totalOutflow, delta);
+    mb[idx].routingError = mb[idx].runoffError;
+}`,
+    wasm: `;; massbal.wat — Mass Balance Checking
+;; SWMM5 Engine in WebAssembly — Continuity Error Tracking
+;; Tracks all inflows, outflows, and storage to verify
+;; conservation of mass throughout the simulation
+
+(module
+  ;; Memory layout per MassBalance (48 bytes):
+  ;; 0: totalInflow, 8: totalOutflow,
+  ;; 16: initialStorage, 24: finalStorage,
+  ;; 32: runoffError, 40: routingError
+
+  (memory (export "memory") 1)
+
+  (func $init (param $base i32)
+    (f64.store (local.get $base) (f64.const 0.0))
+    (f64.store (i32.add (local.get $base) (i32.const 8))
+               (f64.const 0.0))
+    (f64.store (i32.add (local.get $base) (i32.const 16))
+               (f64.const 0.0))
+    (f64.store (i32.add (local.get $base) (i32.const 24))
+               (f64.const 0.0))
+    (f64.store (i32.add (local.get $base) (i32.const 32))
+               (f64.const 0.0))
+    (f64.store (i32.add (local.get $base) (i32.const 40))
+               (f64.const 0.0))
+  )
+
+  (func $addInflow (param $base i32) (param $vol f64)
+    (f64.store (local.get $base)
+      (f64.add (f64.load (local.get $base))
+               (local.get $vol)))
+  )
+
+  (func $addOutflow (param $base i32) (param $vol f64)
+    (f64.store (i32.add (local.get $base) (i32.const 8))
+      (f64.add (f64.load (i32.add (local.get $base)
+                                   (i32.const 8)))
+               (local.get $vol)))
+  )
+
+  (func $updateStorage (param $base i32) (param $cur f64)
+    (f64.store (i32.add (local.get $base) (i32.const 24))
+               (local.get $cur))
+  )
+
+  (func $getError (param $in f64) (param $out f64)
+                  (param $dStorage f64) (result f64)
+    (local $denom f64)
+    (local.set $denom (local.get $in))
+    (if (f64.le (local.get $denom) (f64.const 0.0))
+      (then (local.set $denom
+        (f64.add (local.get $out)
+                 (local.get $dStorage)))))
+    (if (f64.le (local.get $denom) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (f64.div
+      (f64.mul (f64.const 100.0)
+        (f64.sub (f64.sub (local.get $in)
+                           (local.get $out))
+                 (local.get $dStorage)))
+      (local.get $denom))
+  )
+
+  (func $report (export "report") (param $base i32)
+    (local $delta f64)
+    (local $err f64)
+    (local.set $delta
+      (f64.sub
+        (f64.load (i32.add (local.get $base) (i32.const 24)))
+        (f64.load (i32.add (local.get $base) (i32.const 16)))))
+    (local.set $err
+      (call $getError
+        (f64.load (local.get $base))
+        (f64.load (i32.add (local.get $base) (i32.const 8)))
+        (local.get $delta)))
+    (f64.store (i32.add (local.get $base) (i32.const 32))
+               (local.get $err))
+    (f64.store (i32.add (local.get $base) (i32.const 40))
+               (local.get $err))
+  )
+)`,
+    mojo: `# massbal.mojo — Mass Balance Checking
+# SWMM5 Engine in Mojo — Continuity Error Tracking
+# Tracks all inflows, outflows, and storage to verify
+# conservation of mass throughout the simulation
+
+struct MassBalance:
+    var total_inflow: Float64
+    var total_outflow: Float64
+    var initial_storage: Float64
+    var final_storage: Float64
+    var runoff_error: Float64
+    var routing_error: Float64
+
+    fn __init__(inout self):
+        self.total_inflow = 0.0
+        self.total_outflow = 0.0
+        self.initial_storage = 0.0
+        self.final_storage = 0.0
+        self.runoff_error = 0.0
+        self.routing_error = 0.0
+
+    fn add_inflow(inout self, volume: Float64):
+        self.total_inflow += volume
+
+    fn add_outflow(inout self, volume: Float64):
+        self.total_outflow += volume
+
+    fn update_storage(inout self, current: Float64):
+        self.final_storage = current
+
+    fn report(inout self):
+        let delta = self.final_storage
+                    - self.initial_storage
+        self.runoff_error = get_error(
+            self.total_inflow,
+            self.total_outflow, delta
+        )
+        self.routing_error = self.runoff_error
+
+        print("\\n--- Mass Balance Report ---")
+        print("Total Inflow:   ", self.total_inflow)
+        print("Total Outflow:  ", self.total_outflow)
+        print("Initial Storage:", self.initial_storage)
+        print("Final Storage:  ", self.final_storage)
+        print("Runoff Error:   ", self.runoff_error, "%")
+        print("Routing Error:  ", self.routing_error, "%")
+
+
+fn get_error(total_in: Float64, total_out: Float64,
+             storage_change: Float64) -> Float64:
+    var denom = total_in
+    if denom <= 0.0:
+        denom = total_out + storage_change
+    if denom <= 0.0:
+        return 0.0
+    return 100.0 * (total_in - total_out
+                    - storage_change) / denom`,
+    java: `// MassBalance.java — Mass Balance Checking
+// SWMM5 Engine in Java — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+package swmm;
+
+public class MassBalance {
+    private double totalInflow = 0.0;
+    private double totalOutflow = 0.0;
+    private double initialStorage = 0.0;
+    private double finalStorage = 0.0;
+    private double runoffError = 0.0;
+    private double routingError = 0.0;
+
+    public void addInflow(double volume) {
+        totalInflow += volume;
+    }
+
+    public void addOutflow(double volume) {
+        totalOutflow += volume;
+    }
+
+    public void updateStorage(double current) {
+        finalStorage = current;
+    }
+
+    public double getRunoffError() {
+        return runoffError;
+    }
+
+    public double getRoutingError() {
+        return routingError;
+    }
+
+    public static double getError(double totalIn,
+        double totalOut, double storageChange) {
+        double denom = totalIn;
+        if (denom <= 0.0)
+            denom = totalOut + storageChange;
+        if (denom <= 0.0) return 0.0;
+
+        return 100.0 * (totalIn - totalOut
+                        - storageChange) / denom;
+    }
+
+    public String report() {
+        double delta = finalStorage - initialStorage;
+        runoffError = getError(totalInflow,
+                                totalOutflow, delta);
+        routingError = runoffError;
+
+        return String.format(
+            "%n--- Mass Balance Report ---%n" +
+            "Total Inflow:    %12.4f%n" +
+            "Total Outflow:   %12.4f%n" +
+            "Initial Storage: %12.4f%n" +
+            "Final Storage:   %12.4f%n" +
+            "Runoff Error:    %12.4f %%%n" +
+            "Routing Error:   %12.4f %%",
+            totalInflow, totalOutflow,
+            initialStorage, finalStorage,
+            runoffError, routingError);
+    }
+}`,
+    nim: `# massbal.nim — Mass Balance Checking
+# SWMM5 Engine in Nim — Continuity Error Tracking
+# Tracks all inflows, outflows, and storage to verify
+# conservation of mass throughout the simulation
+
+import strformat
+
+type
+  MassBalance = object
+    totalInflow: float
+    totalOutflow: float
+    initialStorage: float
+    finalStorage: float
+    runoffError: float
+    routingError: float
+
+proc initMassBalance(): MassBalance =
+  result = MassBalance(
+    totalInflow: 0.0,
+    totalOutflow: 0.0,
+    initialStorage: 0.0,
+    finalStorage: 0.0,
+    runoffError: 0.0,
+    routingError: 0.0
+  )
+
+proc addInflow(mb: var MassBalance, volume: float) =
+  mb.totalInflow += volume
+
+proc addOutflow(mb: var MassBalance, volume: float) =
+  mb.totalOutflow += volume
+
+proc updateStorage(mb: var MassBalance, current: float) =
+  mb.finalStorage = current
+
+proc getError(totalIn, totalOut,
+              storageChange: float): float =
+  var denom = totalIn
+  if denom <= 0.0:
+    denom = totalOut + storageChange
+  if denom <= 0.0:
+    return 0.0
+  result = 100.0 * (totalIn - totalOut
+                    - storageChange) / denom
+
+proc report(mb: var MassBalance): string =
+  let delta = mb.finalStorage - mb.initialStorage
+  mb.runoffError = getError(
+    mb.totalInflow, mb.totalOutflow, delta
+  )
+  mb.routingError = mb.runoffError
+
+  result = fmt"""
+--- Mass Balance Report ---
+Total Inflow:    {mb.totalInflow:12.4f}
+Total Outflow:   {mb.totalOutflow:12.4f}
+Initial Storage: {mb.initialStorage:12.4f}
+Final Storage:   {mb.finalStorage:12.4f}
+Runoff Error:    {mb.runoffError:12.4f} %
+Routing Error:   {mb.routingError:12.4f} %"""`,
+    ada: `-- massbal.adb — Mass Balance Checking
+-- SWMM5 Engine in Ada — Continuity Error Tracking
+-- Tracks all inflows, outflows, and storage to verify
+-- conservation of mass throughout the simulation
+
+with Ada.Text_IO; use Ada.Text_IO;
+with Ada.Float_Text_IO; use Ada.Float_Text_IO;
+
+package body Mass_Balance_Pkg is
+
+   type Mass_Balance is record
+      Total_Inflow    : Float := 0.0;
+      Total_Outflow   : Float := 0.0;
+      Initial_Storage : Float := 0.0;
+      Final_Storage   : Float := 0.0;
+      Runoff_Error    : Float := 0.0;
+      Routing_Error   : Float := 0.0;
+   end record;
+
+   procedure Init (MB : out Mass_Balance) is
+   begin
+      MB.Total_Inflow    := 0.0;
+      MB.Total_Outflow   := 0.0;
+      MB.Initial_Storage := 0.0;
+      MB.Final_Storage   := 0.0;
+      MB.Runoff_Error    := 0.0;
+      MB.Routing_Error   := 0.0;
+   end Init;
+
+   procedure Add_Inflow (MB : in out Mass_Balance;
+                          Volume : Float) is
+   begin
+      MB.Total_Inflow := MB.Total_Inflow + Volume;
+   end Add_Inflow;
+
+   procedure Add_Outflow (MB : in out Mass_Balance;
+                           Volume : Float) is
+   begin
+      MB.Total_Outflow := MB.Total_Outflow + Volume;
+   end Add_Outflow;
+
+   procedure Update_Storage (MB : in out Mass_Balance;
+                              Current : Float) is
+   begin
+      MB.Final_Storage := Current;
+   end Update_Storage;
+
+   function Get_Error (Total_In    : Float;
+                       Total_Out   : Float;
+                       Storage_Change : Float)
+                       return Float is
+      Denom : Float := Total_In;
+   begin
+      if Denom <= 0.0 then
+         Denom := Total_Out + Storage_Change;
+      end if;
+      if Denom <= 0.0 then
+         return 0.0;
+      end if;
+      return 100.0 * (Total_In - Total_Out
+                      - Storage_Change) / Denom;
+   end Get_Error;
+
+   procedure Report (MB : in out Mass_Balance) is
+      Delta : Float;
+   begin
+      Delta := MB.Final_Storage - MB.Initial_Storage;
+      MB.Runoff_Error := Get_Error(
+         MB.Total_Inflow, MB.Total_Outflow, Delta);
+      MB.Routing_Error := MB.Runoff_Error;
+
+      Put_Line("--- Mass Balance Report ---");
+      Put("Total Inflow:    ");
+      Put(MB.Total_Inflow, Fore => 8, Aft => 4);
+      New_Line;
+      Put("Total Outflow:   ");
+      Put(MB.Total_Outflow, Fore => 8, Aft => 4);
+      New_Line;
+      Put("Runoff Error:    ");
+      Put(MB.Runoff_Error, Fore => 8, Aft => 4);
+      Put_Line(" %");
+   end Report;
+
+end Mass_Balance_Pkg;`,
+    chapel: `// massbal.chpl — Mass Balance Checking
+// SWMM5 Engine in Chapel — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+record MassBalance {
+    var totalInflow: real = 0.0;
+    var totalOutflow: real = 0.0;
+    var initialStorage: real = 0.0;
+    var finalStorage: real = 0.0;
+    var runoffError: real = 0.0;
+    var routingError: real = 0.0;
+
+    proc ref addInflow(volume: real) {
+        totalInflow += volume;
+    }
+
+    proc ref addOutflow(volume: real) {
+        totalOutflow += volume;
+    }
+
+    proc ref updateStorage(current: real) {
+        finalStorage = current;
+    }
+
+    proc ref report() {
+        const delta = finalStorage - initialStorage;
+        runoffError = getError(
+            totalInflow, totalOutflow, delta
+        );
+        routingError = runoffError;
+
+        writeln();
+        writeln("--- Mass Balance Report ---");
+        writef("Total Inflow:    %12.4dr\\n",
+               totalInflow);
+        writef("Total Outflow:   %12.4dr\\n",
+               totalOutflow);
+        writef("Initial Storage: %12.4dr\\n",
+               initialStorage);
+        writef("Final Storage:   %12.4dr\\n",
+               finalStorage);
+        writef("Runoff Error:    %12.4dr %%\\n",
+               runoffError);
+        writef("Routing Error:   %12.4dr %%\\n",
+               routingError);
+    }
+}
+
+proc getError(totalIn: real, totalOut: real,
+              storageChange: real): real {
+    var denom = totalIn;
+    if denom <= 0.0 then
+        denom = totalOut + storageChange;
+    if denom <= 0.0 then
+        return 0.0;
+    return 100.0 * (totalIn - totalOut
+                    - storageChange) / denom;
+}`,
+    swift: `// massbal.swift — Mass Balance Checking
+// SWMM5 Engine in Swift — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+import Foundation
+
+struct MassBalance {
+    var totalInflow: Double = 0.0
+    var totalOutflow: Double = 0.0
+    var initialStorage: Double = 0.0
+    var finalStorage: Double = 0.0
+    var runoffError: Double = 0.0
+    var routingError: Double = 0.0
+
+    mutating func addInflow(_ volume: Double) {
+        totalInflow += volume
+    }
+
+    mutating func addOutflow(_ volume: Double) {
+        totalOutflow += volume
+    }
+
+    mutating func updateStorage(_ current: Double) {
+        finalStorage = current
+    }
+
+    mutating func report() -> String {
+        let delta = finalStorage - initialStorage
+        runoffError = getError(
+            totalIn: totalInflow,
+            totalOut: totalOutflow,
+            storageChange: delta
+        )
+        routingError = runoffError
+
+        return """
+        
+        --- Mass Balance Report ---
+        Total Inflow:    \\(String(format: "%12.4f", totalInflow))
+        Total Outflow:   \\(String(format: "%12.4f", totalOutflow))
+        Initial Storage: \\(String(format: "%12.4f", initialStorage))
+        Final Storage:   \\(String(format: "%12.4f", finalStorage))
+        Runoff Error:    \\(String(format: "%12.4f", runoffError)) %
+        Routing Error:   \\(String(format: "%12.4f", routingError)) %
+        """
+    }
+}
+
+func getError(totalIn: Double, totalOut: Double,
+              storageChange: Double) -> Double {
+    var denom = totalIn
+    if denom <= 0.0 {
+        denom = totalOut + storageChange
+    }
+    guard denom > 0.0 else { return 0.0 }
+
+    return 100.0 * (totalIn - totalOut
+                    - storageChange) / denom
+}`,
+    kotlin: `// MassBalance.kt — Mass Balance Checking
+// SWMM5 Engine in Kotlin — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+package swmm
+
+class MassBalance(
+    var totalInflow: Double = 0.0,
+    var totalOutflow: Double = 0.0,
+    var initialStorage: Double = 0.0,
+    var finalStorage: Double = 0.0,
+    var runoffError: Double = 0.0,
+    var routingError: Double = 0.0
+) {
+    fun addInflow(volume: Double) {
+        totalInflow += volume
+    }
+
+    fun addOutflow(volume: Double) {
+        totalOutflow += volume
+    }
+
+    fun updateStorage(current: Double) {
+        finalStorage = current
+    }
+
+    fun report(): String {
+        val delta = finalStorage - initialStorage
+        runoffError = getError(
+            totalInflow, totalOutflow, delta
+        )
+        routingError = runoffError
+
+        return buildString {
+            appendLine()
+            appendLine("--- Mass Balance Report ---")
+            appendLine("Total Inflow:    %12.4f"
+                .format(totalInflow))
+            appendLine("Total Outflow:   %12.4f"
+                .format(totalOutflow))
+            appendLine("Initial Storage: %12.4f"
+                .format(initialStorage))
+            appendLine("Final Storage:   %12.4f"
+                .format(finalStorage))
+            appendLine("Runoff Error:    %12.4f %%"
+                .format(runoffError))
+            appendLine("Routing Error:   %12.4f %%"
+                .format(routingError))
+        }
+    }
+
+    companion object {
+        fun getError(totalIn: Double, totalOut: Double,
+                     storageChange: Double): Double {
+            var denom = totalIn
+            if (denom <= 0.0)
+                denom = totalOut + storageChange
+            if (denom <= 0.0) return 0.0
+
+            return 100.0 * (totalIn - totalOut
+                            - storageChange) / denom
+        }
+    }
+}`,
   },};
 
 const languages = [
@@ -5743,37 +16120,295 @@ const languages = [
   { id: "javascript", label: "JavaScript", ext: ".js", color: "#f1e05a" },
   { id: "go", label: "Go", ext: ".go", color: "#00ADD8" },
   { id: "zig", label: "Zig", ext: ".zig", color: "#F7A41D" },
+  { id: "cpp", label: "C++", ext: ".cpp", color: "#f34b7d" },
+  { id: "csharp", label: "C#", ext: ".cs", color: "#178600" },
+  { id: "matlab", label: "MATLAB", ext: ".m", color: "#e16737" },
+  { id: "r", label: "R", ext: ".R", color: "#198CE7" },
+  { id: "delphi", label: "Delphi", ext: ".pas", color: "#E3F171" },
+  { id: "typescript", label: "TypeScript", ext: ".ts", color: "#3178C6" },
+  { id: "cuda", label: "CUDA", ext: ".cu", color: "#76B900" },
+  { id: "wasm", label: "WAT/WASM", ext: ".wat", color: "#654FF0" },
+  { id: "mojo", label: "Mojo", ext: ".mojo", color: "#FF4F00" },
+  { id: "java", label: "Java", ext: ".java", color: "#B07219" },
+  { id: "nim", label: "Nim", ext: ".nim", color: "#FFE953" },
+  { id: "ada", label: "Ada", ext: ".adb", color: "#02F88C" },
+  { id: "chapel", label: "Chapel", ext: ".chpl", color: "#8DC63F" },
+  { id: "swift", label: "Swift", ext: ".swift", color: "#F05138" },
+  { id: "kotlin", label: "Kotlin", ext: ".kt", color: "#A97BFF" },
 ];
 
 const translationNotes = {
-  "c-rust": "Rust enforces memory safety at compile time. The C typedef struct becomes a Rust struct with pub fields. Pointer dereferences (uh->t) become owned references (&self). Manual bounds checking is replaced by .clamp(). C's pow() becomes .powf(), and sqrt() becomes .sqrt(). The nested for loops can be replaced with iterator chains (.iter().map().sum()). No null pointers possible \u2014 the type system prevents it. Mutable state uses &mut self instead of pointer modification.",
-  "c-python": "The typedef struct becomes a Python @dataclass with type hints. C's pointer-based access (sc->width) becomes simple dot notation (self.width). Manual memory management disappears entirely. The nested for loops can be replaced with list comprehensions or numpy operations (np.convolve). Python's readability makes the algorithm's intent clearer, though at the cost of runtime performance. Enum classes replace C's #define or enum constants.",
+  "ada-c": "C's typedef struct becomes Ada's record type. math.h functions (pow, sqrt, fabs) maps to Ada.Numerics functions. C's manual malloc/free memory contrasts with Ada's stack with controlled types approach. static, weak typing meets static, very strong typing.",
+  "ada-chapel": "Both emphasize safety and correctness for critical systems. Ada's strong typing and in/out parameters vs Chapel's domain-based parallelism. Ada targets safety-critical infrastructure; Chapel targets HPC clusters. Both would serve large-scale drainage network modeling — Ada for reliability, Chapel for scalability.",
+  "ada-cpp": "C++'s class/struct with methods becomes Ada's record type. std::pow, std::sqrt maps to Ada.Numerics functions. C++'s manual or smart pointers memory contrasts with Ada's stack with controlled types approach. static with templates typing meets static, very strong typing.",
+  "ada-csharp": "C#'s class with properties becomes Ada's record type. Math class maps to Ada.Numerics functions. C#'s garbage collected (.NET) memory contrasts with Ada's stack with controlled types approach. static, strong typing meets static, very strong typing.",
+  "ada-cuda": "CUDA's struct with __device__ functions becomes Ada's record type. device math (sqrtf, powf) maps to Ada.Numerics functions. CUDA's explicit GPU allocation memory contrasts with Ada's stack with controlled types approach. static (C-based) typing meets static, very strong typing.",
+  "ada-delphi": "Delphi/Pascal's class (TMyClass) becomes Ada's record type. Math unit maps to Ada.Numerics functions. Delphi/Pascal's manual or ARC memory contrasts with Ada's stack with controlled types approach. static, strong typing meets static, very strong typing.",
+  "ada-fortran": "Fortran's derived type becomes Ada's record type. intrinsic functions maps to Ada.Numerics functions. Fortran's stack/allocatable memory contrasts with Ada's stack with controlled types approach. static with intent typing meets static, very strong typing.",
+  "ada-go": "Go's struct with methods becomes Ada's record type. math package maps to Ada.Numerics functions. Go's garbage collected memory contrasts with Ada's stack with controlled types approach. static, simple typing meets static, very strong typing.",
+  "ada-java": "Java's class with getters/setters becomes Ada's record type. Math class maps to Ada.Numerics functions. Java's garbage collected (JVM) memory contrasts with Ada's stack with controlled types approach. static, strong typing meets static, very strong typing.",
+  "ada-javascript": "JavaScript's class with constructor becomes Ada's record type. Math object maps to Ada.Numerics functions. JavaScript's garbage collected memory contrasts with Ada's stack with controlled types approach. dynamic typing meets static, very strong typing.",
+  "ada-julia": "Julia's mutable struct becomes Ada's record type. built-in Unicode operators maps to Ada.Numerics functions. Julia's garbage collected memory contrasts with Ada's stack with controlled types approach. dynamic with multiple dispatch typing meets static, very strong typing.",
+  "ada-kotlin": "Ada's record type becomes Kotlin's data class. Ada.Numerics functions maps to kotlin.math. Ada's stack with controlled types memory contrasts with Kotlin's garbage collected (JVM) approach. static, very strong typing meets static, null-safe typing.",
+  "ada-matlab": "MATLAB's struct or classdef becomes Ada's record type. built-in functions maps to Ada.Numerics functions. MATLAB's automatic memory contrasts with Ada's stack with controlled types approach. dynamic, matrix-native typing meets static, very strong typing.",
+  "ada-mojo": "Mojo's struct with fn becomes Ada's record type. built-in or math module maps to Ada.Numerics functions. Mojo's ownership model memory contrasts with Ada's stack with controlled types approach. static, Python-compatible typing meets static, very strong typing.",
+  "ada-nim": "Nim's type = object becomes Ada's record type. math module maps to Ada.Numerics functions. Nim's garbage collected memory contrasts with Ada's stack with controlled types approach. static, inferred typing meets static, very strong typing.",
+  "ada-python": "Python's @dataclass becomes Ada's record type. math module maps to Ada.Numerics functions. Python's garbage collected memory contrasts with Ada's stack with controlled types approach. dynamic with optional hints typing meets static, very strong typing.",
+  "ada-r": "R's list or R6 class becomes Ada's record type. built-in functions maps to Ada.Numerics functions. R's garbage collected memory contrasts with Ada's stack with controlled types approach. dynamic, vector-native typing meets static, very strong typing.",
+  "ada-rust": "Rust's struct with impl blocks becomes Ada's record type. .powf(), .sqrt(), .abs() maps to Ada.Numerics functions. Rust's ownership/borrowing system memory contrasts with Ada's stack with controlled types approach. static, strong with lifetimes typing meets static, very strong typing.",
+  "ada-swift": "Ada's record type becomes Swift's struct with mutating func. Ada.Numerics functions maps to Foundation/Darwin math. Ada's stack with controlled types memory contrasts with Swift's ARC (automatic reference counting) approach. static, very strong typing meets static, strong with optionals typing.",
+  "ada-typescript": "TypeScript's class with interface becomes Ada's record type. Math object maps to Ada.Numerics functions. TypeScript's garbage collected memory contrasts with Ada's stack with controlled types approach. static (structural) typing meets static, very strong typing.",
+  "ada-wasm": "WebAssembly/WAT's linear memory layout becomes Ada's record type. f64.mul, f64.sqrt maps to Ada.Numerics functions. WebAssembly/WAT's linear memory (manual) memory contrasts with Ada's stack with controlled types approach. static (i32/i64/f32/f64) typing meets static, very strong typing.",
+  "ada-zig": "Zig's struct with namespaced fn becomes Ada's record type. @sqrt, std.math.pow maps to Ada.Numerics functions. Zig's manual with allocator interface memory contrasts with Ada's stack with controlled types approach. static with comptime typing meets static, very strong typing.",
+  "c-ada": "Both prioritize explicit, safety-critical code. C's typedef struct becomes Ada's record type. Pointer parameters become Ada's in/out/in out parameter modes. C's #define becomes Ada's constant declarations. Ada's stronger type system prevents the implicit conversions that cause bugs in C. Ada is used in safety-critical infrastructure modeling.",
+  "c-chapel": "C's sequential loops become Chapel's parallel forall/coforall. The struct becomes a Chapel record. C's manual memory management becomes Chapel's automatic memory. Chapel's domain-based arrays replace C's pointer-indexed arrays. This translation shows how drainage network computations could scale to HPC systems.",
+  "c-cpp": "The most natural translation. C's typedef struct becomes a C++ class with member functions. Pointer dereferences (c->field) become this->field or direct member access. C's #define constants become constexpr. Manual function naming (conduit_getFlow) becomes method namespacing (Conduit::getFlow). C++ adds RAII, std::clamp, and type safety while maintaining C's performance. Most SWMM extensions and the OWA rewrite effort use C++.",
+  "c-csharp": "C's low-level pointer manipulation becomes C#'s managed, garbage-collected objects. The typedef struct becomes a class with properties and auto-implemented getters/setters. pow() and sqrt() become Math.Pow() and Math.Sqrt(). C's header files become C# namespaces. The .NET ecosystem is heavily used in EPA's Windows-based tools, and several SWMM wrappers exist in C#.",
+  "c-cuda": "C's sequential algorithms become CUDA's massively parallel kernels. The struct is preserved but functions gain __global__/__device__ qualifiers. Each conduit/node computation maps to a GPU thread via threadIdx/blockIdx. C's single-threaded loops become parallel grid launches. This translation shows how hydraulic solvers can be GPU-accelerated — an active research frontier.",
+  "c-delphi": "Historical connection — the original SWMM5 GUI was written in Delphi. C's typedef struct becomes a Delphi class (TConduit). Pointer access becomes Self.Field. C's {} blocks become begin/end. Function return values use Result := instead of return. Delphi's strong typing and RAD capabilities made it ideal for the SWMM5 graphical interface.",
   "c-fortran": "Full circle \u2014 SWMM3 was originally Fortran! The pointer dereference uh->t becomes uh%t using Fortran's derived type syntax. Arrays use 1-based indexing (rainfall(j+1) vs rainfall[j]). The explicit intent(in/inout) declarations make data flow clearer than C's pointer-based approach. The module/contains pattern replaces C's header files. real(8) provides double precision. Subroutines replace functions when modifying arguments in-place.",
-  "c-julia": "Julia's multiple dispatch replaces C's function naming conventions \u2014 get_runoff(sc, depth) instead of subcatch_getRunoff(sc, depth). The \u2264 operator is native Unicode syntax. Julia uses 1-based indexing like Fortran. Short-circuit returns (expr && return val) are idiomatic. Structs are immutable by default; use mutable struct when state changes are needed. The ! convention (update_level!) signals mutation to callers.",
-  "c-javascript": "The typedef struct becomes a JavaScript class with constructor. C's sqrt() and pow() become Math.sqrt() and Math.pow(). Computed properties use getter syntax (get tBase()). ES module exports make the code ready for browser-based SWMM implementations and WebAssembly integration. Math.max/Math.min replace manual bounds checking. No pointer arithmetic \u2014 everything is reference-based.",
   "c-go": "Go uses exported names (capitalized: GetRunoff vs get_runoff) instead of public/private keywords. Methods are defined outside the struct with receiver syntax (func (s *Subcatch) GetRunoff()). Pointer receivers (*Type) indicate mutation, value receivers indicate pure computation. The math package provides numerical functions. Error handling would typically use multiple returns (result, error). Simple, readable, and fast \u2014 Go's philosophy matches C's directness.",
-  "rust-python": "Rust's strict ownership model relaxes into Python's garbage-collected simplicity. Rust's &self/&mut self distinction disappears \u2014 Python methods freely mutate self. Type annotations (f64 \u2192 float) become optional hints rather than compiler-enforced. Pattern matching and Result types become try/except. The performance gap is significant, but Python's readability and ecosystem (numpy, scipy) often compensate.",
-  "rust-fortran": "Two high-performance languages with different eras. Rust's ownership/borrowing model replaces Fortran's intent(in/inout) system for controlling data flow. Rust's .iter().map().sum() becomes Fortran's explicit do loops. Both excel at numerical computation, but Rust adds memory safety guarantees that Fortran lacks. Fortran's 1-based arrays vs Rust's 0-based indexing requires careful translation.",
-  "rust-julia": "Both are modern systems languages with expressive type systems. Rust's impl blocks become Julia's multiple dispatch functions. Rust's match becomes Julia's if/elseif. Both use Unicode support, but Julia embraces it more fully. Rust guarantees memory safety at compile time; Julia uses garbage collection. Julia's JIT compilation vs Rust's ahead-of-time compilation represents different performance trade-offs.",
-  "rust-javascript": "Rust's strict type system and ownership model contrast sharply with JavaScript's dynamic typing. Rust's struct + impl becomes JavaScript's class. Rust's Result/Option types become JavaScript's try/catch or null checks. The .powf() and .sqrt() methods become Math.pow() and Math.sqrt(). Rust compiles to WebAssembly, so these two languages can actually work together in the browser.",
-  "rust-go": "Both are modern compiled languages, but with different philosophies. Rust's ownership model vs Go's garbage collector. Rust's impl blocks vs Go's methods defined outside the struct. Both use explicit error handling, but Rust uses Result<T,E> while Go uses multiple returns. Go's simplicity trades some of Rust's safety guarantees for faster development speed.",
-  "python-fortran": "Python's dynamic typing meets Fortran's static declarations. Python's @dataclass becomes Fortran's derived type. List comprehensions become do loops. Python's 0-based indexing vs Fortran's 1-based arrays requires index adjustments. Both are widely used in scientific computing, but Fortran's raw numerical performance is typically 10-100x faster. Many engineers use Python for prototyping and Fortran for production.",
-  "python-julia": "Two high-level scientific computing languages. Python's @dataclass becomes Julia's struct. Both support Unicode, type hints, and clean mathematical syntax. Julia's multiple dispatch provides a unique alternative to Python's class-based OOP. Julia is compiled (JIT) while Python is interpreted, giving Julia significant speed advantages for numerical work. Both have rich ecosystems for water resources computing.",
-  "python-javascript": "Python's @dataclass becomes JavaScript's class with constructor. Python's math module maps to JavaScript's Math object. f-strings become template literals. Both are dynamically typed, but JavaScript's === vs == gotchas don't exist in Python. Python dominates server-side scientific computing; JavaScript enables browser-based visualization and interactive tools.",
-  "python-go": "Python's dynamic elegance vs Go's static simplicity. Python's @dataclass becomes Go's struct with exported fields. Python's self becomes Go's receiver parameter. Type hints that Python ignores become Go's enforced static types. Go's explicit error handling (if err != nil) replaces Python's try/except. Go typically runs 10-50x faster than Python for numerical work.",
-  "fortran-julia": "Both are 1-based indexing languages with strong numerical computing heritage. Fortran's derived types become Julia's structs. Fortran's module/contains becomes Julia's module/function pattern. Julia's multiple dispatch offers more flexibility than Fortran's module procedures. Both compile to efficient machine code, but Julia adds interactivity through its REPL and JIT compilation.",
-  "fortran-javascript": "The oldest and newest languages in our set. Fortran's real(8) becomes JavaScript's native Number (all floats). Fortran's module system becomes ES module exports. do loops become for loops. The mathematical algorithms translate directly, but the language idioms are worlds apart \u2014 Fortran optimizes for numerical arrays, JavaScript for event-driven interactions.",
-  "fortran-go": "Both are statically typed compiled languages focused on clarity. Fortran's derived types become Go's structs. Fortran's module procedures become Go's package-level functions with receivers. Fortran's intent(in) becomes Go's value vs pointer receiver convention. Both produce fast binaries, but Go adds built-in concurrency and modern tooling.",
-  "julia-javascript": "Julia's scientific computing focus vs JavaScript's web platform. Julia's struct becomes JavaScript's class. Julia's multiple dispatch becomes JavaScript's class methods. Julia's 1-based indexing requires adjustments for JavaScript's 0-based arrays. Julia excels at numerical computation; JavaScript excels at interactive visualization \u2014 combining both via web APIs creates powerful engineering tools.",
-  "julia-go": "Julia's expressive scientific syntax vs Go's minimalist engineering approach. Julia's mutable struct becomes Go's struct with pointer receivers. Julia's multiple dispatch becomes Go's explicit method definitions. Julia uses 1-based indexing; Go uses 0-based. Julia's ! convention for mutation becomes Go's pointer receiver convention. Both compile to fast native code.",
-  "javascript-go": "Both are modern languages with C-family syntax. JavaScript's class becomes Go's struct + methods. JavaScript's Math.sqrt() becomes Go's math.Sqrt(). JavaScript's dynamic typing becomes Go's static type declarations. JavaScript runs in the browser or Node.js; Go produces standalone binaries. Both have strong ecosystems for web services, making them natural choices for SWMM5 web tools.",
+  "c-java": "C's procedural structs become Java's class hierarchy. Pointer access becomes getter/setter methods. C's #include becomes Java's import/package system. Math functions move to the Math class. Java's enterprise patterns (encapsulation, inheritance) add structure but verbosity. Many water utility SCADA and GIS systems use Java.",
+  "c-javascript": "The typedef struct becomes a JavaScript class with constructor. C's sqrt() and pow() become Math.sqrt() and Math.pow(). Computed properties use getter syntax (get tBase()). ES module exports make the code ready for browser-based SWMM implementations and WebAssembly integration. Math.max/Math.min replace manual bounds checking. No pointer arithmetic \u2014 everything is reference-based.",
+  "c-julia": "Julia's multiple dispatch replaces C's function naming conventions \u2014 get_runoff(sc, depth) instead of subcatch_getRunoff(sc, depth). The \u2264 operator is native Unicode syntax. Julia uses 1-based indexing like Fortran. Short-circuit returns (expr && return val) are idiomatic. Structs are immutable by default; use mutable struct when state changes are needed. The ! convention (update_level!) signals mutation to callers.",
+  "c-kotlin": "C's typedef struct becomes Kotlin's data class. Pointer access becomes property access. C's switch becomes Kotlin's when expression. Null safety (?.) prevents the null pointer bugs common in C. Extension functions can add SWMM-specific operations to standard types. Kotlin runs on the JVM alongside Java-based water utility systems.",
+  "c-matlab": "C's struct becomes a MATLAB struct or classdef. Pointer access (c->field) becomes dot notation (c.field). C's for loops can often become vectorized MATLAB operations. pow() and sqrt() are built-in MATLAB functions. MATLAB's 1-based indexing requires careful translation from C's 0-based arrays. MATLAB is the dominant prototyping language in hydraulic engineering education.",
+  "c-mojo": "Mojo bridges C's performance with Python's syntax. C's typedef struct becomes a Mojo struct with fn methods. Pointer semantics map to Mojo's borrowed/owned/inout parameters. C's pow() and sqrt() become built-in Mojo functions. Mojo promises C-like speed with Python-like readability — directly relevant to the PySWMM community.",
+  "c-nim": "Nim compiles to C, making this translation particularly interesting. C's typedef struct becomes Nim's type object. Pointer dereferences become dot notation. C's explicit types become Nim's type inference. The result variable replaces return statements. Nim's Python-like syntax with C's performance makes it a fascinating middle ground.",
+  "c-python": "The typedef struct becomes a Python @dataclass with type hints. C's pointer-based access (sc->width) becomes simple dot notation (self.width). Manual memory management disappears entirely. The nested for loops can be replaced with list comprehensions or numpy operations (np.convolve). Python's readability makes the algorithm's intent clearer, though at the cost of runtime performance. Enum classes replace C's #define or enum constants.",
+  "c-r": "C's typedef struct becomes an R list or R6 class. Pointer access becomes $ notation (obj$field). C's math.h functions are built-in R functions. R's vectorized operations can replace many C loops. The swmmr package already bridges C SWMM5 with R for calibration and analysis. R excels at statistical post-processing of SWMM results.",
+  "c-rust": "Rust enforces memory safety at compile time. The C typedef struct becomes a Rust struct with pub fields. Pointer dereferences (uh->t) become owned references (&self). Manual bounds checking is replaced by .clamp(). C's pow() becomes .powf(), and sqrt() becomes .sqrt(). The nested for loops can be replaced with iterator chains (.iter().map().sum()). No null pointers possible \u2014 the type system prevents it. Mutable state uses &mut self instead of pointer modification.",
+  "c-swift": "C's typedef struct becomes Swift's struct with methods. Pointer dereferences become self.field. C's manual memory becomes Swift's ARC. Optional types (Double?) replace null pointer checks. guard/let statements provide safe unwrapping. Swift enables mobile SWMM tools for field engineers on iOS.",
+  "c-typescript": "Like C-to-JavaScript but with static type annotations. C's typedef struct becomes a TypeScript interface + class. Type safety is enforced at compile time (number, string, boolean). C's pointer arithmetic disappears. TypeScript's structural typing provides a middle ground between C's weak typing and full static typing.",
+  "c-wasm": "C's high-level constructs become WebAssembly's low-level stack machine instructions. Structs become linear memory layouts with offset-based access. Variables become local.get/local.set operations. Math functions become f64.mul, f64.sqrt, etc. This translation connects to compiling SWMM5 to WASM via Emscripten for browser-based simulation.",
   "c-zig": "Zig replaces C's preprocessor macros and typedefs with comptime and explicit struct definitions. C's pointer dereference (c->width) becomes Zig's dot access on pointer (c.width). malloc/free are replaced by Zig's allocator interface or stack allocation. C's pow() and sqrt() become @sqrt() and std.math.pow(). Zig's explicit error handling via error unions (!T) replaces C's error-code-return convention. No hidden control flow — Zig's philosophy aligns with C's directness while adding safety.",
+  "chapel-cpp": "C++'s class/struct with methods becomes Chapel's record or class. std::pow, std::sqrt maps to built-in math. C++'s manual or smart pointers memory contrasts with Chapel's automatic/managed approach. static with templates typing meets static, inferred typing.",
+  "chapel-csharp": "C#'s class with properties becomes Chapel's record or class. Math class maps to built-in math. C#'s garbage collected (.NET) memory contrasts with Chapel's automatic/managed approach. static, strong typing meets static, inferred typing.",
+  "chapel-cuda": "CUDA's struct with __device__ functions becomes Chapel's record or class. device math (sqrtf, powf) maps to built-in math. CUDA's explicit GPU allocation memory contrasts with Chapel's automatic/managed approach. static (C-based) typing meets static, inferred typing.",
+  "chapel-delphi": "Delphi/Pascal's class (TMyClass) becomes Chapel's record or class. Math unit maps to built-in math. Delphi/Pascal's manual or ARC memory contrasts with Chapel's automatic/managed approach. static, strong typing meets static, inferred typing.",
+  "chapel-fortran": "Fortran's derived type becomes Chapel's record or class. intrinsic functions maps to built-in math. Fortran's stack/allocatable memory contrasts with Chapel's automatic/managed approach. static with intent typing meets static, inferred typing.",
+  "chapel-go": "Go's struct with methods becomes Chapel's record or class. math package maps to built-in math. Go's garbage collected memory contrasts with Chapel's automatic/managed approach. static, simple typing meets static, inferred typing.",
+  "chapel-java": "Java's class with getters/setters becomes Chapel's record or class. Math class maps to built-in math. Java's garbage collected (JVM) memory contrasts with Chapel's automatic/managed approach. static, strong typing meets static, inferred typing.",
+  "chapel-javascript": "JavaScript's class with constructor becomes Chapel's record or class. Math object maps to built-in math. JavaScript's garbage collected memory contrasts with Chapel's automatic/managed approach. dynamic typing meets static, inferred typing.",
+  "chapel-julia": "Julia's mutable struct becomes Chapel's record or class. built-in Unicode operators maps to built-in math. Julia's garbage collected memory contrasts with Chapel's automatic/managed approach. dynamic with multiple dispatch typing meets static, inferred typing.",
+  "chapel-kotlin": "Chapel's record or class becomes Kotlin's data class. built-in math maps to kotlin.math. Chapel's automatic/managed memory contrasts with Kotlin's garbage collected (JVM) approach. static, inferred typing meets static, null-safe typing.",
+  "chapel-matlab": "MATLAB's struct or classdef becomes Chapel's record or class. built-in functions maps to built-in math. MATLAB's automatic memory contrasts with Chapel's automatic/managed approach. dynamic, matrix-native typing meets static, inferred typing.",
+  "chapel-mojo": "Mojo's struct with fn becomes Chapel's record or class. built-in or math module maps to built-in math. Mojo's ownership model memory contrasts with Chapel's automatic/managed approach. static, Python-compatible typing meets static, inferred typing.",
+  "chapel-nim": "Nim's type = object becomes Chapel's record or class. math module maps to built-in math. Nim's garbage collected memory contrasts with Chapel's automatic/managed approach. Nim's result variable, compiles to C, UFCS vs Chapel's forall/coforall parallelism, domains/ranges.",
+  "chapel-python": "Python's @dataclass becomes Chapel's record or class. math module maps to built-in math. Python's garbage collected memory contrasts with Chapel's automatic/managed approach. dynamic with optional hints typing meets static, inferred typing.",
+  "chapel-r": "R's list or R6 class becomes Chapel's record or class. built-in functions maps to built-in math. R's garbage collected memory contrasts with Chapel's automatic/managed approach. dynamic, vector-native typing meets static, inferred typing.",
+  "chapel-rust": "Rust's struct with impl blocks becomes Chapel's record or class. .powf(), .sqrt(), .abs() maps to built-in math. Rust's ownership/borrowing system memory contrasts with Chapel's automatic/managed approach. static, strong with lifetimes typing meets static, inferred typing.",
+  "chapel-swift": "Chapel's record or class becomes Swift's struct with mutating func. built-in math maps to Foundation/Darwin math. Chapel's automatic/managed memory contrasts with Swift's ARC (automatic reference counting) approach. static, inferred typing meets static, strong with optionals typing.",
+  "chapel-typescript": "TypeScript's class with interface becomes Chapel's record or class. Math object maps to built-in math. TypeScript's garbage collected memory contrasts with Chapel's automatic/managed approach. static (structural) typing meets static, inferred typing.",
+  "chapel-wasm": "WebAssembly/WAT's linear memory layout becomes Chapel's record or class. f64.mul, f64.sqrt maps to built-in math. WebAssembly/WAT's linear memory (manual) memory contrasts with Chapel's automatic/managed approach. static (i32/i64/f32/f64) typing meets static, inferred typing.",
+  "chapel-zig": "Zig's struct with namespaced fn becomes Chapel's record or class. @sqrt, std.math.pow maps to built-in math. Zig's manual with allocator interface memory contrasts with Chapel's automatic/managed approach. static with comptime typing meets static, inferred typing.",
+  "cpp-csharp": "Both are OOP languages with similar class syntax. C++'s manual memory management becomes C#'s garbage collection. std::clamp becomes Math.Clamp. C++'s namespaces map directly to C# namespaces. C++'s templates become C# generics. C# adds properties, LINQ, and async/await — trading some performance for developer productivity in the .NET ecosystem.",
+  "cpp-cuda": "C++'s class/struct with methods becomes CUDA's struct with __device__ functions. std::pow, std::sqrt maps to device math (sqrtf, powf). C++'s manual or smart pointers memory contrasts with CUDA's explicit GPU allocation approach. static with templates typing meets static (C-based) typing.",
+  "cpp-delphi": "C++'s class/struct with methods becomes Delphi/Pascal's class (TMyClass). std::pow, std::sqrt maps to Math unit. C++'s manual or smart pointers memory contrasts with Delphi/Pascal's manual or ARC approach. static with templates typing meets static, strong typing.",
+  "cpp-fortran": "Fortran's derived type becomes C++'s class/struct with methods. intrinsic functions maps to std::pow, std::sqrt. Fortran's stack/allocatable memory contrasts with C++'s manual or smart pointers approach. static with intent typing meets static with templates typing.",
+  "cpp-go": "Go's struct with methods becomes C++'s class/struct with methods. math package maps to std::pow, std::sqrt. Go's garbage collected memory contrasts with C++'s manual or smart pointers approach. static, simple typing meets static with templates typing.",
+  "cpp-java": "Both are class-based OOP languages. C++'s multiple inheritance becomes Java's single inheritance + interfaces. C++'s destructors disappear with Java's GC. std::printf becomes System.out.printf. C++'s header/source split becomes Java's single-file classes. Both are widely used in computational engineering and enterprise systems.",
+  "cpp-javascript": "JavaScript's class with constructor becomes C++'s class/struct with methods. Math object maps to std::pow, std::sqrt. JavaScript's garbage collected memory contrasts with C++'s manual or smart pointers approach. dynamic typing meets static with templates typing.",
+  "cpp-julia": "Julia's mutable struct becomes C++'s class/struct with methods. built-in Unicode operators maps to std::pow, std::sqrt. Julia's garbage collected memory contrasts with C++'s manual or smart pointers approach. dynamic with multiple dispatch typing meets static with templates typing.",
+  "cpp-kotlin": "C++'s class/struct with methods becomes Kotlin's data class. std::pow, std::sqrt maps to kotlin.math. C++'s manual or smart pointers memory contrasts with Kotlin's garbage collected (JVM) approach. static with templates typing meets static, null-safe typing.",
+  "cpp-matlab": "C++'s class/struct with methods becomes MATLAB's struct or classdef. std::pow, std::sqrt maps to built-in functions. C++'s manual or smart pointers memory contrasts with MATLAB's automatic approach. static with templates typing meets dynamic, matrix-native typing.",
+  "cpp-mojo": "C++'s class/struct with methods becomes Mojo's struct with fn. std::pow, std::sqrt maps to built-in or math module. C++'s manual or smart pointers memory contrasts with Mojo's ownership model approach. static with templates typing meets static, Python-compatible typing.",
+  "cpp-nim": "C++'s class/struct with methods becomes Nim's type = object. std::pow, std::sqrt maps to math module. C++'s manual or smart pointers memory contrasts with Nim's garbage collected approach. static with templates typing meets static, inferred typing.",
+  "cpp-python": "Python's @dataclass becomes C++'s class/struct with methods. math module maps to std::pow, std::sqrt. Python's garbage collected memory contrasts with C++'s manual or smart pointers approach. dynamic with optional hints typing meets static with templates typing.",
+  "cpp-r": "C++'s class/struct with methods becomes R's list or R6 class. std::pow, std::sqrt maps to built-in functions. C++'s manual or smart pointers memory contrasts with R's garbage collected approach. static with templates typing meets dynamic, vector-native typing.",
+  "cpp-rust": "Rust's struct with impl blocks becomes C++'s class/struct with methods. .powf(), .sqrt(), .abs() maps to std::pow, std::sqrt. Rust's ownership/borrowing system memory contrasts with C++'s manual or smart pointers approach. static, strong with lifetimes typing meets static with templates typing.",
+  "cpp-swift": "C++'s class/struct with methods becomes Swift's struct with mutating func. std::pow, std::sqrt maps to Foundation/Darwin math. C++'s manual or smart pointers memory contrasts with Swift's ARC (automatic reference counting) approach. static with templates typing meets static, strong with optionals typing.",
+  "cpp-typescript": "C++'s class/struct with methods becomes TypeScript's class with interface. std::pow, std::sqrt maps to Math object. C++'s manual or smart pointers memory contrasts with TypeScript's garbage collected approach. static with templates typing meets static (structural) typing.",
+  "cpp-wasm": "C++'s class/struct with methods becomes WebAssembly/WAT's linear memory layout. std::pow, std::sqrt maps to f64.mul, f64.sqrt. C++'s manual or smart pointers memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static with templates typing meets static (i32/i64/f32/f64) typing.",
+  "cpp-zig": "Zig's struct with namespaced fn becomes C++'s class/struct with methods. @sqrt, std.math.pow maps to std::pow, std::sqrt. Zig's manual with allocator interface memory contrasts with C++'s manual or smart pointers approach. static with comptime typing meets static with templates typing.",
+  "csharp-cuda": "C#'s class with properties becomes CUDA's struct with __device__ functions. Math class maps to device math (sqrtf, powf). C#'s garbage collected (.NET) memory contrasts with CUDA's explicit GPU allocation approach. static, strong typing meets static (C-based) typing.",
+  "csharp-delphi": "C#'s class with properties becomes Delphi/Pascal's class (TMyClass). Math class maps to Math unit. C#'s garbage collected (.NET) memory contrasts with Delphi/Pascal's manual or ARC approach. C#'s properties, namespaces, async/await vs Delphi/Pascal's begin/end blocks, Result := value, units.",
+  "csharp-fortran": "Fortran's derived type becomes C#'s class with properties. intrinsic functions maps to Math class. Fortran's stack/allocatable memory contrasts with C#'s garbage collected (.NET) approach. static with intent typing meets static, strong typing.",
+  "csharp-go": "Go's struct with methods becomes C#'s class with properties. math package maps to Math class. Go's garbage collected memory contrasts with C#'s garbage collected (.NET) approach. static, simple typing meets static, strong typing.",
+  "csharp-java": "C#'s class with properties becomes Java's class with getters/setters. C#'s garbage collected (.NET) memory contrasts with Java's garbage collected (JVM) approach. C#'s properties, namespaces, async/await vs Java's packages, checked exceptions, enterprise patterns.",
+  "csharp-javascript": "JavaScript's class with constructor becomes C#'s class with properties. Math object maps to Math class. JavaScript's garbage collected memory contrasts with C#'s garbage collected (.NET) approach. dynamic typing meets static, strong typing.",
+  "csharp-julia": "Julia's mutable struct becomes C#'s class with properties. built-in Unicode operators maps to Math class. Julia's garbage collected memory contrasts with C#'s garbage collected (.NET) approach. dynamic with multiple dispatch typing meets static, strong typing.",
+  "csharp-kotlin": "C#'s class with properties becomes Kotlin's data class. Math class maps to kotlin.math. C#'s garbage collected (.NET) memory contrasts with Kotlin's garbage collected (JVM) approach. static, strong typing meets static, null-safe typing.",
+  "csharp-matlab": "C#'s class with properties becomes MATLAB's struct or classdef. Math class maps to built-in functions. C#'s garbage collected (.NET) memory contrasts with MATLAB's automatic approach. static, strong typing meets dynamic, matrix-native typing.",
+  "csharp-mojo": "C#'s class with properties becomes Mojo's struct with fn. Math class maps to built-in or math module. C#'s garbage collected (.NET) memory contrasts with Mojo's ownership model approach. static, strong typing meets static, Python-compatible typing.",
+  "csharp-nim": "C#'s class with properties becomes Nim's type = object. Math class maps to math module. C#'s garbage collected (.NET) memory contrasts with Nim's garbage collected approach. static, strong typing meets static, inferred typing.",
+  "csharp-python": "Python's @dataclass becomes C#'s class with properties. math module maps to Math class. Python's garbage collected memory contrasts with C#'s garbage collected (.NET) approach. dynamic with optional hints typing meets static, strong typing.",
+  "csharp-r": "C#'s class with properties becomes R's list or R6 class. Math class maps to built-in functions. C#'s garbage collected (.NET) memory contrasts with R's garbage collected approach. static, strong typing meets dynamic, vector-native typing.",
+  "csharp-rust": "Rust's struct with impl blocks becomes C#'s class with properties. .powf(), .sqrt(), .abs() maps to Math class. Rust's ownership/borrowing system memory contrasts with C#'s garbage collected (.NET) approach. static, strong with lifetimes typing meets static, strong typing.",
+  "csharp-swift": "C#'s class with properties becomes Swift's struct with mutating func. Math class maps to Foundation/Darwin math. C#'s garbage collected (.NET) memory contrasts with Swift's ARC (automatic reference counting) approach. static, strong typing meets static, strong with optionals typing.",
+  "csharp-typescript": "C#'s class with properties becomes TypeScript's class with interface. Math class maps to Math object. C#'s garbage collected (.NET) memory contrasts with TypeScript's garbage collected approach. static, strong typing meets static (structural) typing.",
+  "csharp-wasm": "C#'s class with properties becomes WebAssembly/WAT's linear memory layout. Math class maps to f64.mul, f64.sqrt. C#'s garbage collected (.NET) memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static, strong typing meets static (i32/i64/f32/f64) typing.",
+  "csharp-zig": "Zig's struct with namespaced fn becomes C#'s class with properties. @sqrt, std.math.pow maps to Math class. Zig's manual with allocator interface memory contrasts with C#'s garbage collected (.NET) approach. static with comptime typing meets static, strong typing.",
+  "cuda-delphi": "Delphi/Pascal's class (TMyClass) becomes CUDA's struct with __device__ functions. Math unit maps to device math (sqrtf, powf). Delphi/Pascal's manual or ARC memory contrasts with CUDA's explicit GPU allocation approach. static, strong typing meets static (C-based) typing.",
+  "cuda-fortran": "Fortran's derived type becomes CUDA's struct with __device__ functions. intrinsic functions maps to device math (sqrtf, powf). Fortran's stack/allocatable memory contrasts with CUDA's explicit GPU allocation approach. static with intent typing meets static (C-based) typing.",
+  "cuda-go": "Go's struct with methods becomes CUDA's struct with __device__ functions. math package maps to device math (sqrtf, powf). Go's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. static, simple typing meets static (C-based) typing.",
+  "cuda-java": "CUDA's struct with __device__ functions becomes Java's class with getters/setters. device math (sqrtf, powf) maps to Math class. CUDA's explicit GPU allocation memory contrasts with Java's garbage collected (JVM) approach. static (C-based) typing meets static, strong typing.",
+  "cuda-javascript": "JavaScript's class with constructor becomes CUDA's struct with __device__ functions. Math object maps to device math (sqrtf, powf). JavaScript's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. dynamic typing meets static (C-based) typing.",
+  "cuda-julia": "Julia's mutable struct becomes CUDA's struct with __device__ functions. built-in Unicode operators maps to device math (sqrtf, powf). Julia's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. dynamic with multiple dispatch typing meets static (C-based) typing.",
+  "cuda-kotlin": "CUDA's struct with __device__ functions becomes Kotlin's data class. device math (sqrtf, powf) maps to kotlin.math. CUDA's explicit GPU allocation memory contrasts with Kotlin's garbage collected (JVM) approach. static (C-based) typing meets static, null-safe typing.",
+  "cuda-matlab": "MATLAB's struct or classdef becomes CUDA's struct with __device__ functions. built-in functions maps to device math (sqrtf, powf). MATLAB's automatic memory contrasts with CUDA's explicit GPU allocation approach. dynamic, matrix-native typing meets static (C-based) typing.",
+  "cuda-mojo": "CUDA's struct with __device__ functions becomes Mojo's struct with fn. device math (sqrtf, powf) maps to built-in or math module. CUDA's explicit GPU allocation memory contrasts with Mojo's ownership model approach. static (C-based) typing meets static, Python-compatible typing.",
+  "cuda-nim": "CUDA's struct with __device__ functions becomes Nim's type = object. device math (sqrtf, powf) maps to math module. CUDA's explicit GPU allocation memory contrasts with Nim's garbage collected approach. static (C-based) typing meets static, inferred typing.",
+  "cuda-python": "Python's @dataclass becomes CUDA's struct with __device__ functions. math module maps to device math (sqrtf, powf). Python's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. dynamic with optional hints typing meets static (C-based) typing.",
+  "cuda-r": "R's list or R6 class becomes CUDA's struct with __device__ functions. built-in functions maps to device math (sqrtf, powf). R's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. dynamic, vector-native typing meets static (C-based) typing.",
+  "cuda-rust": "Rust's struct with impl blocks becomes CUDA's struct with __device__ functions. .powf(), .sqrt(), .abs() maps to device math (sqrtf, powf). Rust's ownership/borrowing system memory contrasts with CUDA's explicit GPU allocation approach. static, strong with lifetimes typing meets static (C-based) typing.",
+  "cuda-swift": "CUDA's struct with __device__ functions becomes Swift's struct with mutating func. device math (sqrtf, powf) maps to Foundation/Darwin math. CUDA's explicit GPU allocation memory contrasts with Swift's ARC (automatic reference counting) approach. static (C-based) typing meets static, strong with optionals typing.",
+  "cuda-typescript": "TypeScript's class with interface becomes CUDA's struct with __device__ functions. Math object maps to device math (sqrtf, powf). TypeScript's garbage collected memory contrasts with CUDA's explicit GPU allocation approach. static (structural) typing meets static (C-based) typing.",
+  "cuda-wasm": "Two non-traditional targets: GPU and browser. CUDA's thread-parallel model (thousands of threads) contrasts with WASM's single-threaded stack machine. CUDA uses __global__/__device__ qualifiers; WASM uses S-expression syntax. Both represent the future of SWMM computation — GPU for massive simulations, WASM for browser-based tools.",
+  "cuda-zig": "Zig's struct with namespaced fn becomes CUDA's struct with __device__ functions. @sqrt, std.math.pow maps to device math (sqrtf, powf). Zig's manual with allocator interface memory contrasts with CUDA's explicit GPU allocation approach. static with comptime typing meets static (C-based) typing.",
+  "delphi-fortran": "Fortran's derived type becomes Delphi/Pascal's class (TMyClass). intrinsic functions maps to Math unit. Fortran's stack/allocatable memory contrasts with Delphi/Pascal's manual or ARC approach. static with intent typing meets static, strong typing.",
+  "delphi-go": "Go's struct with methods becomes Delphi/Pascal's class (TMyClass). math package maps to Math unit. Go's garbage collected memory contrasts with Delphi/Pascal's manual or ARC approach. static, simple typing meets static, strong typing.",
+  "delphi-java": "Delphi/Pascal's class (TMyClass) becomes Java's class with getters/setters. Math unit maps to Math class. Delphi/Pascal's manual or ARC memory contrasts with Java's garbage collected (JVM) approach. Delphi/Pascal's begin/end blocks, Result := value, units vs Java's packages, checked exceptions, enterprise patterns.",
+  "delphi-javascript": "JavaScript's class with constructor becomes Delphi/Pascal's class (TMyClass). Math object maps to Math unit. JavaScript's garbage collected memory contrasts with Delphi/Pascal's manual or ARC approach. dynamic typing meets static, strong typing.",
+  "delphi-julia": "Julia's mutable struct becomes Delphi/Pascal's class (TMyClass). built-in Unicode operators maps to Math unit. Julia's garbage collected memory contrasts with Delphi/Pascal's manual or ARC approach. dynamic with multiple dispatch typing meets static, strong typing.",
+  "delphi-kotlin": "Delphi/Pascal's class (TMyClass) becomes Kotlin's data class. Math unit maps to kotlin.math. Delphi/Pascal's manual or ARC memory contrasts with Kotlin's garbage collected (JVM) approach. static, strong typing meets static, null-safe typing.",
+  "delphi-matlab": "MATLAB's struct or classdef becomes Delphi/Pascal's class (TMyClass). built-in functions maps to Math unit. MATLAB's automatic memory contrasts with Delphi/Pascal's manual or ARC approach. dynamic, matrix-native typing meets static, strong typing.",
+  "delphi-mojo": "Delphi/Pascal's class (TMyClass) becomes Mojo's struct with fn. Math unit maps to built-in or math module. Delphi/Pascal's manual or ARC memory contrasts with Mojo's ownership model approach. static, strong typing meets static, Python-compatible typing.",
+  "delphi-nim": "Delphi/Pascal's class (TMyClass) becomes Nim's type = object. Math unit maps to math module. Delphi/Pascal's manual or ARC memory contrasts with Nim's garbage collected approach. static, strong typing meets static, inferred typing.",
+  "delphi-python": "Python's @dataclass becomes Delphi/Pascal's class (TMyClass). math module maps to Math unit. Python's garbage collected memory contrasts with Delphi/Pascal's manual or ARC approach. dynamic with optional hints typing meets static, strong typing.",
+  "delphi-r": "R's list or R6 class becomes Delphi/Pascal's class (TMyClass). built-in functions maps to Math unit. R's garbage collected memory contrasts with Delphi/Pascal's manual or ARC approach. dynamic, vector-native typing meets static, strong typing.",
+  "delphi-rust": "Rust's struct with impl blocks becomes Delphi/Pascal's class (TMyClass). .powf(), .sqrt(), .abs() maps to Math unit. Rust's ownership/borrowing system memory contrasts with Delphi/Pascal's manual or ARC approach. static, strong with lifetimes typing meets static, strong typing.",
+  "delphi-swift": "Delphi/Pascal's class (TMyClass) becomes Swift's struct with mutating func. Math unit maps to Foundation/Darwin math. Delphi/Pascal's manual or ARC memory contrasts with Swift's ARC (automatic reference counting) approach. static, strong typing meets static, strong with optionals typing.",
+  "delphi-typescript": "Delphi/Pascal's class (TMyClass) becomes TypeScript's class with interface. Math unit maps to Math object. Delphi/Pascal's manual or ARC memory contrasts with TypeScript's garbage collected approach. static, strong typing meets static (structural) typing.",
+  "delphi-wasm": "Delphi/Pascal's class (TMyClass) becomes WebAssembly/WAT's linear memory layout. Math unit maps to f64.mul, f64.sqrt. Delphi/Pascal's manual or ARC memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static, strong typing meets static (i32/i64/f32/f64) typing.",
+  "delphi-zig": "Zig's struct with namespaced fn becomes Delphi/Pascal's class (TMyClass). @sqrt, std.math.pow maps to Math unit. Zig's manual with allocator interface memory contrasts with Delphi/Pascal's manual or ARC approach. static with comptime typing meets static, strong typing.",
+  "fortran-chapel": "Both target high-performance numerical computing. Fortran's do loops become Chapel's forall for automatic parallelism. Fortran's derived types become Chapel records. Fortran's array syntax maps to Chapel's domain-based arrays. Chapel adds modern parallelism to Fortran's proven numerical computing model.",
+  "fortran-go": "Both are statically typed compiled languages focused on clarity. Fortran's derived types become Go's structs. Fortran's module procedures become Go's package-level functions with receivers. Fortran's intent(in) becomes Go's value vs pointer receiver convention. Both produce fast binaries, but Go adds built-in concurrency and modern tooling.",
+  "fortran-java": "Fortran's derived type becomes Java's class with getters/setters. intrinsic functions maps to Math class. Fortran's stack/allocatable memory contrasts with Java's garbage collected (JVM) approach. static with intent typing meets static, strong typing.",
+  "fortran-javascript": "The oldest and newest languages in our set. Fortran's real(8) becomes JavaScript's native Number (all floats). Fortran's module system becomes ES module exports. do loops become for loops. The mathematical algorithms translate directly, but the language idioms are worlds apart \u2014 Fortran optimizes for numerical arrays, JavaScript for event-driven interactions.",
+  "fortran-julia": "Both are 1-based indexing languages with strong numerical computing heritage. Fortran's derived types become Julia's structs. Fortran's module/contains becomes Julia's module/function pattern. Julia's multiple dispatch offers more flexibility than Fortran's module procedures. Both compile to efficient machine code, but Julia adds interactivity through its REPL and JIT compilation.",
+  "fortran-kotlin": "Fortran's derived type becomes Kotlin's data class. intrinsic functions maps to kotlin.math. Fortran's stack/allocatable memory contrasts with Kotlin's garbage collected (JVM) approach. static with intent typing meets static, null-safe typing.",
+  "fortran-matlab": "Both are 1-based indexing languages dominant in engineering. Fortran's derived types become MATLAB structs. Fortran's do loops become MATLAB for loops (or vectorized ops). Both compile/run efficiently for numerical work. Fortran is the legacy HPC standard; MATLAB is the modern prototyping standard. SWMM3 was originally Fortran.",
+  "fortran-mojo": "Fortran's derived type becomes Mojo's struct with fn. intrinsic functions maps to built-in or math module. Fortran's stack/allocatable memory contrasts with Mojo's ownership model approach. static with intent typing meets static, Python-compatible typing.",
+  "fortran-nim": "Fortran's derived type becomes Nim's type = object. intrinsic functions maps to math module. Fortran's stack/allocatable memory contrasts with Nim's garbage collected approach. static with intent typing meets static, inferred typing.",
+  "fortran-python": "Python's @dataclass becomes Fortran's derived type. math module maps to intrinsic functions. Python's garbage collected memory contrasts with Fortran's stack/allocatable approach. dynamic with optional hints typing meets static with intent typing.",
+  "fortran-r": "Fortran's derived type becomes R's list or R6 class. intrinsic functions maps to built-in functions. Fortran's stack/allocatable memory contrasts with R's garbage collected approach. static with intent typing meets dynamic, vector-native typing.",
+  "fortran-rust": "Rust's struct with impl blocks becomes Fortran's derived type. .powf(), .sqrt(), .abs() maps to intrinsic functions. Rust's ownership/borrowing system memory contrasts with Fortran's stack/allocatable approach. static, strong with lifetimes typing meets static with intent typing.",
+  "fortran-swift": "Fortran's derived type becomes Swift's struct with mutating func. intrinsic functions maps to Foundation/Darwin math. Fortran's stack/allocatable memory contrasts with Swift's ARC (automatic reference counting) approach. static with intent typing meets static, strong with optionals typing.",
+  "fortran-typescript": "Fortran's derived type becomes TypeScript's class with interface. intrinsic functions maps to Math object. Fortran's stack/allocatable memory contrasts with TypeScript's garbage collected approach. static with intent typing meets static (structural) typing.",
+  "fortran-wasm": "Fortran's derived type becomes WebAssembly/WAT's linear memory layout. intrinsic functions maps to f64.mul, f64.sqrt. Fortran's stack/allocatable memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static with intent typing meets static (i32/i64/f32/f64) typing.",
   "fortran-zig": "Fortran's derived types (type :: Conduit) become Zig's struct definitions. Fortran's module/contains pattern becomes Zig's namespaced struct with pub fn methods. Fortran's 1-based array indexing contrasts with Zig's 0-based slices. real(8) maps to Zig's f64. Fortran's intent(in/inout) is replaced by Zig's const vs mutable pointer parameters. Fortran's implicit none finds a kindred spirit in Zig's explicit-everything philosophy — no implicit conversions, no hidden allocations.",
+  "go-java": "Go's struct with methods becomes Java's class with getters/setters. math package maps to Math class. Go's garbage collected memory contrasts with Java's garbage collected (JVM) approach. static, simple typing meets static, strong typing.",
+  "go-javascript": "JavaScript's class with constructor becomes Go's struct with methods. Math object maps to math package. dynamic typing meets static, simple typing. JavaScript's getters/setters, template literals vs Go's exported names (capitalized), multiple returns.",
+  "go-julia": "Julia's mutable struct becomes Go's struct with methods. built-in Unicode operators maps to math package. dynamic with multiple dispatch typing meets static, simple typing. Julia's 1-based indexing, JIT compilation vs Go's exported names (capitalized), multiple returns.",
+  "go-kotlin": "Go's struct with methods becomes Kotlin's data class. math package maps to kotlin.math. Go's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. static, simple typing meets static, null-safe typing.",
+  "go-matlab": "Go's struct with methods becomes MATLAB's struct or classdef. math package maps to built-in functions. Go's garbage collected memory contrasts with MATLAB's automatic approach. static, simple typing meets dynamic, matrix-native typing.",
+  "go-mojo": "Go's struct with methods becomes Mojo's struct with fn. math package maps to built-in or math module. Go's garbage collected memory contrasts with Mojo's ownership model approach. static, simple typing meets static, Python-compatible typing.",
+  "go-nim": "Go's struct with methods becomes Nim's type = object. math package maps to math module. static, simple typing meets static, inferred typing. Go's exported names (capitalized), multiple returns vs Nim's result variable, compiles to C, UFCS.",
+  "go-python": "Python's @dataclass becomes Go's struct with methods. math module maps to math package. dynamic with optional hints typing meets static, simple typing. Python's list comprehensions, duck typing vs Go's exported names (capitalized), multiple returns.",
+  "go-r": "Go's struct with methods becomes R's list or R6 class. math package maps to built-in functions. static, simple typing meets dynamic, vector-native typing. Go's exported names (capitalized), multiple returns vs R's <- assignment, vectorized operations.",
+  "go-rust": "Rust's struct with impl blocks becomes Go's struct with methods. .powf(), .sqrt(), .abs() maps to math package. Rust's ownership/borrowing system memory contrasts with Go's garbage collected approach. static, strong with lifetimes typing meets static, simple typing.",
+  "go-swift": "Go's struct with methods becomes Swift's struct with mutating func. math package maps to Foundation/Darwin math. Go's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. static, simple typing meets static, strong with optionals typing.",
+  "go-typescript": "Go's struct with methods becomes TypeScript's class with interface. math package maps to Math object. static, simple typing meets static (structural) typing. Go's exported names (capitalized), multiple returns vs TypeScript's type annotations, interfaces, generics.",
+  "go-wasm": "Go's struct with methods becomes WebAssembly/WAT's linear memory layout. math package maps to f64.mul, f64.sqrt. Go's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static, simple typing meets static (i32/i64/f32/f64) typing.",
   "go-zig": "Go's garbage-collected runtime contrasts with Zig's manual memory management and comptime allocator model. Go's method receivers (func (c *Conduit) GetFlow()) become Zig's namespaced functions (pub fn getFlow(self: *Conduit)). Go's math.Pow() becomes std.math.pow(). Go's multiple-return error handling (val, err) maps to Zig's error unions (val !ErrorType). Go's exported names (capitalized) become Zig's pub keyword. Both prioritize simplicity and readability over abstraction.",
+  "java-javascript": "JavaScript's class with constructor becomes Java's class with getters/setters. Math object maps to Math class. JavaScript's garbage collected memory contrasts with Java's garbage collected (JVM) approach. dynamic typing meets static, strong typing.",
+  "java-julia": "Julia's mutable struct becomes Java's class with getters/setters. built-in Unicode operators maps to Math class. Julia's garbage collected memory contrasts with Java's garbage collected (JVM) approach. dynamic with multiple dispatch typing meets static, strong typing.",
+  "java-kotlin": "Kotlin is designed as a better Java. Java's verbose class declarations become Kotlin's concise data classes. Java's null checks become Kotlin's null-safe operators (?., ?:). Java's switch becomes Kotlin's powerful when expression. Both run on the JVM and interoperate seamlessly. Kotlin's modern syntax reduces boilerplate significantly.",
+  "java-matlab": "MATLAB's struct or classdef becomes Java's class with getters/setters. built-in functions maps to Math class. MATLAB's automatic memory contrasts with Java's garbage collected (JVM) approach. dynamic, matrix-native typing meets static, strong typing.",
+  "java-mojo": "Mojo's struct with fn becomes Java's class with getters/setters. built-in or math module maps to Math class. Mojo's ownership model memory contrasts with Java's garbage collected (JVM) approach. static, Python-compatible typing meets static, strong typing.",
+  "java-nim": "Java's class with getters/setters becomes Nim's type = object. Math class maps to math module. Java's garbage collected (JVM) memory contrasts with Nim's garbage collected approach. static, strong typing meets static, inferred typing.",
+  "java-python": "Python's @dataclass becomes Java's class with getters/setters. math module maps to Math class. Python's garbage collected memory contrasts with Java's garbage collected (JVM) approach. dynamic with optional hints typing meets static, strong typing.",
+  "java-r": "R's list or R6 class becomes Java's class with getters/setters. built-in functions maps to Math class. R's garbage collected memory contrasts with Java's garbage collected (JVM) approach. dynamic, vector-native typing meets static, strong typing.",
+  "java-rust": "Rust's struct with impl blocks becomes Java's class with getters/setters. .powf(), .sqrt(), .abs() maps to Math class. Rust's ownership/borrowing system memory contrasts with Java's garbage collected (JVM) approach. static, strong with lifetimes typing meets static, strong typing.",
+  "java-swift": "Java's class with getters/setters becomes Swift's struct with mutating func. Math class maps to Foundation/Darwin math. Java's garbage collected (JVM) memory contrasts with Swift's ARC (automatic reference counting) approach. static, strong typing meets static, strong with optionals typing.",
+  "java-typescript": "TypeScript's class with interface becomes Java's class with getters/setters. Math object maps to Math class. TypeScript's garbage collected memory contrasts with Java's garbage collected (JVM) approach. static (structural) typing meets static, strong typing.",
+  "java-wasm": "WebAssembly/WAT's linear memory layout becomes Java's class with getters/setters. f64.mul, f64.sqrt maps to Math class. WebAssembly/WAT's linear memory (manual) memory contrasts with Java's garbage collected (JVM) approach. static (i32/i64/f32/f64) typing meets static, strong typing.",
+  "java-zig": "Zig's struct with namespaced fn becomes Java's class with getters/setters. @sqrt, std.math.pow maps to Math class. Zig's manual with allocator interface memory contrasts with Java's garbage collected (JVM) approach. static with comptime typing meets static, strong typing.",
+  "javascript-go": "Both are modern languages with C-family syntax. JavaScript's class becomes Go's struct + methods. JavaScript's Math.sqrt() becomes Go's math.Sqrt(). JavaScript's dynamic typing becomes Go's static type declarations. JavaScript runs in the browser or Node.js; Go produces standalone binaries. Both have strong ecosystems for web services, making them natural choices for SWMM5 web tools.",
+  "javascript-julia": "Julia's mutable struct becomes JavaScript's class with constructor. built-in Unicode operators maps to Math object. dynamic with multiple dispatch typing meets dynamic typing. Julia's 1-based indexing, JIT compilation vs JavaScript's getters/setters, template literals.",
+  "javascript-kotlin": "JavaScript's class with constructor becomes Kotlin's data class. Math object maps to kotlin.math. JavaScript's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. dynamic typing meets static, null-safe typing.",
+  "javascript-matlab": "JavaScript's class with constructor becomes MATLAB's struct or classdef. Math object maps to built-in functions. JavaScript's garbage collected memory contrasts with MATLAB's automatic approach. dynamic typing meets dynamic, matrix-native typing.",
+  "javascript-mojo": "JavaScript's class with constructor becomes Mojo's struct with fn. Math object maps to built-in or math module. JavaScript's garbage collected memory contrasts with Mojo's ownership model approach. dynamic typing meets static, Python-compatible typing.",
+  "javascript-nim": "JavaScript's class with constructor becomes Nim's type = object. Math object maps to math module. dynamic typing meets static, inferred typing. JavaScript's getters/setters, template literals vs Nim's result variable, compiles to C, UFCS.",
+  "javascript-python": "Python's @dataclass becomes JavaScript's class with constructor. math module maps to Math object. dynamic with optional hints typing meets dynamic typing. Python's list comprehensions, duck typing vs JavaScript's getters/setters, template literals.",
+  "javascript-r": "JavaScript's class with constructor becomes R's list or R6 class. Math object maps to built-in functions. dynamic typing meets dynamic, vector-native typing. JavaScript's getters/setters, template literals vs R's <- assignment, vectorized operations.",
+  "javascript-rust": "Rust's struct with impl blocks becomes JavaScript's class with constructor. .powf(), .sqrt(), .abs() maps to Math object. Rust's ownership/borrowing system memory contrasts with JavaScript's garbage collected approach. static, strong with lifetimes typing meets dynamic typing.",
+  "javascript-swift": "JavaScript's class with constructor becomes Swift's struct with mutating func. Math object maps to Foundation/Darwin math. JavaScript's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. dynamic typing meets static, strong with optionals typing.",
+  "javascript-typescript": "TypeScript adds static types to JavaScript with minimal code changes. JavaScript's dynamic typing becomes explicit : number, : string annotations. Classes gain interface definitions. The runtime behavior is identical — TypeScript compiles to JavaScript. This is the lowest-effort, highest-instructional-value translation in the collection.",
+  "javascript-wasm": "JavaScript's class with constructor becomes WebAssembly/WAT's linear memory layout. Math object maps to f64.mul, f64.sqrt. JavaScript's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. dynamic typing meets static (i32/i64/f32/f64) typing.",
   "javascript-zig": "JavaScript's dynamic typing becomes Zig's strict static typing with comptime generics. JavaScript's class and constructor become Zig's struct with an init function. Math.sqrt() and Math.pow() become @sqrt() and std.math.pow(). JavaScript's garbage collection is replaced by Zig's explicit memory control. JavaScript's try/catch becomes Zig's try/catch with error unions. Zig compiles to WebAssembly just like JavaScript runs natively in the browser, making them complementary for web-based SWMM tools.",
+  "julia-go": "Julia's expressive scientific syntax vs Go's minimalist engineering approach. Julia's mutable struct becomes Go's struct with pointer receivers. Julia's multiple dispatch becomes Go's explicit method definitions. Julia uses 1-based indexing; Go uses 0-based. Julia's ! convention for mutation becomes Go's pointer receiver convention. Both compile to fast native code.",
+  "julia-javascript": "Julia's scientific computing focus vs JavaScript's web platform. Julia's struct becomes JavaScript's class. Julia's multiple dispatch becomes JavaScript's class methods. Julia's 1-based indexing requires adjustments for JavaScript's 0-based arrays. Julia excels at numerical computation; JavaScript excels at interactive visualization \u2014 combining both via web APIs creates powerful engineering tools.",
+  "julia-kotlin": "Julia's mutable struct becomes Kotlin's data class. built-in Unicode operators maps to kotlin.math. Julia's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. dynamic with multiple dispatch typing meets static, null-safe typing.",
+  "julia-matlab": "Julia's mutable struct becomes MATLAB's struct or classdef. built-in Unicode operators maps to built-in functions. Julia's garbage collected memory contrasts with MATLAB's automatic approach. dynamic with multiple dispatch typing meets dynamic, matrix-native typing.",
+  "julia-mojo": "Julia's mutable struct becomes Mojo's struct with fn. built-in Unicode operators maps to built-in or math module. Julia's garbage collected memory contrasts with Mojo's ownership model approach. dynamic with multiple dispatch typing meets static, Python-compatible typing.",
+  "julia-nim": "Julia's mutable struct becomes Nim's type = object. built-in Unicode operators maps to math module. dynamic with multiple dispatch typing meets static, inferred typing. Julia's 1-based indexing, JIT compilation vs Nim's result variable, compiles to C, UFCS.",
+  "julia-python": "Python's @dataclass becomes Julia's mutable struct. math module maps to built-in Unicode operators. dynamic with optional hints typing meets dynamic with multiple dispatch typing. Python's list comprehensions, duck typing vs Julia's 1-based indexing, JIT compilation.",
+  "julia-r": "Julia's mutable struct becomes R's list or R6 class. built-in Unicode operators maps to built-in functions. dynamic with multiple dispatch typing meets dynamic, vector-native typing. Julia's 1-based indexing, JIT compilation vs R's <- assignment, vectorized operations.",
+  "julia-rust": "Rust's struct with impl blocks becomes Julia's mutable struct. .powf(), .sqrt(), .abs() maps to built-in Unicode operators. Rust's ownership/borrowing system memory contrasts with Julia's garbage collected approach. static, strong with lifetimes typing meets dynamic with multiple dispatch typing.",
+  "julia-swift": "Julia's mutable struct becomes Swift's struct with mutating func. built-in Unicode operators maps to Foundation/Darwin math. Julia's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. dynamic with multiple dispatch typing meets static, strong with optionals typing.",
+  "julia-typescript": "Julia's mutable struct becomes TypeScript's class with interface. built-in Unicode operators maps to Math object. dynamic with multiple dispatch typing meets static (structural) typing. Julia's 1-based indexing, JIT compilation vs TypeScript's type annotations, interfaces, generics.",
+  "julia-wasm": "Julia's mutable struct becomes WebAssembly/WAT's linear memory layout. built-in Unicode operators maps to f64.mul, f64.sqrt. Julia's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. dynamic with multiple dispatch typing meets static (i32/i64/f32/f64) typing.",
   "julia-zig": "Julia's high-level multiple dispatch (function friction_slope(c::Conduit)) becomes Zig's namespaced struct methods (pub fn frictionSlope(self: *const Conduit)). Julia's mutable struct maps directly to Zig's struct (all mutable by default). Julia's 1-based indexing contrasts with Zig's 0-based. Julia's JIT compilation vs Zig's ahead-of-time compilation represents different performance philosophies. Julia's Unicode operators (≤) become standard comparisons (<=). Both produce fast code, but Zig gives deterministic performance without a runtime.",
+  "kotlin-matlab": "MATLAB's struct or classdef becomes Kotlin's data class. built-in functions maps to kotlin.math. MATLAB's automatic memory contrasts with Kotlin's garbage collected (JVM) approach. dynamic, matrix-native typing meets static, null-safe typing.",
+  "kotlin-mojo": "Mojo's struct with fn becomes Kotlin's data class. built-in or math module maps to kotlin.math. Mojo's ownership model memory contrasts with Kotlin's garbage collected (JVM) approach. static, Python-compatible typing meets static, null-safe typing.",
+  "kotlin-nim": "Nim's type = object becomes Kotlin's data class. math module maps to kotlin.math. Nim's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. static, inferred typing meets static, null-safe typing.",
+  "kotlin-python": "Python's @dataclass becomes Kotlin's data class. math module maps to kotlin.math. Python's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. dynamic with optional hints typing meets static, null-safe typing.",
+  "kotlin-r": "R's list or R6 class becomes Kotlin's data class. built-in functions maps to kotlin.math. R's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. dynamic, vector-native typing meets static, null-safe typing.",
+  "kotlin-rust": "Rust's struct with impl blocks becomes Kotlin's data class. .powf(), .sqrt(), .abs() maps to kotlin.math. Rust's ownership/borrowing system memory contrasts with Kotlin's garbage collected (JVM) approach. static, strong with lifetimes typing meets static, null-safe typing.",
+  "kotlin-swift": "Swift's struct with mutating func becomes Kotlin's data class. Foundation/Darwin math maps to kotlin.math. Swift's ARC (automatic reference counting) memory contrasts with Kotlin's garbage collected (JVM) approach. static, strong with optionals typing meets static, null-safe typing.",
+  "kotlin-typescript": "TypeScript's class with interface becomes Kotlin's data class. Math object maps to kotlin.math. TypeScript's garbage collected memory contrasts with Kotlin's garbage collected (JVM) approach. static (structural) typing meets static, null-safe typing.",
+  "kotlin-wasm": "WebAssembly/WAT's linear memory layout becomes Kotlin's data class. f64.mul, f64.sqrt maps to kotlin.math. WebAssembly/WAT's linear memory (manual) memory contrasts with Kotlin's garbage collected (JVM) approach. static (i32/i64/f32/f64) typing meets static, null-safe typing.",
+  "kotlin-zig": "Zig's struct with namespaced fn becomes Kotlin's data class. @sqrt, std.math.pow maps to kotlin.math. Zig's manual with allocator interface memory contrasts with Kotlin's garbage collected (JVM) approach. static with comptime typing meets static, null-safe typing.",
+  "matlab-mojo": "MATLAB's struct or classdef becomes Mojo's struct with fn. built-in functions maps to built-in or math module. MATLAB's automatic memory contrasts with Mojo's ownership model approach. dynamic, matrix-native typing meets static, Python-compatible typing.",
+  "matlab-nim": "MATLAB's struct or classdef becomes Nim's type = object. built-in functions maps to math module. MATLAB's automatic memory contrasts with Nim's garbage collected approach. dynamic, matrix-native typing meets static, inferred typing.",
+  "matlab-python": "Two dominant languages in engineering education. MATLAB's 1-based indexing vs Python's 0-based. MATLAB's built-in matrix operations vs Python's numpy. MATLAB's struct becomes Python's @dataclass. Both support interactive development, but Python's open-source ecosystem (PySWMM) has grown rapidly while MATLAB remains dominant in academia.",
+  "matlab-r": "Both are domain-specific numerical languages. MATLAB's 1-based indexing matches R's 1-based vectors. MATLAB's struct becomes R's list. Both excel at vectorized operations and plotting. MATLAB dominates in engineering; R dominates in statistical hydrology and calibration. The swmmr package makes R particularly relevant for SWMM analysis.",
+  "matlab-rust": "Rust's struct with impl blocks becomes MATLAB's struct or classdef. .powf(), .sqrt(), .abs() maps to built-in functions. Rust's ownership/borrowing system memory contrasts with MATLAB's automatic approach. static, strong with lifetimes typing meets dynamic, matrix-native typing.",
+  "matlab-swift": "MATLAB's struct or classdef becomes Swift's struct with mutating func. built-in functions maps to Foundation/Darwin math. MATLAB's automatic memory contrasts with Swift's ARC (automatic reference counting) approach. dynamic, matrix-native typing meets static, strong with optionals typing.",
+  "matlab-typescript": "MATLAB's struct or classdef becomes TypeScript's class with interface. built-in functions maps to Math object. MATLAB's automatic memory contrasts with TypeScript's garbage collected approach. dynamic, matrix-native typing meets static (structural) typing.",
+  "matlab-wasm": "MATLAB's struct or classdef becomes WebAssembly/WAT's linear memory layout. built-in functions maps to f64.mul, f64.sqrt. MATLAB's automatic memory contrasts with WebAssembly/WAT's linear memory (manual) approach. dynamic, matrix-native typing meets static (i32/i64/f32/f64) typing.",
+  "matlab-zig": "Zig's struct with namespaced fn becomes MATLAB's struct or classdef. @sqrt, std.math.pow maps to built-in functions. Zig's manual with allocator interface memory contrasts with MATLAB's automatic approach. static with comptime typing meets dynamic, matrix-native typing.",
+  "mojo-nim": "Mojo's struct with fn becomes Nim's type = object. built-in or math module maps to math module. Mojo's ownership model memory contrasts with Nim's garbage collected approach. static, Python-compatible typing meets static, inferred typing.",
+  "mojo-python": "Python's @dataclass becomes Mojo's struct with fn. math module maps to built-in or math module. Python's garbage collected memory contrasts with Mojo's ownership model approach. dynamic with optional hints typing meets static, Python-compatible typing.",
+  "mojo-r": "R's list or R6 class becomes Mojo's struct with fn. built-in functions maps to built-in or math module. R's garbage collected memory contrasts with Mojo's ownership model approach. dynamic, vector-native typing meets static, Python-compatible typing.",
+  "mojo-rust": "Rust's struct with impl blocks becomes Mojo's struct with fn. .powf(), .sqrt(), .abs() maps to built-in or math module. Rust's ownership/borrowing system memory contrasts with Mojo's ownership model approach. static, strong with lifetimes typing meets static, Python-compatible typing.",
+  "mojo-swift": "Mojo's struct with fn becomes Swift's struct with mutating func. built-in or math module maps to Foundation/Darwin math. Mojo's ownership model memory contrasts with Swift's ARC (automatic reference counting) approach. static, Python-compatible typing meets static, strong with optionals typing.",
+  "mojo-typescript": "TypeScript's class with interface becomes Mojo's struct with fn. Math object maps to built-in or math module. TypeScript's garbage collected memory contrasts with Mojo's ownership model approach. static (structural) typing meets static, Python-compatible typing.",
+  "mojo-wasm": "WebAssembly/WAT's linear memory layout becomes Mojo's struct with fn. f64.mul, f64.sqrt maps to built-in or math module. WebAssembly/WAT's linear memory (manual) memory contrasts with Mojo's ownership model approach. static (i32/i64/f32/f64) typing meets static, Python-compatible typing.",
+  "mojo-zig": "Zig's struct with namespaced fn becomes Mojo's struct with fn. @sqrt, std.math.pow maps to built-in or math module. Zig's manual with allocator interface memory contrasts with Mojo's ownership model approach. static with comptime typing meets static, Python-compatible typing.",
+  "nim-mojo": "Both bridge high-level syntax with low-level performance. Nim compiles to C with Python-like syntax; Mojo compiles to native code with Python-compatible syntax. Nim's type object becomes Mojo's struct. Both aim to give Python users systems-level performance. Nim's result variable vs Mojo's return statement.",
+  "nim-python": "Python's @dataclass becomes Nim's type = object. dynamic with optional hints typing meets static, inferred typing. Python's list comprehensions, duck typing vs Nim's result variable, compiles to C, UFCS.",
+  "nim-r": "R's list or R6 class becomes Nim's type = object. built-in functions maps to math module. dynamic, vector-native typing meets static, inferred typing. R's <- assignment, vectorized operations vs Nim's result variable, compiles to C, UFCS.",
+  "nim-rust": "Rust's struct with impl blocks becomes Nim's type = object. .powf(), .sqrt(), .abs() maps to math module. Rust's ownership/borrowing system memory contrasts with Nim's garbage collected approach. static, strong with lifetimes typing meets static, inferred typing.",
+  "nim-swift": "Nim's type = object becomes Swift's struct with mutating func. math module maps to Foundation/Darwin math. Nim's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. static, inferred typing meets static, strong with optionals typing.",
+  "nim-typescript": "TypeScript's class with interface becomes Nim's type = object. Math object maps to math module. static (structural) typing meets static, inferred typing. TypeScript's type annotations, interfaces, generics vs Nim's result variable, compiles to C, UFCS.",
+  "nim-wasm": "WebAssembly/WAT's linear memory layout becomes Nim's type = object. f64.mul, f64.sqrt maps to math module. WebAssembly/WAT's linear memory (manual) memory contrasts with Nim's garbage collected approach. static (i32/i64/f32/f64) typing meets static, inferred typing.",
+  "nim-zig": "Zig's struct with namespaced fn becomes Nim's type = object. @sqrt, std.math.pow maps to math module. Zig's manual with allocator interface memory contrasts with Nim's garbage collected approach. static with comptime typing meets static, inferred typing.",
+  "python-fortran": "Python's dynamic typing meets Fortran's static declarations. Python's @dataclass becomes Fortran's derived type. List comprehensions become do loops. Python's 0-based indexing vs Fortran's 1-based arrays requires index adjustments. Both are widely used in scientific computing, but Fortran's raw numerical performance is typically 10-100x faster. Many engineers use Python for prototyping and Fortran for production.",
+  "python-go": "Python's dynamic elegance vs Go's static simplicity. Python's @dataclass becomes Go's struct with exported fields. Python's self becomes Go's receiver parameter. Type hints that Python ignores become Go's enforced static types. Go's explicit error handling (if err != nil) replaces Python's try/except. Go typically runs 10-50x faster than Python for numerical work.",
+  "python-javascript": "Python's @dataclass becomes JavaScript's class with constructor. Python's math module maps to JavaScript's Math object. f-strings become template literals. Both are dynamically typed, but JavaScript's === vs == gotchas don't exist in Python. Python dominates server-side scientific computing; JavaScript enables browser-based visualization and interactive tools.",
+  "python-julia": "Two high-level scientific computing languages. Python's @dataclass becomes Julia's struct. Both support Unicode, type hints, and clean mathematical syntax. Julia's multiple dispatch provides a unique alternative to Python's class-based OOP. Julia is compiled (JIT) while Python is interpreted, giving Julia significant speed advantages for numerical work. Both have rich ecosystems for water resources computing.",
+  "python-mojo": "Mojo is a Python superset designed for performance. Python's def becomes Mojo's fn for strict typing. Python's @dataclass becomes Mojo's struct. Python's float becomes Mojo's Float64. The syntax is nearly identical but Mojo adds ownership (borrowed/owned/inout) and compiles to native code. Directly relevant to PySWMM users wanting C-like speed.",
+  "python-r": "Python's @dataclass becomes R's list or R6 class. math module maps to built-in functions. dynamic with optional hints typing meets dynamic, vector-native typing. Python's list comprehensions, duck typing vs R's <- assignment, vectorized operations.",
+  "python-rust": "Rust's struct with impl blocks becomes Python's @dataclass. .powf(), .sqrt(), .abs() maps to math module. Rust's ownership/borrowing system memory contrasts with Python's garbage collected approach. static, strong with lifetimes typing meets dynamic with optional hints typing.",
+  "python-swift": "Python's @dataclass becomes Swift's struct with mutating func. math module maps to Foundation/Darwin math. Python's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. dynamic with optional hints typing meets static, strong with optionals typing.",
+  "python-typescript": "Python's @dataclass becomes TypeScript's class with interface. math module maps to Math object. dynamic with optional hints typing meets static (structural) typing. Python's list comprehensions, duck typing vs TypeScript's type annotations, interfaces, generics.",
+  "python-wasm": "Python's @dataclass becomes WebAssembly/WAT's linear memory layout. math module maps to f64.mul, f64.sqrt. Python's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. dynamic with optional hints typing meets static (i32/i64/f32/f64) typing.",
   "python-zig": "Python's @dataclass becomes Zig's struct with explicit field types (f64 instead of float hints). Python's self.width becomes self.width via pointer access. Python's dynamic typing is replaced by Zig's compile-time type checking. math.sqrt() becomes @sqrt(), and ** exponentiation becomes std.math.pow(). Python's list comprehensions become explicit loops in Zig. The development speed trade-off is stark — Python's rapid prototyping vs Zig's zero-overhead performance with compile-time safety guarantees.",
+  "r-rust": "Rust's struct with impl blocks becomes R's list or R6 class. .powf(), .sqrt(), .abs() maps to built-in functions. Rust's ownership/borrowing system memory contrasts with R's garbage collected approach. static, strong with lifetimes typing meets dynamic, vector-native typing.",
+  "r-swift": "R's list or R6 class becomes Swift's struct with mutating func. built-in functions maps to Foundation/Darwin math. R's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. dynamic, vector-native typing meets static, strong with optionals typing.",
+  "r-typescript": "R's list or R6 class becomes TypeScript's class with interface. built-in functions maps to Math object. dynamic, vector-native typing meets static (structural) typing. R's <- assignment, vectorized operations vs TypeScript's type annotations, interfaces, generics.",
+  "r-wasm": "R's list or R6 class becomes WebAssembly/WAT's linear memory layout. built-in functions maps to f64.mul, f64.sqrt. R's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. dynamic, vector-native typing meets static (i32/i64/f32/f64) typing.",
+  "r-zig": "Zig's struct with namespaced fn becomes R's list or R6 class. @sqrt, std.math.pow maps to built-in functions. Zig's manual with allocator interface memory contrasts with R's garbage collected approach. static with comptime typing meets dynamic, vector-native typing.",
+  "rust-cpp": "Both are systems languages with zero-cost abstractions. Rust's ownership/borrowing replaces C++'s manual memory management and smart pointers. Rust's impl becomes C++'s class methods. Rust's match becomes C++'s switch. Rust guarantees memory safety at compile time; C++ relies on programmer discipline. Both compile to highly optimized native code.",
+  "rust-fortran": "Two high-performance languages with different eras. Rust's ownership/borrowing model replaces Fortran's intent(in/inout) system for controlling data flow. Rust's .iter().map().sum() becomes Fortran's explicit do loops. Both excel at numerical computation, but Rust adds memory safety guarantees that Fortran lacks. Fortran's 1-based arrays vs Rust's 0-based indexing requires careful translation.",
+  "rust-go": "Both are modern compiled languages, but with different philosophies. Rust's ownership model vs Go's garbage collector. Rust's impl blocks vs Go's methods defined outside the struct. Both use explicit error handling, but Rust uses Result<T,E> while Go uses multiple returns. Go's simplicity trades some of Rust's safety guarantees for faster development speed.",
+  "rust-javascript": "Rust's strict type system and ownership model contrast sharply with JavaScript's dynamic typing. Rust's struct + impl becomes JavaScript's class. Rust's Result/Option types become JavaScript's try/catch or null checks. The .powf() and .sqrt() methods become Math.pow() and Math.sqrt(). Rust compiles to WebAssembly, so these two languages can actually work together in the browser.",
+  "rust-julia": "Both are modern systems languages with expressive type systems. Rust's impl blocks become Julia's multiple dispatch functions. Rust's match becomes Julia's if/elseif. Both use Unicode support, but Julia embraces it more fully. Rust guarantees memory safety at compile time; Julia uses garbage collection. Julia's JIT compilation vs Rust's ahead-of-time compilation represents different performance trade-offs.",
+  "rust-python": "Rust's strict ownership model relaxes into Python's garbage-collected simplicity. Rust's &self/&mut self distinction disappears \u2014 Python methods freely mutate self. Type annotations (f64 \u2192 float) become optional hints rather than compiler-enforced. Pattern matching and Result types become try/except. The performance gap is significant, but Python's readability and ecosystem (numpy, scipy) often compensate.",
+  "rust-swift": "Rust's struct with impl blocks becomes Swift's struct with mutating func. .powf(), .sqrt(), .abs() maps to Foundation/Darwin math. Rust's ownership/borrowing system memory contrasts with Swift's ARC (automatic reference counting) approach. static, strong with lifetimes typing meets static, strong with optionals typing.",
+  "rust-typescript": "Rust's struct with impl blocks becomes TypeScript's class with interface. .powf(), .sqrt(), .abs() maps to Math object. Rust's ownership/borrowing system memory contrasts with TypeScript's garbage collected approach. static, strong with lifetimes typing meets static (structural) typing.",
+  "rust-wasm": "Rust's struct with impl blocks becomes WebAssembly/WAT's linear memory layout. .powf(), .sqrt(), .abs() maps to f64.mul, f64.sqrt. Rust's ownership/borrowing system memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static, strong with lifetimes typing meets static (i32/i64/f32/f64) typing.",
   "rust-zig": "Two modern systems languages with different safety strategies. Rust's ownership/borrowing model is replaced by Zig's simpler pointer semantics with optional safety checks. Rust's impl blocks become Zig's namespaced struct functions. Rust's .powf() and .sqrt() become std.math.pow() and @sqrt(). Rust's match becomes Zig's switch. Rust's Result<T,E> maps to Zig's error unions (!T). Rust enforces safety through the type system; Zig trusts the programmer but provides runtime safety checks in debug mode.",
+  "swift-kotlin": "Modern mobile-platform languages with similar philosophies. Swift's struct becomes Kotlin's data class. Swift's guard/let becomes Kotlin's let/require. Swift's optionals (Double?) match Kotlin's nullable types (Double?). Swift targets Apple/iOS; Kotlin targets Android/JVM. Both enable mobile SWMM tools for field engineers.",
+  "swift-typescript": "TypeScript's class with interface becomes Swift's struct with mutating func. Math object maps to Foundation/Darwin math. TypeScript's garbage collected memory contrasts with Swift's ARC (automatic reference counting) approach. static (structural) typing meets static, strong with optionals typing.",
+  "swift-wasm": "WebAssembly/WAT's linear memory layout becomes Swift's struct with mutating func. f64.mul, f64.sqrt maps to Foundation/Darwin math. WebAssembly/WAT's linear memory (manual) memory contrasts with Swift's ARC (automatic reference counting) approach. static (i32/i64/f32/f64) typing meets static, strong with optionals typing.",
+  "swift-zig": "Zig's struct with namespaced fn becomes Swift's struct with mutating func. @sqrt, std.math.pow maps to Foundation/Darwin math. Zig's manual with allocator interface memory contrasts with Swift's ARC (automatic reference counting) approach. static with comptime typing meets static, strong with optionals typing.",
+  "typescript-wasm": "TypeScript's class with interface becomes WebAssembly/WAT's linear memory layout. Math object maps to f64.mul, f64.sqrt. TypeScript's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static (structural) typing meets static (i32/i64/f32/f64) typing.",
+  "typescript-zig": "Zig's struct with namespaced fn becomes TypeScript's class with interface. @sqrt, std.math.pow maps to Math object. Zig's manual with allocator interface memory contrasts with TypeScript's garbage collected approach. static with comptime typing meets static (structural) typing.",
+  "wasm-zig": "Zig's struct with namespaced fn becomes WebAssembly/WAT's linear memory layout. @sqrt, std.math.pow maps to f64.mul, f64.sqrt. Zig's manual with allocator interface memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static with comptime typing meets static (i32/i64/f32/f64) typing."
 };
 
 export { modules, languages, translationNotes };

@@ -14,6 +14,21 @@ const keywordSets = {
   javascript: /\b(class|constructor|this|const|let|var|function|return|if|else|for|of|export|new|get|Math)\b/g,
   go: /\b(package|import|type|struct|func|return|if|for|float64|int|var|range|continue)\b/g,
   zig: /\b(const|var|fn|pub|return|if|else|for|while|struct|enum|union|switch|break|continue|defer|try|catch|error|comptime|inline|export|unreachable|undefined|null|void|bool|u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|usize|isize|anytype)\b/g,
+  cpp: /\b(class|struct|double|int|void|return|if|else|for|continue|public|private|const|auto|namespace|using|include|template|new|delete|virtual|override|static|bool|float|size_t|std|this|nullptr)\b/g,
+  csharp: /\b(class|struct|double|int|void|return|if|else|for|foreach|in|public|private|static|new|var|using|namespace|get|set|this|bool|float|string|readonly|const|override|abstract|virtual|null)\b/g,
+  matlab: /\b(function|end|return|if|else|elseif|for|while|switch|case|otherwise|classdef|properties|methods|obj|true|false)\b/g,
+  r: /\b(function|return|if|else|for|in|while|library|require|NULL|TRUE|FALSE|NA|c|list|data\.frame|numeric|integer|character|logical)\b/g,
+  delphi: /\b(program|unit|uses|type|class|record|var|const|begin|end|function|procedure|result|if|then|else|for|to|do|while|repeat|until|private|public|property|inherited|constructor|destructor|implementation|interface|array|of|integer|double|string|boolean|nil|Self)\b/gi,
+  typescript: /\b(class|constructor|this|const|let|var|function|return|if|else|for|of|export|new|get|Math|interface|type|number|string|boolean|void|readonly|private|public|static|extends|implements|enum|as|unknown|any|never)\b/g,
+  cuda: /\b(__global__|__device__|__host__|__shared__|void|int|float|double|return|if|else|for|while|threadIdx|blockIdx|blockDim|gridDim|struct|const|static|dim3|sizeof|cudaMalloc|cudaMemcpy|cudaFree|syncthreads)\b/g,
+  wasm: /\b(module|func|param|result|local|i32|i64|f32|f64|get|set|call|export|import|memory|table|global|mut|block|loop|br|br_if|return|if|then|else|end|drop|select|unreachable|nop|data|elem|type)\b/g,
+  mojo: /\b(fn|def|struct|var|let|return|if|else|for|in|while|import|from|self|Self|Int|Float64|Float32|String|Bool|True|False|None|alias|owned|borrowed|inout|raises|trait|conformance|SIMD|DType)\b/g,
+  java: /\b(class|interface|public|private|protected|static|final|void|int|double|float|boolean|long|return|if|else|for|while|new|this|extends|implements|import|package|try|catch|throw|throws|abstract|override|null|super|String)\b/g,
+  nim: /\b(proc|func|var|let|const|type|object|return|if|else|elif|for|in|while|import|export|result|float64|int|string|bool|seq|ref|ptr|nil|of|method|template|macro|discard|echo|when)\b/g,
+  ada: /\b(procedure|function|package|body|is|begin|end|return|if|then|else|elsif|for|loop|while|in|out|type|record|new|use|with|constant|access|range|Float|Integer|Boolean|String|null|not|and|or|pragma|declare|array|of|exception|raise|when|others|private|limited)\b/gi,
+  chapel: /\b(proc|var|const|ref|param|type|record|class|module|use|import|return|if|else|for|in|while|do|forall|coforall|begin|on|real|int|bool|string|domain|range|config|iter|yield|sync|atomic|serial|reduce|scan|writeln)\b/g,
+  swift: /\b(struct|class|func|var|let|return|if|else|for|in|while|import|self|Self|init|mutating|public|private|static|guard|switch|case|default|nil|true|false|Double|Int|Float|String|Bool|Array|protocol|extension|override|throws|try|catch|inout)\b/g,
+  kotlin: /\b(class|data|fun|val|var|return|if|else|for|in|while|when|import|package|this|super|object|companion|override|open|abstract|interface|private|public|internal|protected|null|true|false|Double|Int|Float|String|Boolean|Long|is|as|try|catch|throw|constructor)\b/g,
 };
 
 const commentPatterns = {
@@ -25,6 +40,21 @@ const commentPatterns = {
   javascript: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   go: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   zig: /(\/\/.*$)/gm,
+  cpp: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  csharp: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  matlab: /(%.*$|%\{[\s\S]*?%\})/gm,
+  r: /(#.*$)/gm,
+  delphi: /(\{[\s\S]*?\}|\/\/.*$|\(\*[\s\S]*?\*\))/gm,
+  typescript: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  cuda: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  wasm: /(;;.*$)/gm,
+  mojo: /(#.*$|"""[\s\S]*?"""|'''[\s\S]*?''')/gm,
+  java: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  nim: /(#.*$|#\[[\s\S]*?\]#)/gm,
+  ada: /(--.*$)/gm,
+  chapel: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  swift: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  kotlin: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
 };
 
 const stringPattern = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;
@@ -398,7 +428,7 @@ export default function SWMM5CodeViewer() {
   const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const shareText = `Compare EPA SWMM5 stormwater algorithms across 8 programming languages — C, Rust, Python, Fortran, Julia, JavaScript, Go, and Zig. The SWMM5 Rosetta Stone:`;
+  const shareText = `Compare EPA SWMM5 stormwater algorithms across 23 programming languages — from C to Rust, Python, MATLAB, CUDA, and more. The SWMM5 Rosetta Stone:`;
   const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
 
@@ -650,7 +680,7 @@ export default function SWMM5CodeViewer() {
             <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
               target="_blank" rel="noopener noreferrer"
               style={{ color: t.accent, textDecoration: "none" }}>EPA SWMM5</a>
-            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 8 modern programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
+            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 23 programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
           </p>
           <div style={{
             display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20,
@@ -679,7 +709,7 @@ export default function SWMM5CodeViewer() {
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
-            }}>8 languages</span>
+            }}>23 languages</span>
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
