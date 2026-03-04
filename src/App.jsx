@@ -1019,7 +1019,7 @@ export default function SWMM5CodeViewer() {
         <span>&bull;</span>
         <span>EPA Storm Water Management Model</span>
         <span>&bull;</span>
-        <span>{moduleKeys.length} Modules &bull; 7 Languages</span>
+        <span>{moduleKeys.length} Modules &bull; {languages.length} Languages</span>
         <span>&bull;</span>
         <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
           target="_blank" rel="noopener noreferrer"
