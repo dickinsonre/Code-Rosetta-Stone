@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { modules, languages, translationNotes } from "./modules.js";
+import AppShowcase from "./AppShowcase.jsx";
 
 // ─── Code Samples (moved to modules.js) ─────────────────────────────
 
@@ -563,6 +564,13 @@ export default function SWMM5CodeViewer() {
           <span style={{ fontSize: 15 }}>{"\uD83D\uDCA7"}</span>
           HydroCouple
         </button>
+        <button
+          className={`app-tab ${activeTab === "swmmapps" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmmapps")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDEE0\uFE0F"}</span>
+          SWMM Apps
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -638,6 +646,9 @@ export default function SWMM5CodeViewer() {
           />
         </div>
       )}
+
+      {/* SWMM Apps Tab */}
+      {activeTab === "swmmapps" && <AppShowcase theme={t} />}
 
       {/* Rosetta Stone Tab Content */}
       {activeTab === "rosetta" && <>
