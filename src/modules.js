@@ -16109,6 +16109,8102 @@ class MassBalance(
         }
     }
 }`,
+  },
+  "gwater.c — Groundwater Flow": {
+    category: "Hydrology",
+    difficulty: "advanced",
+    tags: ["groundwater", "aquifer", "water table", "percolation", "lateral flow", "subsurface", "unsaturated zone", "saturated zone"],
+    description: "Models the two-zone groundwater system beneath each subcatchment. The upper (unsaturated) zone receives infiltration from the surface and loses water through percolation to the lower (saturated) zone. The lower zone exchanges lateral flow with the drainage network based on water table elevation relative to node invert. Uses a simple mass balance with Darcy's law for lateral flow.",
+    equations: "Q_lateral = A·Ks·(H_gw - H_node)/L (lateral groundwater flow); Perc = Ks_unsat·(θ/θ_sat)^n (percolation); dH/dt = (Infil - Perc - ET - Q_lat)/(A·porosity)",
+    inputs: "Aquifer properties (Ks, porosity, field capacity), infiltration rate, node water level, subcatchment area",
+    outputs: "Groundwater lateral flow to drainage network, water table elevation, upper zone moisture",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// gwater.c — Groundwater Flow
+// EPA SWMM5 Engine — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+#include <math.h>
+
+typedef struct {
+    double ks;          // saturated hydraulic conductivity (ft/s)
+    double porosity;    // soil porosity (fraction)
+    double fieldCap;    // field capacity (fraction)
+    double percExp;     // percolation exponent
+} TAquifer;
+
+typedef struct {
+    double upperMoist;  // upper zone moisture (fraction)
+    double waterTable;  // water table elevation (ft)
+    double area;        // subcatchment area (ft²)
+    double nodeElev;    // drainage node invert elevation (ft)
+    double flowLength;  // distance to drainage node (ft)
+} TGwater;
+
+double gwater_getPercolation(TAquifer* a, TGwater* gw)
+{
+    double theta;
+
+    if (gw->upperMoist <= a->fieldCap) return 0.0;
+
+    theta = gw->upperMoist / a->porosity;
+    if (theta > 1.0) theta = 1.0;
+
+    return a->ks * pow(theta, a->percExp);
+}
+
+double gwater_getLateralFlow(TAquifer* a, TGwater* gw)
+{
+    double dh;
+
+    dh = gw->waterTable - gw->nodeElev;
+    if (gw->flowLength <= 0.0) return 0.0;
+
+    return gw->area * a->ks * dh / gw->flowLength;
+}
+
+void gwater_updateWaterTable(TAquifer* a, TGwater* gw,
+                              double infil, double et,
+                              double dt)
+{
+    double perc, qLat, dh;
+
+    perc = gwater_getPercolation(a, gw);
+    qLat = gwater_getLateralFlow(a, gw);
+
+    gw->upperMoist += (infil - perc - et) * dt
+                      / (gw->area * a->porosity);
+    if (gw->upperMoist < 0.0) gw->upperMoist = 0.0;
+    if (gw->upperMoist > a->porosity)
+        gw->upperMoist = a->porosity;
+
+    dh = (perc * gw->area - qLat) * dt
+         / (gw->area * a->porosity);
+    gw->waterTable += dh;
+}`,
+    rust: `// gwater.rs — Groundwater Flow
+// SWMM5 Engine in Rust — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+pub struct Aquifer {
+    pub ks: f64,        // saturated hydraulic conductivity (ft/s)
+    pub porosity: f64,  // soil porosity (fraction)
+    pub field_cap: f64, // field capacity (fraction)
+    pub perc_exp: f64,  // percolation exponent
+}
+
+pub struct GWater {
+    pub upper_moist: f64,  // upper zone moisture (fraction)
+    pub water_table: f64,  // water table elevation (ft)
+    pub area: f64,         // subcatchment area (ft²)
+    pub node_elev: f64,    // drainage node invert elevation (ft)
+    pub flow_length: f64,  // distance to drainage node (ft)
+}
+
+impl GWater {
+    pub fn get_percolation(&self, aq: &Aquifer) -> f64 {
+        if self.upper_moist <= aq.field_cap { return 0.0; }
+
+        let theta = (self.upper_moist / aq.porosity).min(1.0);
+        aq.ks * theta.powf(aq.perc_exp)
+    }
+
+    pub fn get_lateral_flow(&self, aq: &Aquifer) -> f64 {
+        if self.flow_length <= 0.0 { return 0.0; }
+
+        let dh = self.water_table - self.node_elev;
+        self.area * aq.ks * dh / self.flow_length
+    }
+
+    pub fn update_water_table(&mut self, aq: &Aquifer,
+                               infil: f64, et: f64,
+                               dt: f64) {
+        let perc = self.get_percolation(aq);
+        let q_lat = self.get_lateral_flow(aq);
+
+        self.upper_moist += (infil - perc - et) * dt
+                            / (self.area * aq.porosity);
+        self.upper_moist = self.upper_moist
+                               .clamp(0.0, aq.porosity);
+
+        let dh = (perc * self.area - q_lat) * dt
+                 / (self.area * aq.porosity);
+        self.water_table += dh;
+    }
+}`,
+    python: `# gwater.py — Groundwater Flow
+# SWMM5 Engine in Python — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+from dataclasses import dataclass
+
+@dataclass
+class Aquifer:
+    ks: float        # saturated hydraulic conductivity (ft/s)
+    porosity: float  # soil porosity (fraction)
+    field_cap: float # field capacity (fraction)
+    perc_exp: float  # percolation exponent
+
+@dataclass
+class GWater:
+    upper_moist: float  # upper zone moisture (fraction)
+    water_table: float  # water table elevation (ft)
+    area: float         # subcatchment area (ft²)
+    node_elev: float    # drainage node invert elevation (ft)
+    flow_length: float  # distance to drainage node (ft)
+
+    def get_percolation(self, aq: Aquifer) -> float:
+        if self.upper_moist <= aq.field_cap:
+            return 0.0
+        theta = min(self.upper_moist / aq.porosity, 1.0)
+        return aq.ks * theta ** aq.perc_exp
+
+    def get_lateral_flow(self, aq: Aquifer) -> float:
+        if self.flow_length <= 0.0:
+            return 0.0
+        dh = self.water_table - self.node_elev
+        return self.area * aq.ks * dh / self.flow_length
+
+    def update_water_table(self, aq: Aquifer,
+                           infil: float, et: float,
+                           dt: float) -> None:
+        perc = self.get_percolation(aq)
+        q_lat = self.get_lateral_flow(aq)
+
+        self.upper_moist += ((infil - perc - et) * dt
+                             / (self.area * aq.porosity))
+        self.upper_moist = max(0.0,
+                           min(self.upper_moist, aq.porosity))
+
+        dh = ((perc * self.area - q_lat) * dt
+              / (self.area * aq.porosity))
+        self.water_table += dh`,
+    fortran: `! gwater.f90 — Groundwater Flow
+! SWMM5 Engine in Fortran — Two-Zone Groundwater Model
+! Models unsaturated/saturated zones beneath each
+! subcatchment with Darcy lateral flow to drainage network
+
+module gwater_module
+    implicit none
+
+    type :: Aquifer
+        real(8) :: ks        ! saturated hydraulic conductivity
+        real(8) :: porosity  ! soil porosity (fraction)
+        real(8) :: field_cap ! field capacity (fraction)
+        real(8) :: perc_exp  ! percolation exponent
+    end type Aquifer
+
+    type :: GWater
+        real(8) :: upper_moist  ! upper zone moisture
+        real(8) :: water_table  ! water table elevation (ft)
+        real(8) :: area         ! subcatchment area (ft²)
+        real(8) :: node_elev    ! drainage node invert (ft)
+        real(8) :: flow_length  ! distance to node (ft)
+    end type GWater
+
+contains
+
+    function get_percolation(aq, gw) result(perc)
+        type(Aquifer), intent(in) :: aq
+        type(GWater), intent(in) :: gw
+        real(8) :: perc, theta
+
+        if (gw%upper_moist <= aq%field_cap) then
+            perc = 0.0d0
+            return
+        end if
+
+        theta = gw%upper_moist / aq%porosity
+        if (theta > 1.0d0) theta = 1.0d0
+        perc = aq%ks * theta**aq%perc_exp
+    end function get_percolation
+
+    function get_lateral_flow(aq, gw) result(q_lat)
+        type(Aquifer), intent(in) :: aq
+        type(GWater), intent(in) :: gw
+        real(8) :: q_lat, dh
+
+        if (gw%flow_length <= 0.0d0) then
+            q_lat = 0.0d0
+            return
+        end if
+
+        dh = gw%water_table - gw%node_elev
+        q_lat = gw%area * aq%ks * dh / gw%flow_length
+    end function get_lateral_flow
+
+    subroutine update_water_table(aq, gw, infil, et, dt)
+        type(Aquifer), intent(in) :: aq
+        type(GWater), intent(inout) :: gw
+        real(8), intent(in) :: infil, et, dt
+        real(8) :: perc, q_lat, dh
+
+        perc = get_percolation(aq, gw)
+        q_lat = get_lateral_flow(aq, gw)
+
+        gw%upper_moist = gw%upper_moist &
+            + (infil - perc - et) * dt &
+            / (gw%area * aq%porosity)
+        if (gw%upper_moist < 0.0d0) gw%upper_moist = 0.0d0
+        if (gw%upper_moist > aq%porosity) &
+            gw%upper_moist = aq%porosity
+
+        dh = (perc * gw%area - q_lat) * dt &
+             / (gw%area * aq%porosity)
+        gw%water_table = gw%water_table + dh
+    end subroutine update_water_table
+
+end module gwater_module`,
+    julia: `# gwater.jl — Groundwater Flow
+# SWMM5 Engine in Julia — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+struct Aquifer
+    ks::Float64        # saturated hydraulic conductivity
+    porosity::Float64  # soil porosity (fraction)
+    field_cap::Float64 # field capacity (fraction)
+    perc_exp::Float64  # percolation exponent
+end
+
+mutable struct GWater
+    upper_moist::Float64  # upper zone moisture
+    water_table::Float64  # water table elevation (ft)
+    area::Float64         # subcatchment area (ft²)
+    node_elev::Float64    # drainage node invert (ft)
+    flow_length::Float64  # distance to node (ft)
+end
+
+function get_percolation(aq::Aquifer, gw::GWater)::Float64
+    gw.upper_moist ≤ aq.field_cap && return 0.0
+    theta = min(gw.upper_moist / aq.porosity, 1.0)
+    return aq.ks * theta^aq.perc_exp
+end
+
+function get_lateral_flow(aq::Aquifer, gw::GWater)::Float64
+    gw.flow_length ≤ 0.0 && return 0.0
+    dh = gw.water_table - gw.node_elev
+    return gw.area * aq.ks * dh / gw.flow_length
+end
+
+function update_water_table!(aq::Aquifer, gw::GWater,
+                              infil::Float64, et::Float64,
+                              dt::Float64)
+    perc = get_percolation(aq, gw)
+    q_lat = get_lateral_flow(aq, gw)
+
+    gw.upper_moist += (infil - perc - et) * dt /
+                      (gw.area * aq.porosity)
+    gw.upper_moist = clamp(gw.upper_moist, 0.0, aq.porosity)
+
+    dh = (perc * gw.area - q_lat) * dt /
+         (gw.area * aq.porosity)
+    gw.water_table += dh
+end`,
+    javascript: `// gwater.js — Groundwater Flow
+// SWMM5 Engine in JavaScript — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+class Aquifer {
+    constructor(ks, porosity, fieldCap, percExp) {
+        this.ks = ks;
+        this.porosity = porosity;
+        this.fieldCap = fieldCap;
+        this.percExp = percExp;
+    }
+}
+
+class GWater {
+    constructor(upperMoist, waterTable, area,
+                nodeElev, flowLength) {
+        this.upperMoist = upperMoist;
+        this.waterTable = waterTable;
+        this.area = area;
+        this.nodeElev = nodeElev;
+        this.flowLength = flowLength;
+    }
+
+    getPercolation(aq) {
+        if (this.upperMoist <= aq.fieldCap) return 0.0;
+        const theta = Math.min(
+            this.upperMoist / aq.porosity, 1.0);
+        return aq.ks * Math.pow(theta, aq.percExp);
+    }
+
+    getLateralFlow(aq) {
+        if (this.flowLength <= 0.0) return 0.0;
+        const dh = this.waterTable - this.nodeElev;
+        return this.area * aq.ks * dh / this.flowLength;
+    }
+
+    updateWaterTable(aq, infil, et, dt) {
+        const perc = this.getPercolation(aq);
+        const qLat = this.getLateralFlow(aq);
+
+        this.upperMoist += (infil - perc - et) * dt
+                           / (this.area * aq.porosity);
+        this.upperMoist = Math.max(0.0,
+            Math.min(this.upperMoist, aq.porosity));
+
+        const dh = (perc * this.area - qLat) * dt
+                   / (this.area * aq.porosity);
+        this.waterTable += dh;
+    }
+}
+
+export { Aquifer, GWater };`,
+    go: `// gwater.go — Groundwater Flow
+// SWMM5 Engine in Go — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+package swmm
+
+import "math"
+
+type Aquifer struct {
+    Ks       float64 // saturated hydraulic conductivity
+    Porosity float64 // soil porosity (fraction)
+    FieldCap float64 // field capacity (fraction)
+    PercExp  float64 // percolation exponent
+}
+
+type GWater struct {
+    UpperMoist float64 // upper zone moisture
+    WaterTable float64 // water table elevation (ft)
+    Area       float64 // subcatchment area (ft²)
+    NodeElev   float64 // drainage node invert (ft)
+    FlowLength float64 // distance to node (ft)
+}
+
+func (gw *GWater) GetPercolation(aq *Aquifer) float64 {
+    if gw.UpperMoist <= aq.FieldCap {
+        return 0.0
+    }
+    theta := gw.UpperMoist / aq.Porosity
+    if theta > 1.0 {
+        theta = 1.0
+    }
+    return aq.Ks * math.Pow(theta, aq.PercExp)
+}
+
+func (gw *GWater) GetLateralFlow(aq *Aquifer) float64 {
+    if gw.FlowLength <= 0.0 {
+        return 0.0
+    }
+    dh := gw.WaterTable - gw.NodeElev
+    return gw.Area * aq.Ks * dh / gw.FlowLength
+}
+
+func (gw *GWater) UpdateWaterTable(aq *Aquifer,
+    infil, et, dt float64) {
+
+    perc := gw.GetPercolation(aq)
+    qLat := gw.GetLateralFlow(aq)
+
+    gw.UpperMoist += (infil - perc - et) * dt /
+        (gw.Area * aq.Porosity)
+    if gw.UpperMoist < 0.0 {
+        gw.UpperMoist = 0.0
+    } else if gw.UpperMoist > aq.Porosity {
+        gw.UpperMoist = aq.Porosity
+    }
+
+    dh := (perc*gw.Area - qLat) * dt /
+        (gw.Area * aq.Porosity)
+    gw.WaterTable += dh
+}`,
+    zig: `// gwater.zig — Groundwater Flow
+// SWMM5 Engine in Zig — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+const std = @import("std");
+const math = std.math;
+
+const Aquifer = struct {
+    ks: f64,        // saturated hydraulic conductivity
+    porosity: f64,  // soil porosity (fraction)
+    field_cap: f64, // field capacity (fraction)
+    perc_exp: f64,  // percolation exponent
+};
+
+const GWater = struct {
+    upper_moist: f64,  // upper zone moisture
+    water_table: f64,  // water table elevation (ft)
+    area: f64,         // subcatchment area (ft²)
+    node_elev: f64,    // drainage node invert (ft)
+    flow_length: f64,  // distance to node (ft)
+
+    pub fn getPercolation(self: *const GWater,
+                          aq: *const Aquifer) f64 {
+        if (self.upper_moist <= aq.field_cap) return 0.0;
+        const theta = @min(
+            self.upper_moist / aq.porosity, 1.0);
+        return aq.ks * math.pow(f64, theta, aq.perc_exp);
+    }
+
+    pub fn getLateralFlow(self: *const GWater,
+                          aq: *const Aquifer) f64 {
+        if (self.flow_length <= 0.0) return 0.0;
+        const dh = self.water_table - self.node_elev;
+        return self.area * aq.ks * dh / self.flow_length;
+    }
+
+    pub fn updateWaterTable(self: *GWater,
+                            aq: *const Aquifer,
+                            infil: f64, et: f64,
+                            dt: f64) void {
+        const perc = self.getPercolation(aq);
+        const q_lat = self.getLateralFlow(aq);
+
+        self.upper_moist += (infil - perc - et) * dt /
+            (self.area * aq.porosity);
+        self.upper_moist = math.clamp(
+            self.upper_moist, 0.0, aq.porosity);
+
+        const dh = (perc * self.area - q_lat) * dt /
+            (self.area * aq.porosity);
+        self.water_table += dh;
+    }
+};`,
+    cpp: `// gwater.cpp — Groundwater Flow
+// SWMM5 Engine in C++ — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+struct Aquifer {
+    double ks;        // saturated hydraulic conductivity
+    double porosity;  // soil porosity (fraction)
+    double fieldCap;  // field capacity (fraction)
+    double percExp;   // percolation exponent
+};
+
+struct GWater {
+    double upperMoist;  // upper zone moisture
+    double waterTable;  // water table elevation (ft)
+    double area;        // subcatchment area (ft²)
+    double nodeElev;    // drainage node invert (ft)
+    double flowLength;  // distance to node (ft)
+
+    double getPercolation(const Aquifer& aq) const {
+        if (upperMoist <= aq.fieldCap) return 0.0;
+        double theta = std::min(
+            upperMoist / aq.porosity, 1.0);
+        return aq.ks * std::pow(theta, aq.percExp);
+    }
+
+    double getLateralFlow(const Aquifer& aq) const {
+        if (flowLength <= 0.0) return 0.0;
+        double dh = waterTable - nodeElev;
+        return area * aq.ks * dh / flowLength;
+    }
+
+    void updateWaterTable(const Aquifer& aq,
+                          double infil, double et,
+                          double dt) {
+        double perc = getPercolation(aq);
+        double qLat = getLateralFlow(aq);
+
+        upperMoist += (infil - perc - et) * dt
+                      / (area * aq.porosity);
+        upperMoist = std::clamp(upperMoist,
+                                0.0, aq.porosity);
+
+        double dh = (perc * area - qLat) * dt
+                    / (area * aq.porosity);
+        waterTable += dh;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// GWater.cs — Groundwater Flow
+// SWMM5 Engine in C# — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+using System;
+
+namespace Swmm
+{
+    public class Aquifer
+    {
+        public double Ks { get; set; }
+        public double Porosity { get; set; }
+        public double FieldCap { get; set; }
+        public double PercExp { get; set; }
+
+        public Aquifer(double ks, double porosity,
+                       double fieldCap, double percExp)
+        {
+            Ks = ks;
+            Porosity = porosity;
+            FieldCap = fieldCap;
+            PercExp = percExp;
+        }
+    }
+
+    public class GWater
+    {
+        public double UpperMoist { get; set; }
+        public double WaterTable { get; set; }
+        public double Area { get; set; }
+        public double NodeElev { get; set; }
+        public double FlowLength { get; set; }
+
+        public GWater(double upperMoist, double waterTable,
+                      double area, double nodeElev,
+                      double flowLength)
+        {
+            UpperMoist = upperMoist;
+            WaterTable = waterTable;
+            Area = area;
+            NodeElev = nodeElev;
+            FlowLength = flowLength;
+        }
+
+        public double GetPercolation(Aquifer aq)
+        {
+            if (UpperMoist <= aq.FieldCap) return 0.0;
+            double theta = Math.Min(
+                UpperMoist / aq.Porosity, 1.0);
+            return aq.Ks * Math.Pow(theta, aq.PercExp);
+        }
+
+        public double GetLateralFlow(Aquifer aq)
+        {
+            if (FlowLength <= 0.0) return 0.0;
+            double dh = WaterTable - NodeElev;
+            return Area * aq.Ks * dh / FlowLength;
+        }
+
+        public void UpdateWaterTable(Aquifer aq,
+            double infil, double et, double dt)
+        {
+            double perc = GetPercolation(aq);
+            double qLat = GetLateralFlow(aq);
+
+            UpperMoist += (infil - perc - et) * dt
+                          / (Area * aq.Porosity);
+            UpperMoist = Math.Clamp(UpperMoist,
+                                    0.0, aq.Porosity);
+
+            double dh = (perc * Area - qLat) * dt
+                        / (Area * aq.Porosity);
+            WaterTable += dh;
+        }
+    }
+}`,
+    matlab: `% gwater.m — Groundwater Flow
+% SWMM5 Engine in MATLAB — Two-Zone Groundwater Model
+% Models unsaturated/saturated zones beneath each
+% subcatchment with Darcy lateral flow to drainage network
+
+function aq = create_aquifer(ks, porosity, ...
+                              field_cap, perc_exp)
+    aq.ks        = ks;
+    aq.porosity  = porosity;
+    aq.field_cap = field_cap;
+    aq.perc_exp  = perc_exp;
+end
+
+function gw = create_gwater(upper_moist, water_table, ...
+                              area, node_elev, flow_length)
+    gw.upper_moist = upper_moist;
+    gw.water_table = water_table;
+    gw.area        = area;
+    gw.node_elev   = node_elev;
+    gw.flow_length = flow_length;
+end
+
+function perc = get_percolation(aq, gw)
+    if gw.upper_moist <= aq.field_cap
+        perc = 0.0;
+        return;
+    end
+    theta = min(gw.upper_moist / aq.porosity, 1.0);
+    perc = aq.ks * theta^aq.perc_exp;
+end
+
+function q_lat = get_lateral_flow(aq, gw)
+    if gw.flow_length <= 0.0
+        q_lat = 0.0;
+        return;
+    end
+    dh = gw.water_table - gw.node_elev;
+    q_lat = gw.area * aq.ks * dh / gw.flow_length;
+end
+
+function gw = update_water_table(aq, gw, infil, et, dt)
+    perc  = get_percolation(aq, gw);
+    q_lat = get_lateral_flow(aq, gw);
+
+    gw.upper_moist = gw.upper_moist ...
+        + (infil - perc - et) * dt ...
+        / (gw.area * aq.porosity);
+    gw.upper_moist = max(0.0, ...
+        min(gw.upper_moist, aq.porosity));
+
+    dh = (perc * gw.area - q_lat) * dt ...
+         / (gw.area * aq.porosity);
+    gw.water_table = gw.water_table + dh;
+end`,
+    r: `# gwater.R — Groundwater Flow
+# SWMM5 Engine in R — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+create_aquifer <- function(ks, porosity,
+                            field_cap, perc_exp) {
+    list(
+        ks        = ks,
+        porosity  = porosity,
+        field_cap = field_cap,
+        perc_exp  = perc_exp
+    )
+}
+
+create_gwater <- function(upper_moist, water_table,
+                           area, node_elev, flow_length) {
+    list(
+        upper_moist = upper_moist,
+        water_table = water_table,
+        area        = area,
+        node_elev   = node_elev,
+        flow_length = flow_length
+    )
+}
+
+get_percolation <- function(aq, gw) {
+    if (gw$upper_moist <= aq$field_cap) return(0.0)
+    theta <- min(gw$upper_moist / aq$porosity, 1.0)
+    aq$ks * theta^aq$perc_exp
+}
+
+get_lateral_flow <- function(aq, gw) {
+    if (gw$flow_length <= 0.0) return(0.0)
+    dh <- gw$water_table - gw$node_elev
+    gw$area * aq$ks * dh / gw$flow_length
+}
+
+update_water_table <- function(aq, gw, infil, et, dt) {
+    perc  <- get_percolation(aq, gw)
+    q_lat <- get_lateral_flow(aq, gw)
+
+    gw$upper_moist <- gw$upper_moist +
+        (infil - perc - et) * dt /
+        (gw$area * aq$porosity)
+    gw$upper_moist <- max(0.0,
+        min(gw$upper_moist, aq$porosity))
+
+    dh <- (perc * gw$area - q_lat) * dt /
+          (gw$area * aq$porosity)
+    gw$water_table <- gw$water_table + dh
+    gw
+}`,
+    delphi: `{ gwater.pas — Groundwater Flow }
+{ SWMM5 Engine in Delphi — Two-Zone Groundwater Model }
+{ Models unsaturated/saturated zones beneath each }
+{ subcatchment with Darcy lateral flow to drainage network }
+
+unit GWater;
+
+interface
+
+uses Math;
+
+type
+  TAquifer = class
+  public
+    Ks: Double;
+    Porosity: Double;
+    FieldCap: Double;
+    PercExp: Double;
+    constructor Create(AKs, APorosity,
+                       AFieldCap, APercExp: Double);
+  end;
+
+  TGWater = class
+  public
+    UpperMoist: Double;
+    WaterTable: Double;
+    Area: Double;
+    NodeElev: Double;
+    FlowLength: Double;
+    constructor Create(AUpperMoist, AWaterTable,
+                       AArea, ANodeElev,
+                       AFlowLength: Double);
+    function GetPercolation(Aq: TAquifer): Double;
+    function GetLateralFlow(Aq: TAquifer): Double;
+    procedure UpdateWaterTable(Aq: TAquifer;
+        Infil, ET, Dt: Double);
+  end;
+
+implementation
+
+constructor TAquifer.Create(AKs, APorosity,
+                             AFieldCap, APercExp: Double);
+begin
+  Ks       := AKs;
+  Porosity := APorosity;
+  FieldCap := AFieldCap;
+  PercExp  := APercExp;
+end;
+
+constructor TGWater.Create(AUpperMoist, AWaterTable,
+                            AArea, ANodeElev,
+                            AFlowLength: Double);
+begin
+  UpperMoist := AUpperMoist;
+  WaterTable := AWaterTable;
+  Area       := AArea;
+  NodeElev   := ANodeElev;
+  FlowLength := AFlowLength;
+end;
+
+function TGWater.GetPercolation(Aq: TAquifer): Double;
+var
+  Theta: Double;
+begin
+  if UpperMoist <= Aq.FieldCap then
+    Exit(0.0);
+  Theta := Min(UpperMoist / Aq.Porosity, 1.0);
+  Result := Aq.Ks * Power(Theta, Aq.PercExp);
+end;
+
+function TGWater.GetLateralFlow(Aq: TAquifer): Double;
+var
+  Dh: Double;
+begin
+  if FlowLength <= 0.0 then
+    Exit(0.0);
+  Dh := WaterTable - NodeElev;
+  Result := Area * Aq.Ks * Dh / FlowLength;
+end;
+
+procedure TGWater.UpdateWaterTable(Aq: TAquifer;
+    Infil, ET, Dt: Double);
+var
+  Perc, QLat, Dh: Double;
+begin
+  Perc := GetPercolation(Aq);
+  QLat := GetLateralFlow(Aq);
+
+  UpperMoist := UpperMoist
+      + (Infil - Perc - ET) * Dt
+      / (Area * Aq.Porosity);
+  UpperMoist := Max(0.0, Min(UpperMoist, Aq.Porosity));
+
+  Dh := (Perc * Area - QLat) * Dt
+        / (Area * Aq.Porosity);
+  WaterTable := WaterTable + Dh;
+end;
+
+end.`,
+    typescript: `// gwater.ts — Groundwater Flow
+// SWMM5 Engine in TypeScript — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+interface AquiferParams {
+    ks: number;
+    porosity: number;
+    fieldCap: number;
+    percExp: number;
+}
+
+interface GWaterParams {
+    upperMoist: number;
+    waterTable: number;
+    area: number;
+    nodeElev: number;
+    flowLength: number;
+}
+
+class Aquifer {
+    readonly ks: number;
+    readonly porosity: number;
+    readonly fieldCap: number;
+    readonly percExp: number;
+
+    constructor(p: AquiferParams) {
+        this.ks = p.ks;
+        this.porosity = p.porosity;
+        this.fieldCap = p.fieldCap;
+        this.percExp = p.percExp;
+    }
+}
+
+class GWater {
+    upperMoist: number;
+    waterTable: number;
+    area: number;
+    nodeElev: number;
+    flowLength: number;
+
+    constructor(p: GWaterParams) {
+        this.upperMoist = p.upperMoist;
+        this.waterTable = p.waterTable;
+        this.area = p.area;
+        this.nodeElev = p.nodeElev;
+        this.flowLength = p.flowLength;
+    }
+
+    getPercolation(aq: Aquifer): number {
+        if (this.upperMoist <= aq.fieldCap) return 0.0;
+        const theta: number = Math.min(
+            this.upperMoist / aq.porosity, 1.0);
+        return aq.ks * Math.pow(theta, aq.percExp);
+    }
+
+    getLateralFlow(aq: Aquifer): number {
+        if (this.flowLength <= 0.0) return 0.0;
+        const dh: number = this.waterTable - this.nodeElev;
+        return this.area * aq.ks * dh / this.flowLength;
+    }
+
+    updateWaterTable(aq: Aquifer, infil: number,
+                     et: number, dt: number): void {
+        const perc: number = this.getPercolation(aq);
+        const qLat: number = this.getLateralFlow(aq);
+
+        this.upperMoist += (infil - perc - et) * dt
+                           / (this.area * aq.porosity);
+        this.upperMoist = Math.max(0.0,
+            Math.min(this.upperMoist, aq.porosity));
+
+        const dh: number = (perc * this.area - qLat) * dt
+                           / (this.area * aq.porosity);
+        this.waterTable += dh;
+    }
+}
+
+export { Aquifer, GWater };`,
+    cuda: `// gwater.cu — Groundwater Flow
+// SWMM5 Engine in CUDA — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+#include <math.h>
+
+struct Aquifer {
+    float ks;
+    float porosity;
+    float fieldCap;
+    float percExp;
+};
+
+struct GWaterData {
+    float upperMoist;
+    float waterTable;
+    float area;
+    float nodeElev;
+    float flowLength;
+};
+
+__device__ float getPercolation(const Aquifer* aq,
+                                 const GWaterData* gw)
+{
+    if (gw->upperMoist <= aq->fieldCap) return 0.0f;
+    float theta = gw->upperMoist / aq->porosity;
+    if (theta > 1.0f) theta = 1.0f;
+    return aq->ks * powf(theta, aq->percExp);
+}
+
+__device__ float getLateralFlow(const Aquifer* aq,
+                                 const GWaterData* gw)
+{
+    if (gw->flowLength <= 0.0f) return 0.0f;
+    float dh = gw->waterTable - gw->nodeElev;
+    return gw->area * aq->ks * dh / gw->flowLength;
+}
+
+__global__ void updateWaterTableKernel(
+    Aquifer* aquifers, GWaterData* gwData,
+    float* infil, float* et, float dt, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    Aquifer aq = aquifers[idx];
+    GWaterData gw = gwData[idx];
+
+    float perc = getPercolation(&aq, &gw);
+    float qLat = getLateralFlow(&aq, &gw);
+
+    gw.upperMoist += (infil[idx] - perc - et[idx]) * dt
+                     / (gw.area * aq.porosity);
+    gw.upperMoist = fmaxf(0.0f,
+        fminf(gw.upperMoist, aq.porosity));
+
+    float dh = (perc * gw.area - qLat) * dt
+               / (gw.area * aq.porosity);
+    gw.waterTable += dh;
+
+    gwData[idx] = gw;
+}`,
+    wasm: `;; gwater.wat — Groundwater Flow
+;; SWMM5 Engine in WebAssembly — Two-Zone Groundwater Model
+;; Models unsaturated/saturated zones beneath each
+;; subcatchment with Darcy lateral flow to drainage network
+
+(module
+  (func $getPercolation
+    (param $upper_moist f64) (param $porosity f64)
+    (param $field_cap f64) (param $ks f64)
+    (param $perc_exp f64)
+    (result f64)
+    (local $theta f64)
+    (if (result f64) (f64.le (local.get $upper_moist)
+                              (local.get $field_cap))
+      (then (f64.const 0.0))
+      (else
+        (local.set $theta
+          (f64.div (local.get $upper_moist)
+                   (local.get $porosity)))
+        (if (f64.gt (local.get $theta) (f64.const 1.0))
+          (then (local.set $theta (f64.const 1.0))))
+        (f64.mul (local.get $ks)
+          (call $pow (local.get $theta)
+                     (local.get $perc_exp))))))
+
+  (func $getLateralFlow
+    (param $water_table f64) (param $node_elev f64)
+    (param $area f64) (param $ks f64)
+    (param $flow_length f64)
+    (result f64)
+    (if (result f64) (f64.le (local.get $flow_length)
+                              (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (f64.div
+          (f64.mul
+            (f64.mul (local.get $area) (local.get $ks))
+            (f64.sub (local.get $water_table)
+                     (local.get $node_elev)))
+          (local.get $flow_length)))))
+
+  (func $pow (param f64) (param f64) (result f64)
+    f64.const 1.0)
+)`,
+    mojo: `# gwater.mojo — Groundwater Flow
+# SWMM5 Engine in Mojo — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+from math import pow, min, max
+
+struct Aquifer:
+    var ks: Float64
+    var porosity: Float64
+    var field_cap: Float64
+    var perc_exp: Float64
+
+    fn __init__(inout self, ks: Float64, porosity: Float64,
+                field_cap: Float64, perc_exp: Float64):
+        self.ks = ks
+        self.porosity = porosity
+        self.field_cap = field_cap
+        self.perc_exp = perc_exp
+
+struct GWater:
+    var upper_moist: Float64
+    var water_table: Float64
+    var area: Float64
+    var node_elev: Float64
+    var flow_length: Float64
+
+    fn __init__(inout self, upper_moist: Float64,
+                water_table: Float64, area: Float64,
+                node_elev: Float64,
+                flow_length: Float64):
+        self.upper_moist = upper_moist
+        self.water_table = water_table
+        self.area = area
+        self.node_elev = node_elev
+        self.flow_length = flow_length
+
+    fn get_percolation(self, aq: Aquifer) -> Float64:
+        if self.upper_moist <= aq.field_cap:
+            return 0.0
+        var theta = self.upper_moist / aq.porosity
+        if theta > 1.0:
+            theta = 1.0
+        return aq.ks * pow(theta, aq.perc_exp)
+
+    fn get_lateral_flow(self, aq: Aquifer) -> Float64:
+        if self.flow_length <= 0.0:
+            return 0.0
+        let dh = self.water_table - self.node_elev
+        return self.area * aq.ks * dh / self.flow_length
+
+    fn update_water_table(inout self, aq: Aquifer,
+                          infil: Float64, et: Float64,
+                          dt: Float64):
+        let perc = self.get_percolation(aq)
+        let q_lat = self.get_lateral_flow(aq)
+
+        self.upper_moist += (infil - perc - et) * dt / (
+            self.area * aq.porosity)
+        self.upper_moist = max(
+            0.0, min(self.upper_moist, aq.porosity))
+
+        let dh = (perc * self.area - q_lat) * dt / (
+            self.area * aq.porosity)
+        self.water_table += dh`,
+    java: `// GWater.java — Groundwater Flow
+// SWMM5 Engine in Java — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+package swmm;
+
+public class GWater {
+
+    public static class Aquifer {
+        public final double ks;
+        public final double porosity;
+        public final double fieldCap;
+        public final double percExp;
+
+        public Aquifer(double ks, double porosity,
+                       double fieldCap, double percExp) {
+            this.ks = ks;
+            this.porosity = porosity;
+            this.fieldCap = fieldCap;
+            this.percExp = percExp;
+        }
+    }
+
+    private double upperMoist;
+    private double waterTable;
+    private final double area;
+    private final double nodeElev;
+    private final double flowLength;
+
+    public GWater(double upperMoist, double waterTable,
+                  double area, double nodeElev,
+                  double flowLength) {
+        this.upperMoist = upperMoist;
+        this.waterTable = waterTable;
+        this.area = area;
+        this.nodeElev = nodeElev;
+        this.flowLength = flowLength;
+    }
+
+    public double getPercolation(Aquifer aq) {
+        if (upperMoist <= aq.fieldCap) return 0.0;
+        double theta = Math.min(
+            upperMoist / aq.porosity, 1.0);
+        return aq.ks * Math.pow(theta, aq.percExp);
+    }
+
+    public double getLateralFlow(Aquifer aq) {
+        if (flowLength <= 0.0) return 0.0;
+        double dh = waterTable - nodeElev;
+        return area * aq.ks * dh / flowLength;
+    }
+
+    public void updateWaterTable(Aquifer aq,
+        double infil, double et, double dt) {
+        double perc = getPercolation(aq);
+        double qLat = getLateralFlow(aq);
+
+        upperMoist += (infil - perc - et) * dt
+                      / (area * aq.porosity);
+        upperMoist = Math.max(0.0,
+            Math.min(upperMoist, aq.porosity));
+
+        double dh = (perc * area - qLat) * dt
+                    / (area * aq.porosity);
+        waterTable += dh;
+    }
+
+    public double getUpperMoist() { return upperMoist; }
+    public double getWaterTable() { return waterTable; }
+}`,
+    nim: `# gwater.nim — Groundwater Flow
+# SWMM5 Engine in Nim — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+import math
+
+type
+  Aquifer = object
+    ks: float64
+    porosity: float64
+    fieldCap: float64
+    percExp: float64
+
+  GWater = object
+    upperMoist: float64
+    waterTable: float64
+    area: float64
+    nodeElev: float64
+    flowLength: float64
+
+proc getPercolation(gw: GWater, aq: Aquifer): float64 =
+  if gw.upperMoist <= aq.fieldCap:
+    return 0.0
+  var theta = gw.upperMoist / aq.porosity
+  if theta > 1.0: theta = 1.0
+  result = aq.ks * pow(theta, aq.percExp)
+
+proc getLateralFlow(gw: GWater, aq: Aquifer): float64 =
+  if gw.flowLength <= 0.0:
+    return 0.0
+  let dh = gw.waterTable - gw.nodeElev
+  result = gw.area * aq.ks * dh / gw.flowLength
+
+proc updateWaterTable(gw: var GWater, aq: Aquifer,
+                       infil, et, dt: float64) =
+  let perc = gw.getPercolation(aq)
+  let qLat = gw.getLateralFlow(aq)
+
+  gw.upperMoist += (infil - perc - et) * dt /
+                   (gw.area * aq.porosity)
+  gw.upperMoist = max(0.0, min(gw.upperMoist, aq.porosity))
+
+  let dh = (perc * gw.area - qLat) * dt /
+           (gw.area * aq.porosity)
+  gw.waterTable += dh`,
+    ada: `-- gwater.adb — Groundwater Flow
+-- SWMM5 Engine in Ada — Two-Zone Groundwater Model
+-- Models unsaturated/saturated zones beneath each
+-- subcatchment with Darcy lateral flow to drainage network
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body GWater_Pkg is
+
+   type Aquifer is record
+      Ks        : Long_Float;
+      Porosity  : Long_Float;
+      Field_Cap : Long_Float;
+      Perc_Exp  : Long_Float;
+   end record;
+
+   type GWater is record
+      Upper_Moist : Long_Float;
+      Water_Table : Long_Float;
+      Area        : Long_Float;
+      Node_Elev   : Long_Float;
+      Flow_Length  : Long_Float;
+   end record;
+
+   function Get_Percolation
+     (Aq : Aquifer; GW : GWater) return Long_Float
+   is
+      Theta : Long_Float;
+   begin
+      if GW.Upper_Moist <= Aq.Field_Cap then
+         return 0.0;
+      end if;
+      Theta := GW.Upper_Moist / Aq.Porosity;
+      if Theta > 1.0 then
+         Theta := 1.0;
+      end if;
+      return Aq.Ks * (Theta ** Aq.Perc_Exp);
+   end Get_Percolation;
+
+   function Get_Lateral_Flow
+     (Aq : Aquifer; GW : GWater) return Long_Float
+   is
+      Dh : Long_Float;
+   begin
+      if GW.Flow_Length <= 0.0 then
+         return 0.0;
+      end if;
+      Dh := GW.Water_Table - GW.Node_Elev;
+      return GW.Area * Aq.Ks * Dh / GW.Flow_Length;
+   end Get_Lateral_Flow;
+
+   procedure Update_Water_Table
+     (Aq    : Aquifer;
+      GW    : in out GWater;
+      Infil : Long_Float;
+      ET    : Long_Float;
+      Dt    : Long_Float)
+   is
+      Perc, Q_Lat, Dh : Long_Float;
+   begin
+      Perc  := Get_Percolation(Aq, GW);
+      Q_Lat := Get_Lateral_Flow(Aq, GW);
+
+      GW.Upper_Moist := GW.Upper_Moist
+         + (Infil - Perc - ET) * Dt
+         / (GW.Area * Aq.Porosity);
+      if GW.Upper_Moist < 0.0 then
+         GW.Upper_Moist := 0.0;
+      elsif GW.Upper_Moist > Aq.Porosity then
+         GW.Upper_Moist := Aq.Porosity;
+      end if;
+
+      Dh := (Perc * GW.Area - Q_Lat) * Dt
+            / (GW.Area * Aq.Porosity);
+      GW.Water_Table := GW.Water_Table + Dh;
+   end Update_Water_Table;
+
+end GWater_Pkg;`,
+    chapel: `// gwater.chpl — Groundwater Flow
+// SWMM5 Engine in Chapel — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+record Aquifer {
+    var ks: real;
+    var porosity: real;
+    var fieldCap: real;
+    var percExp: real;
+}
+
+record GWater {
+    var upperMoist: real;
+    var waterTable: real;
+    var area: real;
+    var nodeElev: real;
+    var flowLength: real;
+}
+
+proc getPercolation(const ref aq: Aquifer,
+                    const ref gw: GWater): real {
+    if gw.upperMoist <= aq.fieldCap then return 0.0;
+    var theta = min(gw.upperMoist / aq.porosity, 1.0);
+    return aq.ks * theta**aq.percExp;
+}
+
+proc getLateralFlow(const ref aq: Aquifer,
+                    const ref gw: GWater): real {
+    if gw.flowLength <= 0.0 then return 0.0;
+    var dh = gw.waterTable - gw.nodeElev;
+    return gw.area * aq.ks * dh / gw.flowLength;
+}
+
+proc updateWaterTable(const ref aq: Aquifer,
+                      ref gw: GWater,
+                      infil: real, et: real,
+                      dt: real) {
+    var perc = getPercolation(aq, gw);
+    var qLat = getLateralFlow(aq, gw);
+
+    gw.upperMoist += (infil - perc - et) * dt
+                     / (gw.area * aq.porosity);
+    gw.upperMoist = max(0.0,
+        min(gw.upperMoist, aq.porosity));
+
+    var dh = (perc * gw.area - qLat) * dt
+             / (gw.area * aq.porosity);
+    gw.waterTable += dh;
+}`,
+    swift: `// gwater.swift — Groundwater Flow
+// SWMM5 Engine in Swift — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+import Foundation
+
+struct Aquifer {
+    let ks: Double
+    let porosity: Double
+    let fieldCap: Double
+    let percExp: Double
+}
+
+struct GWater {
+    var upperMoist: Double
+    var waterTable: Double
+    let area: Double
+    let nodeElev: Double
+    let flowLength: Double
+
+    func getPercolation(_ aq: Aquifer) -> Double {
+        guard upperMoist > aq.fieldCap else { return 0.0 }
+        let theta = min(upperMoist / aq.porosity, 1.0)
+        return aq.ks * pow(theta, aq.percExp)
+    }
+
+    func getLateralFlow(_ aq: Aquifer) -> Double {
+        guard flowLength > 0.0 else { return 0.0 }
+        let dh = waterTable - nodeElev
+        return area * aq.ks * dh / flowLength
+    }
+
+    mutating func updateWaterTable(_ aq: Aquifer,
+                                    infil: Double,
+                                    et: Double,
+                                    dt: Double) {
+        let perc = getPercolation(aq)
+        let qLat = getLateralFlow(aq)
+
+        upperMoist += (infil - perc - et) * dt
+                      / (area * aq.porosity)
+        upperMoist = max(0.0,
+                     min(upperMoist, aq.porosity))
+
+        let dh = (perc * area - qLat) * dt
+                 / (area * aq.porosity)
+        waterTable += dh
+    }
+}`,
+    kotlin: `// GWater.kt — Groundwater Flow
+// SWMM5 Engine in Kotlin — Two-Zone Groundwater Model
+// Models unsaturated/saturated zones beneath each
+// subcatchment with Darcy lateral flow to drainage network
+
+package swmm
+
+import kotlin.math.*
+
+data class Aquifer(
+    val ks: Double,
+    val porosity: Double,
+    val fieldCap: Double,
+    val percExp: Double
+)
+
+data class GWater(
+    var upperMoist: Double,
+    var waterTable: Double,
+    val area: Double,
+    val nodeElev: Double,
+    val flowLength: Double
+) {
+    fun getPercolation(aq: Aquifer): Double {
+        if (upperMoist <= aq.fieldCap) return 0.0
+        val theta = min(upperMoist / aq.porosity, 1.0)
+        return aq.ks * theta.pow(aq.percExp)
+    }
+
+    fun getLateralFlow(aq: Aquifer): Double {
+        if (flowLength <= 0.0) return 0.0
+        val dh = waterTable - nodeElev
+        return area * aq.ks * dh / flowLength
+    }
+
+    fun updateWaterTable(aq: Aquifer, infil: Double,
+                         et: Double, dt: Double) {
+        val perc = getPercolation(aq)
+        val qLat = getLateralFlow(aq)
+
+        upperMoist += (infil - perc - et) * dt /
+                      (area * aq.porosity)
+        upperMoist = max(0.0,
+            min(upperMoist, aq.porosity))
+
+        val dh = (perc * area - qLat) * dt /
+                 (area * aq.porosity)
+        waterTable += dh
+    }
+}`,
+  },
+
+  "xsect.c — Cross-Section Geometry": {
+    category: "Hydraulics",
+    difficulty: "intermediate",
+    tags: ["cross-section", "geometry", "circular", "area", "hydraulic radius", "wetted perimeter", "depth"],
+    description: "Computes geometric properties (area, hydraulic radius, wetted perimeter, top width) for various cross-section shapes. The circular pipe is the most common — area and hydraulic radius are computed from the central angle θ using A = D²/4·(θ - sinθ) and R = D/4·(1 - sinθ/θ). Also provides inverse lookups (depth from area, area from section factor) used throughout the hydraulic solver.",
+    equations: "A = D²/4·(θ - sinθ); R = D/4·(1 - sinθ/θ); S = A·R^(2/3) (section factor); θ = 2·acos(1 - 2y/D)",
+    inputs: "Cross-section shape, diameter/dimensions, depth or area",
+    outputs: "Area, hydraulic radius, top width, section factor, wetted perimeter",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// xsect.c — Cross-Section Geometry
+// EPA SWMM5 Engine — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+#include <math.h>
+
+#define CIRCULAR 1
+
+typedef struct {
+    int    type;       // shape type (CIRCULAR, etc.)
+    double diameter;   // pipe diameter (ft)
+} TXsect;
+
+double xsect_getTheta(double depth, double diameter)
+{
+    double yNorm;
+    if (depth <= 0.0) return 0.0;
+    if (depth >= diameter) return 2.0 * M_PI;
+    yNorm = depth / diameter;
+    return 2.0 * acos(1.0 - 2.0 * yNorm);
+}
+
+double xsect_getArea(TXsect* x, double depth)
+{
+    double theta, d;
+    if (depth <= 0.0) return 0.0;
+    d = x->diameter;
+    if (depth >= d)
+        return M_PI / 4.0 * d * d;
+    theta = xsect_getTheta(depth, d);
+    return (d * d / 4.0) * (theta - sin(theta));
+}
+
+double xsect_getWettedPerimeter(TXsect* x, double depth)
+{
+    double theta;
+    if (depth <= 0.0) return 0.0;
+    if (depth >= x->diameter)
+        return M_PI * x->diameter;
+    theta = xsect_getTheta(depth, x->diameter);
+    return 0.5 * x->diameter * theta;
+}
+
+double xsect_getHydRadius(TXsect* x, double depth)
+{
+    double area, wp;
+    area = xsect_getArea(x, depth);
+    wp = xsect_getWettedPerimeter(x, depth);
+    if (wp <= 0.0) return 0.0;
+    return area / wp;
+}
+
+double xsect_getWidth(TXsect* x, double depth)
+{
+    if (depth <= 0.0 || depth >= x->diameter)
+        return 0.0;
+    return x->diameter
+           * sin(xsect_getTheta(depth, x->diameter) / 2.0);
+}
+
+double xsect_getSectionFactor(TXsect* x, double depth)
+{
+    double area, rh;
+    area = xsect_getArea(x, depth);
+    rh = xsect_getHydRadius(x, depth);
+    return area * pow(rh, 2.0 / 3.0);
+}`,
+    rust: `// xsect.rs — Cross-Section Geometry
+// SWMM5 Engine in Rust — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+use std::f64::consts::PI;
+
+pub struct Xsect {
+    pub shape: u32,
+    pub diameter: f64,
+}
+
+impl Xsect {
+    fn get_theta(depth: f64, diameter: f64) -> f64 {
+        if depth <= 0.0 { return 0.0; }
+        if depth >= diameter { return 2.0 * PI; }
+        let y_norm = depth / diameter;
+        2.0 * (1.0 - 2.0 * y_norm).acos()
+    }
+
+    pub fn get_area(&self, depth: f64) -> f64 {
+        if depth <= 0.0 { return 0.0; }
+        let d = self.diameter;
+        if depth >= d {
+            return PI / 4.0 * d * d;
+        }
+        let theta = Self::get_theta(depth, d);
+        (d * d / 4.0) * (theta - theta.sin())
+    }
+
+    pub fn get_wetted_perimeter(&self, depth: f64) -> f64 {
+        if depth <= 0.0 { return 0.0; }
+        if depth >= self.diameter {
+            return PI * self.diameter;
+        }
+        let theta = Self::get_theta(depth, self.diameter);
+        0.5 * self.diameter * theta
+    }
+
+    pub fn get_hyd_radius(&self, depth: f64) -> f64 {
+        let area = self.get_area(depth);
+        let wp = self.get_wetted_perimeter(depth);
+        if wp <= 0.0 { return 0.0; }
+        area / wp
+    }
+
+    pub fn get_width(&self, depth: f64) -> f64 {
+        if depth <= 0.0 || depth >= self.diameter {
+            return 0.0;
+        }
+        let theta = Self::get_theta(depth, self.diameter);
+        self.diameter * (theta / 2.0).sin()
+    }
+
+    pub fn get_section_factor(&self, depth: f64) -> f64 {
+        let area = self.get_area(depth);
+        let rh = self.get_hyd_radius(depth);
+        area * rh.powf(2.0 / 3.0)
+    }
+}`,
+    python: `# xsect.py — Cross-Section Geometry
+# SWMM5 Engine in Python — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+import math
+from dataclasses import dataclass
+
+CIRCULAR = 1
+
+@dataclass
+class Xsect:
+    shape: int
+    diameter: float
+
+    @staticmethod
+    def _get_theta(depth: float, diameter: float) -> float:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return 2.0 * math.pi
+        y_norm = depth / diameter
+        return 2.0 * math.acos(1.0 - 2.0 * y_norm)
+
+    def get_area(self, depth: float) -> float:
+        if depth <= 0.0:
+            return 0.0
+        d = self.diameter
+        if depth >= d:
+            return math.pi / 4.0 * d * d
+        theta = self._get_theta(depth, d)
+        return (d * d / 4.0) * (theta - math.sin(theta))
+
+    def get_wetted_perimeter(self, depth: float) -> float:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= self.diameter:
+            return math.pi * self.diameter
+        theta = self._get_theta(depth, self.diameter)
+        return 0.5 * self.diameter * theta
+
+    def get_hyd_radius(self, depth: float) -> float:
+        area = self.get_area(depth)
+        wp = self.get_wetted_perimeter(depth)
+        if wp <= 0.0:
+            return 0.0
+        return area / wp
+
+    def get_width(self, depth: float) -> float:
+        if depth <= 0.0 or depth >= self.diameter:
+            return 0.0
+        theta = self._get_theta(depth, self.diameter)
+        return self.diameter * math.sin(theta / 2.0)
+
+    def get_section_factor(self, depth: float) -> float:
+        area = self.get_area(depth)
+        rh = self.get_hyd_radius(depth)
+        return area * rh ** (2.0 / 3.0)`,
+    fortran: `! xsect.f90 — Cross-Section Geometry
+! SWMM5 Engine in Fortran — Circular Pipe Geometry
+! Computes area, hydraulic radius, top width,
+! and section factor from depth for circular pipes
+
+module xsect_module
+    implicit none
+    integer, parameter :: CIRCULAR = 1
+    real(8), parameter :: PI = 3.14159265358979d0
+
+    type :: Xsect
+        integer :: shape
+        real(8) :: diameter
+    end type Xsect
+
+contains
+
+    function get_theta(depth, diameter) result(theta)
+        real(8), intent(in) :: depth, diameter
+        real(8) :: theta, y_norm
+        if (depth <= 0.0d0) then
+            theta = 0.0d0; return
+        end if
+        if (depth >= diameter) then
+            theta = 2.0d0 * PI; return
+        end if
+        y_norm = depth / diameter
+        theta = 2.0d0 * acos(1.0d0 - 2.0d0 * y_norm)
+    end function get_theta
+
+    function xsect_get_area(x, depth) result(area)
+        type(Xsect), intent(in) :: x
+        real(8), intent(in) :: depth
+        real(8) :: area, theta, d
+        if (depth <= 0.0d0) then
+            area = 0.0d0; return
+        end if
+        d = x%diameter
+        if (depth >= d) then
+            area = PI / 4.0d0 * d * d; return
+        end if
+        theta = get_theta(depth, d)
+        area = (d * d / 4.0d0) * (theta - sin(theta))
+    end function xsect_get_area
+
+    function xsect_get_wetted_perimeter(x, depth) result(wp)
+        type(Xsect), intent(in) :: x
+        real(8), intent(in) :: depth
+        real(8) :: wp, theta
+        if (depth <= 0.0d0) then
+            wp = 0.0d0; return
+        end if
+        if (depth >= x%diameter) then
+            wp = PI * x%diameter; return
+        end if
+        theta = get_theta(depth, x%diameter)
+        wp = 0.5d0 * x%diameter * theta
+    end function xsect_get_wetted_perimeter
+
+    function xsect_get_hyd_radius(x, depth) result(rh)
+        type(Xsect), intent(in) :: x
+        real(8), intent(in) :: depth
+        real(8) :: rh, area, wp
+        area = xsect_get_area(x, depth)
+        wp = xsect_get_wetted_perimeter(x, depth)
+        if (wp <= 0.0d0) then
+            rh = 0.0d0; return
+        end if
+        rh = area / wp
+    end function xsect_get_hyd_radius
+
+    function xsect_get_width(x, depth) result(w)
+        type(Xsect), intent(in) :: x
+        real(8), intent(in) :: depth
+        real(8) :: w, theta
+        if (depth <= 0.0d0 .or. depth >= x%diameter) then
+            w = 0.0d0; return
+        end if
+        theta = get_theta(depth, x%diameter)
+        w = x%diameter * sin(theta / 2.0d0)
+    end function xsect_get_width
+
+    function xsect_get_section_factor(x, depth) result(sf)
+        type(Xsect), intent(in) :: x
+        real(8), intent(in) :: depth
+        real(8) :: sf, area, rh
+        area = xsect_get_area(x, depth)
+        rh = xsect_get_hyd_radius(x, depth)
+        sf = area * rh**(2.0d0 / 3.0d0)
+    end function xsect_get_section_factor
+
+end module xsect_module`,
+    julia: `# xsect.jl — Cross-Section Geometry
+# SWMM5 Engine in Julia — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+const CIRCULAR = 1
+
+mutable struct Xsect
+    shape::Int
+    diameter::Float64
+end
+
+function get_theta(depth::Float64, diameter::Float64)::Float64
+    depth <= 0.0 && return 0.0
+    depth >= diameter && return 2.0 * π
+    y_norm = depth / diameter
+    return 2.0 * acos(1.0 - 2.0 * y_norm)
+end
+
+function get_area(x::Xsect, depth::Float64)::Float64
+    depth <= 0.0 && return 0.0
+    d = x.diameter
+    depth >= d && return π / 4.0 * d * d
+    θ = get_theta(depth, d)
+    return (d * d / 4.0) * (θ - sin(θ))
+end
+
+function get_wetted_perimeter(x::Xsect, depth::Float64)::Float64
+    depth <= 0.0 && return 0.0
+    depth >= x.diameter && return π * x.diameter
+    θ = get_theta(depth, x.diameter)
+    return 0.5 * x.diameter * θ
+end
+
+function get_hyd_radius(x::Xsect, depth::Float64)::Float64
+    area = get_area(x, depth)
+    wp = get_wetted_perimeter(x, depth)
+    wp <= 0.0 && return 0.0
+    return area / wp
+end
+
+function get_width(x::Xsect, depth::Float64)::Float64
+    (depth <= 0.0 || depth >= x.diameter) && return 0.0
+    θ = get_theta(depth, x.diameter)
+    return x.diameter * sin(θ / 2.0)
+end
+
+function get_section_factor(x::Xsect, depth::Float64)::Float64
+    area = get_area(x, depth)
+    rh = get_hyd_radius(x, depth)
+    return area * rh^(2.0 / 3.0)
+end`,
+    javascript: `// xsect.js — Cross-Section Geometry
+// SWMM5 Engine in JavaScript — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+const CIRCULAR = 1;
+
+class Xsect {
+    constructor(shape, diameter) {
+        this.shape = shape;
+        this.diameter = diameter;
+    }
+
+    static getTheta(depth, diameter) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return 2.0 * Math.PI;
+        const yNorm = depth / diameter;
+        return 2.0 * Math.acos(1.0 - 2.0 * yNorm);
+    }
+
+    getArea(depth) {
+        if (depth <= 0.0) return 0.0;
+        const d = this.diameter;
+        if (depth >= d)
+            return Math.PI / 4.0 * d * d;
+        const theta = Xsect.getTheta(depth, d);
+        return (d * d / 4.0) * (theta - Math.sin(theta));
+    }
+
+    getWettedPerimeter(depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= this.diameter)
+            return Math.PI * this.diameter;
+        const theta = Xsect.getTheta(depth, this.diameter);
+        return 0.5 * this.diameter * theta;
+    }
+
+    getHydRadius(depth) {
+        const area = this.getArea(depth);
+        const wp = this.getWettedPerimeter(depth);
+        if (wp <= 0.0) return 0.0;
+        return area / wp;
+    }
+
+    getWidth(depth) {
+        if (depth <= 0.0 || depth >= this.diameter)
+            return 0.0;
+        const theta = Xsect.getTheta(depth, this.diameter);
+        return this.diameter * Math.sin(theta / 2.0);
+    }
+
+    getSectionFactor(depth) {
+        const area = this.getArea(depth);
+        const rh = this.getHydRadius(depth);
+        return area * Math.pow(rh, 2.0 / 3.0);
+    }
+}
+
+export { Xsect, CIRCULAR };`,
+    go: `// xsect.go — Cross-Section Geometry
+// SWMM5 Engine in Go — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+package swmm
+
+import "math"
+
+const Circular = 1
+
+type Xsect struct {
+    Shape    int
+    Diameter float64
+}
+
+func getTheta(depth, diameter float64) float64 {
+    if depth <= 0.0 {
+        return 0.0
+    }
+    if depth >= diameter {
+        return 2.0 * math.Pi
+    }
+    yNorm := depth / diameter
+    return 2.0 * math.Acos(1.0-2.0*yNorm)
+}
+
+func (x *Xsect) GetArea(depth float64) float64 {
+    if depth <= 0.0 {
+        return 0.0
+    }
+    d := x.Diameter
+    if depth >= d {
+        return math.Pi / 4.0 * d * d
+    }
+    theta := getTheta(depth, d)
+    return (d * d / 4.0) * (theta - math.Sin(theta))
+}
+
+func (x *Xsect) GetWettedPerimeter(depth float64) float64 {
+    if depth <= 0.0 {
+        return 0.0
+    }
+    if depth >= x.Diameter {
+        return math.Pi * x.Diameter
+    }
+    theta := getTheta(depth, x.Diameter)
+    return 0.5 * x.Diameter * theta
+}
+
+func (x *Xsect) GetHydRadius(depth float64) float64 {
+    area := x.GetArea(depth)
+    wp := x.GetWettedPerimeter(depth)
+    if wp <= 0.0 {
+        return 0.0
+    }
+    return area / wp
+}
+
+func (x *Xsect) GetWidth(depth float64) float64 {
+    if depth <= 0.0 || depth >= x.Diameter {
+        return 0.0
+    }
+    theta := getTheta(depth, x.Diameter)
+    return x.Diameter * math.Sin(theta/2.0)
+}
+
+func (x *Xsect) GetSectionFactor(depth float64) float64 {
+    area := x.GetArea(depth)
+    rh := x.GetHydRadius(depth)
+    return area * math.Pow(rh, 2.0/3.0)
+}`,
+    zig: `// xsect.zig — Cross-Section Geometry
+// SWMM5 Engine in Zig — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+const std = @import("std");
+const math = std.math;
+
+const CIRCULAR: u32 = 1;
+
+const Xsect = struct {
+    shape: u32,
+    diameter: f64,
+
+    fn getTheta(depth: f64, diameter: f64) f64 {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return 2.0 * math.pi;
+        const y_norm = depth / diameter;
+        return 2.0 * math.acos(1.0 - 2.0 * y_norm);
+    }
+
+    pub fn getArea(self: Xsect, depth: f64) f64 {
+        if (depth <= 0.0) return 0.0;
+        const d = self.diameter;
+        if (depth >= d)
+            return math.pi / 4.0 * d * d;
+        const theta = getTheta(depth, d);
+        return (d * d / 4.0) * (theta - @sin(theta));
+    }
+
+    pub fn getWettedPerimeter(self: Xsect, depth: f64) f64 {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= self.diameter)
+            return math.pi * self.diameter;
+        const theta = getTheta(depth, self.diameter);
+        return 0.5 * self.diameter * theta;
+    }
+
+    pub fn getHydRadius(self: Xsect, depth: f64) f64 {
+        const area = self.getArea(depth);
+        const wp = self.getWettedPerimeter(depth);
+        if (wp <= 0.0) return 0.0;
+        return area / wp;
+    }
+
+    pub fn getWidth(self: Xsect, depth: f64) f64 {
+        if (depth <= 0.0 or depth >= self.diameter)
+            return 0.0;
+        const theta = getTheta(depth, self.diameter);
+        return self.diameter * @sin(theta / 2.0);
+    }
+
+    pub fn getSectionFactor(self: Xsect, depth: f64) f64 {
+        const area = self.getArea(depth);
+        const rh = self.getHydRadius(depth);
+        return area * math.pow(f64, rh, 2.0 / 3.0);
+    }
+};`,
+    cpp: `// xsect.cpp — Cross-Section Geometry
+// SWMM5 Engine in C++ — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+#include <cmath>
+
+namespace swmm {
+
+constexpr int CIRCULAR = 1;
+
+struct Xsect {
+    int    shape;
+    double diameter;
+
+    static double getTheta(double depth, double diameter) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return 2.0 * M_PI;
+        double yNorm = depth / diameter;
+        return 2.0 * std::acos(1.0 - 2.0 * yNorm);
+    }
+
+    double getArea(double depth) const {
+        if (depth <= 0.0) return 0.0;
+        double d = diameter;
+        if (depth >= d)
+            return M_PI / 4.0 * d * d;
+        double theta = getTheta(depth, d);
+        return (d * d / 4.0) * (theta - std::sin(theta));
+    }
+
+    double getWettedPerimeter(double depth) const {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return M_PI * diameter;
+        double theta = getTheta(depth, diameter);
+        return 0.5 * diameter * theta;
+    }
+
+    double getHydRadius(double depth) const {
+        double area = getArea(depth);
+        double wp = getWettedPerimeter(depth);
+        if (wp <= 0.0) return 0.0;
+        return area / wp;
+    }
+
+    double getWidth(double depth) const {
+        if (depth <= 0.0 || depth >= diameter)
+            return 0.0;
+        double theta = getTheta(depth, diameter);
+        return diameter * std::sin(theta / 2.0);
+    }
+
+    double getSectionFactor(double depth) const {
+        double area = getArea(depth);
+        double rh = getHydRadius(depth);
+        return area * std::pow(rh, 2.0 / 3.0);
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Xsect.cs — Cross-Section Geometry
+// SWMM5 Engine in C# — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+using System;
+
+namespace Swmm
+{
+    public class Xsect
+    {
+        public int Shape { get; set; }
+        public double Diameter { get; set; }
+
+        public const int Circular = 1;
+
+        public Xsect(int shape, double diameter)
+        {
+            Shape = shape;
+            Diameter = diameter;
+        }
+
+        private static double GetTheta(double depth,
+                                        double diameter)
+        {
+            if (depth <= 0.0) return 0.0;
+            if (depth >= diameter) return 2.0 * Math.PI;
+            double yNorm = depth / diameter;
+            return 2.0 * Math.Acos(1.0 - 2.0 * yNorm);
+        }
+
+        public double GetArea(double depth)
+        {
+            if (depth <= 0.0) return 0.0;
+            double d = Diameter;
+            if (depth >= d)
+                return Math.PI / 4.0 * d * d;
+            double theta = GetTheta(depth, d);
+            return (d * d / 4.0) * (theta - Math.Sin(theta));
+        }
+
+        public double GetWettedPerimeter(double depth)
+        {
+            if (depth <= 0.0) return 0.0;
+            if (depth >= Diameter)
+                return Math.PI * Diameter;
+            double theta = GetTheta(depth, Diameter);
+            return 0.5 * Diameter * theta;
+        }
+
+        public double GetHydRadius(double depth)
+        {
+            double area = GetArea(depth);
+            double wp = GetWettedPerimeter(depth);
+            if (wp <= 0.0) return 0.0;
+            return area / wp;
+        }
+
+        public double GetWidth(double depth)
+        {
+            if (depth <= 0.0 || depth >= Diameter)
+                return 0.0;
+            double theta = GetTheta(depth, Diameter);
+            return Diameter * Math.Sin(theta / 2.0);
+        }
+
+        public double GetSectionFactor(double depth)
+        {
+            double area = GetArea(depth);
+            double rh = GetHydRadius(depth);
+            return area * Math.Pow(rh, 2.0 / 3.0);
+        }
+    }
+}`,
+    matlab: `% xsect.m — Cross-Section Geometry
+% SWMM5 Engine in MATLAB — Circular Pipe Geometry
+% Computes area, hydraulic radius, top width,
+% and section factor from depth for circular pipes
+
+function xs = create_xsect(shape, diameter)
+    xs.shape    = shape;
+    xs.diameter = diameter;
+end
+
+function theta = get_theta(depth, diameter)
+    if depth <= 0.0
+        theta = 0.0; return;
+    end
+    if depth >= diameter
+        theta = 2.0 * pi; return;
+    end
+    y_norm = depth / diameter;
+    theta = 2.0 * acos(1.0 - 2.0 * y_norm);
+end
+
+function area = get_area(xs, depth)
+    if depth <= 0.0
+        area = 0.0; return;
+    end
+    d = xs.diameter;
+    if depth >= d
+        area = pi / 4.0 * d * d; return;
+    end
+    theta = get_theta(depth, d);
+    area = (d * d / 4.0) * (theta - sin(theta));
+end
+
+function wp = get_wetted_perimeter(xs, depth)
+    if depth <= 0.0
+        wp = 0.0; return;
+    end
+    if depth >= xs.diameter
+        wp = pi * xs.diameter; return;
+    end
+    theta = get_theta(depth, xs.diameter);
+    wp = 0.5 * xs.diameter * theta;
+end
+
+function rh = get_hyd_radius(xs, depth)
+    area = get_area(xs, depth);
+    wp = get_wetted_perimeter(xs, depth);
+    if wp <= 0.0
+        rh = 0.0; return;
+    end
+    rh = area / wp;
+end
+
+function w = get_width(xs, depth)
+    if depth <= 0.0 || depth >= xs.diameter
+        w = 0.0; return;
+    end
+    theta = get_theta(depth, xs.diameter);
+    w = xs.diameter * sin(theta / 2.0);
+end
+
+function sf = get_section_factor(xs, depth)
+    area = get_area(xs, depth);
+    rh = get_hyd_radius(xs, depth);
+    sf = area * rh^(2.0 / 3.0);
+end`,
+    r: `# xsect.R — Cross-Section Geometry
+# SWMM5 Engine in R — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+CIRCULAR <- 1
+
+create_xsect <- function(shape, diameter) {
+    list(shape = shape, diameter = diameter)
+}
+
+get_theta <- function(depth, diameter) {
+    if (depth <= 0.0) return(0.0)
+    if (depth >= diameter) return(2.0 * pi)
+    y_norm <- depth / diameter
+    2.0 * acos(1.0 - 2.0 * y_norm)
+}
+
+get_area <- function(xs, depth) {
+    if (depth <= 0.0) return(0.0)
+    d <- xs$diameter
+    if (depth >= d) return(pi / 4.0 * d * d)
+    theta <- get_theta(depth, d)
+    (d * d / 4.0) * (theta - sin(theta))
+}
+
+get_wetted_perimeter <- function(xs, depth) {
+    if (depth <= 0.0) return(0.0)
+    if (depth >= xs$diameter) return(pi * xs$diameter)
+    theta <- get_theta(depth, xs$diameter)
+    0.5 * xs$diameter * theta
+}
+
+get_hyd_radius <- function(xs, depth) {
+    area <- get_area(xs, depth)
+    wp <- get_wetted_perimeter(xs, depth)
+    if (wp <= 0.0) return(0.0)
+    area / wp
+}
+
+get_width <- function(xs, depth) {
+    if (depth <= 0.0 || depth >= xs$diameter) return(0.0)
+    theta <- get_theta(depth, xs$diameter)
+    xs$diameter * sin(theta / 2.0)
+}
+
+get_section_factor <- function(xs, depth) {
+    area <- get_area(xs, depth)
+    rh <- get_hyd_radius(xs, depth)
+    area * rh^(2.0 / 3.0)
+}`,
+    delphi: `{ xsect.pas — Cross-Section Geometry }
+{ SWMM5 Engine in Delphi — Circular Pipe Geometry }
+{ Computes area, hydraulic radius, top width, }
+{ and section factor from depth for circular pipes }
+
+unit Xsect;
+
+interface
+
+const
+  CIRCULAR = 1;
+
+type
+  TXsect = class
+  private
+    FShape: Integer;
+    FDiameter: Double;
+  public
+    constructor Create(AShape: Integer;
+                       ADiameter: Double);
+    function GetTheta(Depth: Double): Double;
+    function GetArea(Depth: Double): Double;
+    function GetWettedPerimeter(Depth: Double): Double;
+    function GetHydRadius(Depth: Double): Double;
+    function GetWidth(Depth: Double): Double;
+    function GetSectionFactor(Depth: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TXsect.Create(AShape: Integer;
+                           ADiameter: Double);
+begin
+  FShape    := AShape;
+  FDiameter := ADiameter;
+end;
+
+function TXsect.GetTheta(Depth: Double): Double;
+begin
+  if Depth <= 0.0 then Exit(0.0);
+  if Depth >= FDiameter then Exit(2.0 * Pi);
+  Result := 2.0 * ArcCos(1.0 - 2.0 * Depth / FDiameter);
+end;
+
+function TXsect.GetArea(Depth: Double): Double;
+var
+  Theta: Double;
+begin
+  if Depth <= 0.0 then Exit(0.0);
+  if Depth >= FDiameter then
+    Exit(Pi / 4.0 * FDiameter * FDiameter);
+  Theta := GetTheta(Depth);
+  Result := (FDiameter * FDiameter / 4.0)
+            * (Theta - Sin(Theta));
+end;
+
+function TXsect.GetWettedPerimeter(Depth: Double): Double;
+var
+  Theta: Double;
+begin
+  if Depth <= 0.0 then Exit(0.0);
+  if Depth >= FDiameter then
+    Exit(Pi * FDiameter);
+  Theta := GetTheta(Depth);
+  Result := 0.5 * FDiameter * Theta;
+end;
+
+function TXsect.GetHydRadius(Depth: Double): Double;
+var
+  Area, WP: Double;
+begin
+  Area := GetArea(Depth);
+  WP := GetWettedPerimeter(Depth);
+  if WP <= 0.0 then Exit(0.0);
+  Result := Area / WP;
+end;
+
+function TXsect.GetWidth(Depth: Double): Double;
+var
+  Theta: Double;
+begin
+  if (Depth <= 0.0) or (Depth >= FDiameter) then
+    Exit(0.0);
+  Theta := GetTheta(Depth);
+  Result := FDiameter * Sin(Theta / 2.0);
+end;
+
+function TXsect.GetSectionFactor(Depth: Double): Double;
+var
+  Area, RH: Double;
+begin
+  Area := GetArea(Depth);
+  RH := GetHydRadius(Depth);
+  Result := Area * Power(RH, 2.0 / 3.0);
+end;
+
+end.`,
+    typescript: `// xsect.ts — Cross-Section Geometry
+// SWMM5 Engine in TypeScript — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+const CIRCULAR: number = 1;
+
+interface XsectParams {
+    shape: number;
+    diameter: number;
+}
+
+class Xsect {
+    readonly shape: number;
+    readonly diameter: number;
+
+    constructor(params: XsectParams) {
+        this.shape = params.shape;
+        this.diameter = params.diameter;
+    }
+
+    static getTheta(depth: number, diameter: number): number {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return 2.0 * Math.PI;
+        const yNorm: number = depth / diameter;
+        return 2.0 * Math.acos(1.0 - 2.0 * yNorm);
+    }
+
+    getArea(depth: number): number {
+        if (depth <= 0.0) return 0.0;
+        const d: number = this.diameter;
+        if (depth >= d)
+            return Math.PI / 4.0 * d * d;
+        const theta: number = Xsect.getTheta(depth, d);
+        return (d * d / 4.0) * (theta - Math.sin(theta));
+    }
+
+    getWettedPerimeter(depth: number): number {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= this.diameter)
+            return Math.PI * this.diameter;
+        const theta: number =
+            Xsect.getTheta(depth, this.diameter);
+        return 0.5 * this.diameter * theta;
+    }
+
+    getHydRadius(depth: number): number {
+        const area: number = this.getArea(depth);
+        const wp: number = this.getWettedPerimeter(depth);
+        if (wp <= 0.0) return 0.0;
+        return area / wp;
+    }
+
+    getWidth(depth: number): number {
+        if (depth <= 0.0 || depth >= this.diameter)
+            return 0.0;
+        const theta: number =
+            Xsect.getTheta(depth, this.diameter);
+        return this.diameter * Math.sin(theta / 2.0);
+    }
+
+    getSectionFactor(depth: number): number {
+        const area: number = this.getArea(depth);
+        const rh: number = this.getHydRadius(depth);
+        return area * Math.pow(rh, 2.0 / 3.0);
+    }
+}
+
+export { Xsect, CIRCULAR };`,
+    cuda: `// xsect.cu — Cross-Section Geometry
+// SWMM5 Engine in CUDA — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+#include <math.h>
+
+#define CIRCULAR 1
+#define PI_F 3.14159265f
+
+struct Xsect {
+    int   shape;
+    float diameter;
+};
+
+__device__ float xsect_getTheta(float depth, float diameter)
+{
+    if (depth <= 0.0f) return 0.0f;
+    if (depth >= diameter) return 2.0f * PI_F;
+    float yNorm = depth / diameter;
+    return 2.0f * acosf(1.0f - 2.0f * yNorm);
+}
+
+__device__ float xsect_getArea(const Xsect* x, float depth)
+{
+    if (depth <= 0.0f) return 0.0f;
+    float d = x->diameter;
+    if (depth >= d)
+        return PI_F / 4.0f * d * d;
+    float theta = xsect_getTheta(depth, d);
+    return (d * d / 4.0f) * (theta - sinf(theta));
+}
+
+__device__ float xsect_getWP(const Xsect* x, float depth)
+{
+    if (depth <= 0.0f) return 0.0f;
+    if (depth >= x->diameter) return PI_F * x->diameter;
+    float theta = xsect_getTheta(depth, x->diameter);
+    return 0.5f * x->diameter * theta;
+}
+
+__device__ float xsect_getHydRadius(const Xsect* x,
+                                     float depth)
+{
+    float area = xsect_getArea(x, depth);
+    float wp = xsect_getWP(x, depth);
+    if (wp <= 0.0f) return 0.0f;
+    return area / wp;
+}
+
+__global__ void computeXsectKernel(Xsect* xsects,
+    float* depths, float* areas, float* hydRads, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    areas[idx] = xsect_getArea(&xsects[idx], depths[idx]);
+    hydRads[idx] = xsect_getHydRadius(&xsects[idx],
+                                       depths[idx]);
+}`,
+    wasm: `;; xsect.wat — Cross-Section Geometry
+;; SWMM5 Engine in WebAssembly — Circular Pipe Geometry
+;; Computes area, hydraulic radius, top width,
+;; and section factor from depth for circular pipes
+
+(module
+  (func $getTheta (param $depth f64) (param $diam f64)
+    (result f64)
+    (if (result f64) (f64.le (local.get $depth) (f64.const 0))
+      (then (f64.const 0))
+      (else
+        (if (result f64) (f64.ge (local.get $depth)
+                                  (local.get $diam))
+          (then (f64.mul (f64.const 2)
+                         (f64.const 3.14159265358979)))
+          (else
+            (f64.mul (f64.const 2)
+              (call $acos
+                (f64.sub (f64.const 1)
+                  (f64.mul (f64.const 2)
+                    (f64.div (local.get $depth)
+                             (local.get $diam)))))))))))
+
+  (func $getArea (param $diam f64) (param $depth f64)
+    (result f64)
+    (local $theta f64)
+    (if (result f64) (f64.le (local.get $depth) (f64.const 0))
+      (then (f64.const 0))
+      (else
+        (if (result f64) (f64.ge (local.get $depth)
+                                  (local.get $diam))
+          (then (f64.mul
+            (f64.div (f64.const 3.14159265358979)
+                     (f64.const 4))
+            (f64.mul (local.get $diam) (local.get $diam))))
+          (else
+            (local.set $theta
+              (call $getTheta (local.get $depth)
+                              (local.get $diam)))
+            (f64.mul
+              (f64.div (f64.mul (local.get $diam)
+                                (local.get $diam))
+                       (f64.const 4))
+              (f64.sub (local.get $theta)
+                (call $sin (local.get $theta)))))))))
+
+  (func $getHydRadius (param $diam f64) (param $depth f64)
+    (result f64)
+    (local $area f64) (local $wp f64)
+    (local.set $area
+      (call $getArea (local.get $diam) (local.get $depth)))
+    (local.set $wp
+      (f64.mul (f64.const 0.5) (f64.mul (local.get $diam)
+        (call $getTheta (local.get $depth)
+                        (local.get $diam)))))
+    (if (result f64) (f64.le (local.get $wp) (f64.const 0))
+      (then (f64.const 0))
+      (else (f64.div (local.get $area) (local.get $wp)))))
+
+  (func $acos (param f64) (result f64) unreachable)
+  (func $sin (param f64) (result f64) unreachable)
+)`,
+    mojo: `# xsect.mojo — Cross-Section Geometry
+# SWMM5 Engine in Mojo — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+from math import pi, acos, sin, pow
+
+alias CIRCULAR: Int = 1
+
+struct Xsect:
+    var shape: Int
+    var diameter: Float64
+
+    fn __init__(inout self, shape: Int, diameter: Float64):
+        self.shape = shape
+        self.diameter = diameter
+
+    @staticmethod
+    fn get_theta(depth: Float64, diameter: Float64) -> Float64:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return 2.0 * pi
+        var y_norm = depth / diameter
+        return 2.0 * acos(1.0 - 2.0 * y_norm)
+
+    fn get_area(self, depth: Float64) -> Float64:
+        if depth <= 0.0:
+            return 0.0
+        var d = self.diameter
+        if depth >= d:
+            return pi / 4.0 * d * d
+        var theta = Self.get_theta(depth, d)
+        return (d * d / 4.0) * (theta - sin(theta))
+
+    fn get_wetted_perimeter(self, depth: Float64) -> Float64:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= self.diameter:
+            return pi * self.diameter
+        var theta = Self.get_theta(depth, self.diameter)
+        return 0.5 * self.diameter * theta
+
+    fn get_hyd_radius(self, depth: Float64) -> Float64:
+        var area = self.get_area(depth)
+        var wp = self.get_wetted_perimeter(depth)
+        if wp <= 0.0:
+            return 0.0
+        return area / wp
+
+    fn get_width(self, depth: Float64) -> Float64:
+        if depth <= 0.0 or depth >= self.diameter:
+            return 0.0
+        var theta = Self.get_theta(depth, self.diameter)
+        return self.diameter * sin(theta / 2.0)
+
+    fn get_section_factor(self, depth: Float64) -> Float64:
+        var area = self.get_area(depth)
+        var rh = self.get_hyd_radius(depth)
+        return area * pow(rh, 2.0 / 3.0)`,
+    java: `// Xsect.java — Cross-Section Geometry
+// SWMM5 Engine in Java — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+package swmm;
+
+public class Xsect {
+    public static final int CIRCULAR = 1;
+
+    private final int shape;
+    private final double diameter;
+
+    public Xsect(int shape, double diameter) {
+        this.shape = shape;
+        this.diameter = diameter;
+    }
+
+    private static double getTheta(double depth,
+                                    double diameter) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return 2.0 * Math.PI;
+        double yNorm = depth / diameter;
+        return 2.0 * Math.acos(1.0 - 2.0 * yNorm);
+    }
+
+    public double getArea(double depth) {
+        if (depth <= 0.0) return 0.0;
+        double d = diameter;
+        if (depth >= d)
+            return Math.PI / 4.0 * d * d;
+        double theta = getTheta(depth, d);
+        return (d * d / 4.0) * (theta - Math.sin(theta));
+    }
+
+    public double getWettedPerimeter(double depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return Math.PI * diameter;
+        double theta = getTheta(depth, diameter);
+        return 0.5 * diameter * theta;
+    }
+
+    public double getHydRadius(double depth) {
+        double area = getArea(depth);
+        double wp = getWettedPerimeter(depth);
+        if (wp <= 0.0) return 0.0;
+        return area / wp;
+    }
+
+    public double getWidth(double depth) {
+        if (depth <= 0.0 || depth >= diameter)
+            return 0.0;
+        double theta = getTheta(depth, diameter);
+        return diameter * Math.sin(theta / 2.0);
+    }
+
+    public double getSectionFactor(double depth) {
+        double area = getArea(depth);
+        double rh = getHydRadius(depth);
+        return area * Math.pow(rh, 2.0 / 3.0);
+    }
+}`,
+    nim: `# xsect.nim — Cross-Section Geometry
+# SWMM5 Engine in Nim — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+import math
+
+const Circular = 1
+
+type
+  Xsect = object
+    shape: int
+    diameter: float64
+
+proc getTheta(depth, diameter: float64): float64 =
+  if depth <= 0.0: return 0.0
+  if depth >= diameter: return 2.0 * PI
+  let yNorm = depth / diameter
+  result = 2.0 * arccos(1.0 - 2.0 * yNorm)
+
+proc getArea(x: Xsect, depth: float64): float64 =
+  if depth <= 0.0: return 0.0
+  let d = x.diameter
+  if depth >= d: return PI / 4.0 * d * d
+  let theta = getTheta(depth, d)
+  result = (d * d / 4.0) * (theta - sin(theta))
+
+proc getWettedPerimeter(x: Xsect, depth: float64): float64 =
+  if depth <= 0.0: return 0.0
+  if depth >= x.diameter: return PI * x.diameter
+  let theta = getTheta(depth, x.diameter)
+  result = 0.5 * x.diameter * theta
+
+proc getHydRadius(x: Xsect, depth: float64): float64 =
+  let area = getArea(x, depth)
+  let wp = getWettedPerimeter(x, depth)
+  if wp <= 0.0: return 0.0
+  result = area / wp
+
+proc getWidth(x: Xsect, depth: float64): float64 =
+  if depth <= 0.0 or depth >= x.diameter: return 0.0
+  let theta = getTheta(depth, x.diameter)
+  result = x.diameter * sin(theta / 2.0)
+
+proc getSectionFactor(x: Xsect, depth: float64): float64 =
+  let area = getArea(x, depth)
+  let rh = getHydRadius(x, depth)
+  result = area * pow(rh, 2.0 / 3.0)`,
+    ada: `-- xsect.adb — Cross-Section Geometry
+-- SWMM5 Engine in Ada — Circular Pipe Geometry
+-- Computes area, hydraulic radius, top width,
+-- and section factor from depth for circular pipes
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Xsect_Pkg is
+
+   type Shape_Type is (Circular);
+
+   type Xsect is record
+      Shape    : Shape_Type;
+      Diameter : Float;
+   end record;
+
+   function Get_Theta (Depth, Diameter : Float) return Float is
+      Y_Norm : Float;
+   begin
+      if Depth <= 0.0 then return 0.0; end if;
+      if Depth >= Diameter then
+         return 2.0 * Ada.Numerics.Pi;
+      end if;
+      Y_Norm := Depth / Diameter;
+      return 2.0 * Arccos (1.0 - 2.0 * Y_Norm);
+   end Get_Theta;
+
+   function Get_Area (X : Xsect; Depth : Float) return Float is
+      D     : Float := X.Diameter;
+      Theta : Float;
+   begin
+      if Depth <= 0.0 then return 0.0; end if;
+      if Depth >= D then
+         return Ada.Numerics.Pi / 4.0 * D * D;
+      end if;
+      Theta := Get_Theta (Depth, D);
+      return (D * D / 4.0) * (Theta - Sin (Theta));
+   end Get_Area;
+
+   function Get_Wetted_Perimeter (X : Xsect;
+      Depth : Float) return Float is
+      Theta : Float;
+   begin
+      if Depth <= 0.0 then return 0.0; end if;
+      if Depth >= X.Diameter then
+         return Ada.Numerics.Pi * X.Diameter;
+      end if;
+      Theta := Get_Theta (Depth, X.Diameter);
+      return 0.5 * X.Diameter * Theta;
+   end Get_Wetted_Perimeter;
+
+   function Get_Hyd_Radius (X : Xsect;
+      Depth : Float) return Float is
+      Area : Float := Get_Area (X, Depth);
+      WP   : Float := Get_Wetted_Perimeter (X, Depth);
+   begin
+      if WP <= 0.0 then return 0.0; end if;
+      return Area / WP;
+   end Get_Hyd_Radius;
+
+   function Get_Width (X : Xsect;
+      Depth : Float) return Float is
+      Theta : Float;
+   begin
+      if Depth <= 0.0 or Depth >= X.Diameter then
+         return 0.0;
+      end if;
+      Theta := Get_Theta (Depth, X.Diameter);
+      return X.Diameter * Sin (Theta / 2.0);
+   end Get_Width;
+
+   function Get_Section_Factor (X : Xsect;
+      Depth : Float) return Float is
+      Area : Float := Get_Area (X, Depth);
+      RH   : Float := Get_Hyd_Radius (X, Depth);
+   begin
+      return Area * (RH ** (2.0 / 3.0));
+   end Get_Section_Factor;
+
+end Xsect_Pkg;`,
+    chapel: `// xsect.chpl — Cross-Section Geometry
+// SWMM5 Engine in Chapel — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+use Math;
+
+const CIRCULAR = 1;
+
+record Xsect {
+    var shape: int;
+    var diameter: real;
+}
+
+proc getTheta(depth: real, diameter: real): real {
+    if depth <= 0.0 then return 0.0;
+    if depth >= diameter then return 2.0 * pi;
+    var yNorm = depth / diameter;
+    return 2.0 * acos(1.0 - 2.0 * yNorm);
+}
+
+proc getArea(ref x: Xsect, depth: real): real {
+    if depth <= 0.0 then return 0.0;
+    var d = x.diameter;
+    if depth >= d then return pi / 4.0 * d * d;
+    var theta = getTheta(depth, d);
+    return (d * d / 4.0) * (theta - sin(theta));
+}
+
+proc getWettedPerimeter(ref x: Xsect, depth: real): real {
+    if depth <= 0.0 then return 0.0;
+    if depth >= x.diameter then return pi * x.diameter;
+    var theta = getTheta(depth, x.diameter);
+    return 0.5 * x.diameter * theta;
+}
+
+proc getHydRadius(ref x: Xsect, depth: real): real {
+    var area = getArea(x, depth);
+    var wp = getWettedPerimeter(x, depth);
+    if wp <= 0.0 then return 0.0;
+    return area / wp;
+}
+
+proc getWidth(ref x: Xsect, depth: real): real {
+    if depth <= 0.0 || depth >= x.diameter then return 0.0;
+    var theta = getTheta(depth, x.diameter);
+    return x.diameter * sin(theta / 2.0);
+}
+
+proc getSectionFactor(ref x: Xsect, depth: real): real {
+    var area = getArea(x, depth);
+    var rh = getHydRadius(x, depth);
+    return area * rh ** (2.0 / 3.0);
+}`,
+    swift: `// xsect.swift — Cross-Section Geometry
+// SWMM5 Engine in Swift — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+import Foundation
+
+let CIRCULAR = 1
+
+struct Xsect {
+    let shape: Int
+    let diameter: Double
+
+    static func getTheta(depth: Double,
+                          diameter: Double) -> Double {
+        guard depth > 0.0 else { return 0.0 }
+        guard depth < diameter else {
+            return 2.0 * Double.pi
+        }
+        let yNorm = depth / diameter
+        return 2.0 * acos(1.0 - 2.0 * yNorm)
+    }
+
+    func getArea(depth: Double) -> Double {
+        guard depth > 0.0 else { return 0.0 }
+        let d = diameter
+        guard depth < d else {
+            return Double.pi / 4.0 * d * d
+        }
+        let theta = Xsect.getTheta(depth: depth,
+                                     diameter: d)
+        return (d * d / 4.0) * (theta - sin(theta))
+    }
+
+    func getWettedPerimeter(depth: Double) -> Double {
+        guard depth > 0.0 else { return 0.0 }
+        guard depth < diameter else {
+            return Double.pi * diameter
+        }
+        let theta = Xsect.getTheta(depth: depth,
+                                     diameter: diameter)
+        return 0.5 * diameter * theta
+    }
+
+    func getHydRadius(depth: Double) -> Double {
+        let area = getArea(depth: depth)
+        let wp = getWettedPerimeter(depth: depth)
+        guard wp > 0.0 else { return 0.0 }
+        return area / wp
+    }
+
+    func getWidth(depth: Double) -> Double {
+        guard depth > 0.0, depth < diameter else {
+            return 0.0
+        }
+        let theta = Xsect.getTheta(depth: depth,
+                                     diameter: diameter)
+        return diameter * sin(theta / 2.0)
+    }
+
+    func getSectionFactor(depth: Double) -> Double {
+        let area = getArea(depth: depth)
+        let rh = getHydRadius(depth: depth)
+        return area * pow(rh, 2.0 / 3.0)
+    }
+}`,
+    kotlin: `// Xsect.kt — Cross-Section Geometry
+// SWMM5 Engine in Kotlin — Circular Pipe Geometry
+// Computes area, hydraulic radius, top width,
+// and section factor from depth for circular pipes
+
+package swmm
+
+import kotlin.math.*
+
+const val CIRCULAR = 1
+
+data class Xsect(val shape: Int, val diameter: Double) {
+
+    companion object {
+        fun getTheta(depth: Double, diameter: Double): Double {
+            if (depth <= 0.0) return 0.0
+            if (depth >= diameter) return 2.0 * PI
+            val yNorm = depth / diameter
+            return 2.0 * acos(1.0 - 2.0 * yNorm)
+        }
+    }
+
+    fun getArea(depth: Double): Double {
+        if (depth <= 0.0) return 0.0
+        val d = diameter
+        if (depth >= d) return PI / 4.0 * d * d
+        val theta = getTheta(depth, d)
+        return (d * d / 4.0) * (theta - sin(theta))
+    }
+
+    fun getWettedPerimeter(depth: Double): Double {
+        if (depth <= 0.0) return 0.0
+        if (depth >= diameter) return PI * diameter
+        val theta = getTheta(depth, diameter)
+        return 0.5 * diameter * theta
+    }
+
+    fun getHydRadius(depth: Double): Double {
+        val area = getArea(depth)
+        val wp = getWettedPerimeter(depth)
+        if (wp <= 0.0) return 0.0
+        return area / wp
+    }
+
+    fun getWidth(depth: Double): Double {
+        if (depth <= 0.0 || depth >= diameter) return 0.0
+        val theta = getTheta(depth, diameter)
+        return diameter * sin(theta / 2.0)
+    }
+
+    fun getSectionFactor(depth: Double): Double {
+        val area = getArea(depth)
+        val rh = getHydRadius(depth)
+        return area * rh.pow(2.0 / 3.0)
+    }
+}`,
+  },
+  "climate.c — Climate/Evaporation Processing": {
+    category: "Hydrology",
+    difficulty: "intermediate",
+    tags: ["climate", "evaporation", "temperature", "wind speed", "snow", "weather", "seasonal", "Hargreaves"],
+    description: "Processes climate data for evaporation, temperature, and wind speed used throughout the simulation. Supports multiple evaporation methods: constant rate, monthly averages, time series, temperature-based (Hargreaves). Provides daily temperature range for snowmelt calculations and adjusts evaporation for soil moisture recovery.",
+    equations: "ET_Hargreaves = 0.0023·Ra·(T_mean + 17.8)·√(T_max - T_min) (Hargreaves method); ET_adjusted = ET_potential · Ks (soil moisture coefficient)",
+    inputs: "Temperature (min/max), evaporation rates or climate time series, wind speed",
+    outputs: "Daily evaporation rate, adjusted ET, temperature for snowmelt",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// climate.c — Climate/Evaporation Processing
+// EPA SWMM5 Engine — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+#include <math.h>
+
+typedef enum {
+    EVAP_CONSTANT,
+    EVAP_MONTHLY,
+    EVAP_TIMESERIES,
+    EVAP_HARGREAVES
+} EvapMethod;
+
+typedef struct {
+    EvapMethod method;
+    double     constRate;       // constant ET (in/day)
+    double     monthlyRate[12]; // monthly ET (in/day)
+    double     tMin;            // daily min temp (°F)
+    double     tMax;            // daily max temp (°F)
+    double     ra;              // extraterrestrial radiation
+    double     windSpeed;       // wind speed (mph)
+    int        month;           // current month (0-11)
+} TClimate;
+
+double climate_hargreaves(TClimate* c)
+{
+    double tMean, tRange;
+    tMean  = (c->tMax + c->tMin) / 2.0;
+    tRange = c->tMax - c->tMin;
+    if (tRange < 0.0) tRange = 0.0;
+    return 0.0023 * c->ra * (tMean + 17.8)
+           * sqrt(tRange);
+}
+
+double climate_getEvapRate(TClimate* c)
+{
+    switch (c->method) {
+        case EVAP_CONSTANT:    return c->constRate;
+        case EVAP_MONTHLY:     return c->monthlyRate[c->month];
+        case EVAP_HARGREAVES:  return climate_hargreaves(c);
+        default:               return 0.0;
+    }
+}
+
+double climate_adjustForSoilMoisture(double etPotential,
+    double moisture, double fieldCap)
+{
+    double ks;
+    if (fieldCap <= 0.0) return 0.0;
+    ks = moisture / fieldCap;
+    if (ks > 1.0) ks = 1.0;
+    return etPotential * ks;
+}`,
+    rust: `// climate.rs — Climate/Evaporation Processing
+// SWMM5 Engine in Rust — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+pub enum EvapMethod {
+    Constant,
+    Monthly,
+    TimeSeries,
+    Hargreaves,
+}
+
+pub struct Climate {
+    pub method: EvapMethod,
+    pub const_rate: f64,
+    pub monthly_rate: [f64; 12],
+    pub t_min: f64,
+    pub t_max: f64,
+    pub ra: f64,
+    pub wind_speed: f64,
+    pub month: usize,
+}
+
+impl Climate {
+    pub fn hargreaves(&self) -> f64 {
+        let t_mean = (self.t_max + self.t_min) / 2.0;
+        let t_range = (self.t_max - self.t_min).max(0.0);
+        0.0023 * self.ra * (t_mean + 17.8) * t_range.sqrt()
+    }
+
+    pub fn get_evap_rate(&self) -> f64 {
+        match self.method {
+            EvapMethod::Constant   => self.const_rate,
+            EvapMethod::Monthly    => self.monthly_rate[self.month],
+            EvapMethod::Hargreaves => self.hargreaves(),
+            EvapMethod::TimeSeries => 0.0,
+        }
+    }
+
+    pub fn adjust_for_soil_moisture(
+        et_potential: f64, moisture: f64, field_cap: f64,
+    ) -> f64 {
+        if field_cap <= 0.0 { return 0.0; }
+        let ks = (moisture / field_cap).min(1.0);
+        et_potential * ks
+    }
+}`,
+    python: `# climate.py — Climate/Evaporation Processing
+# SWMM5 Engine in Python — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+import math
+from dataclasses import dataclass, field
+from enum import Enum
+
+class EvapMethod(Enum):
+    CONSTANT = 0
+    MONTHLY = 1
+    TIMESERIES = 2
+    HARGREAVES = 3
+
+@dataclass
+class Climate:
+    method: EvapMethod = EvapMethod.CONSTANT
+    const_rate: float = 0.0
+    monthly_rate: list = field(
+        default_factory=lambda: [0.0] * 12)
+    t_min: float = 0.0
+    t_max: float = 0.0
+    ra: float = 0.0
+    wind_speed: float = 0.0
+    month: int = 0
+
+    def hargreaves(self) -> float:
+        t_mean = (self.t_max + self.t_min) / 2.0
+        t_range = max(self.t_max - self.t_min, 0.0)
+        return 0.0023 * self.ra * (t_mean + 17.8) \\
+               * math.sqrt(t_range)
+
+    def get_evap_rate(self) -> float:
+        if self.method == EvapMethod.CONSTANT:
+            return self.const_rate
+        elif self.method == EvapMethod.MONTHLY:
+            return self.monthly_rate[self.month]
+        elif self.method == EvapMethod.HARGREAVES:
+            return self.hargreaves()
+        return 0.0
+
+    @staticmethod
+    def adjust_for_soil_moisture(
+        et_potential: float, moisture: float,
+        field_cap: float
+    ) -> float:
+        if field_cap <= 0.0:
+            return 0.0
+        ks = min(moisture / field_cap, 1.0)
+        return et_potential * ks`,
+    fortran: `! climate.f90 — Climate/Evaporation Processing
+! SWMM5 Engine in Fortran — Evaporation & Temperature
+! Supports constant, monthly, time series, and
+! Hargreaves temperature-based evaporation methods
+
+module climate_module
+    implicit none
+
+    integer, parameter :: EVAP_CONSTANT   = 0
+    integer, parameter :: EVAP_MONTHLY    = 1
+    integer, parameter :: EVAP_TIMESERIES = 2
+    integer, parameter :: EVAP_HARGREAVES = 3
+
+    type :: Climate
+        integer  :: method
+        real(8)  :: const_rate
+        real(8)  :: monthly_rate(12)
+        real(8)  :: t_min, t_max
+        real(8)  :: ra
+        real(8)  :: wind_speed
+        integer  :: month
+    end type Climate
+
+contains
+
+    function hargreaves(c) result(et)
+        type(Climate), intent(in) :: c
+        real(8) :: et, t_mean, t_range
+        t_mean  = (c%t_max + c%t_min) / 2.0d0
+        t_range = max(c%t_max - c%t_min, 0.0d0)
+        et = 0.0023d0 * c%ra * (t_mean + 17.8d0) &
+             * sqrt(t_range)
+    end function hargreaves
+
+    function get_evap_rate(c) result(rate)
+        type(Climate), intent(in) :: c
+        real(8) :: rate
+        select case (c%method)
+            case (EVAP_CONSTANT)
+                rate = c%const_rate
+            case (EVAP_MONTHLY)
+                rate = c%monthly_rate(c%month)
+            case (EVAP_HARGREAVES)
+                rate = hargreaves(c)
+            case default
+                rate = 0.0d0
+        end select
+    end function get_evap_rate
+
+    function adjust_for_soil_moisture(et_pot, moisture, &
+                                       field_cap) result(et)
+        real(8), intent(in) :: et_pot, moisture, field_cap
+        real(8) :: et, ks
+        if (field_cap <= 0.0d0) then
+            et = 0.0d0
+            return
+        end if
+        ks = min(moisture / field_cap, 1.0d0)
+        et = et_pot * ks
+    end function adjust_for_soil_moisture
+
+end module climate_module`,
+    julia: `# climate.jl — Climate/Evaporation Processing
+# SWMM5 Engine in Julia — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+@enum EvapMethod begin
+    EVAP_CONSTANT
+    EVAP_MONTHLY
+    EVAP_TIMESERIES
+    EVAP_HARGREAVES
+end
+
+mutable struct Climate
+    method::EvapMethod
+    const_rate::Float64
+    monthly_rate::Vector{Float64}
+    t_min::Float64
+    t_max::Float64
+    ra::Float64
+    wind_speed::Float64
+    month::Int
+end
+
+function hargreaves(c::Climate)::Float64
+    t_mean  = (c.t_max + c.t_min) / 2.0
+    t_range = max(c.t_max - c.t_min, 0.0)
+    return 0.0023 * c.ra * (t_mean + 17.8) * sqrt(t_range)
+end
+
+function get_evap_rate(c::Climate)::Float64
+    if c.method == EVAP_CONSTANT
+        return c.const_rate
+    elseif c.method == EVAP_MONTHLY
+        return c.monthly_rate[c.month]
+    elseif c.method == EVAP_HARGREAVES
+        return hargreaves(c)
+    end
+    return 0.0
+end
+
+function adjust_for_soil_moisture(et_pot::Float64,
+    moisture::Float64, field_cap::Float64)::Float64
+    field_cap ≤ 0.0 && return 0.0
+    ks = min(moisture / field_cap, 1.0)
+    return et_pot * ks
+end`,
+    javascript: `// climate.js — Climate/Evaporation Processing
+// SWMM5 Engine in JavaScript — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+const EvapMethod = Object.freeze({
+    CONSTANT: 0,
+    MONTHLY: 1,
+    TIMESERIES: 2,
+    HARGREAVES: 3,
+});
+
+class Climate {
+    constructor(method, constRate, monthlyRate,
+                tMin, tMax, ra, windSpeed, month) {
+        this.method = method;
+        this.constRate = constRate;
+        this.monthlyRate = monthlyRate || new Array(12).fill(0);
+        this.tMin = tMin;
+        this.tMax = tMax;
+        this.ra = ra;
+        this.windSpeed = windSpeed;
+        this.month = month;
+    }
+
+    hargreaves() {
+        const tMean = (this.tMax + this.tMin) / 2.0;
+        const tRange = Math.max(this.tMax - this.tMin, 0.0);
+        return 0.0023 * this.ra * (tMean + 17.8)
+               * Math.sqrt(tRange);
+    }
+
+    getEvapRate() {
+        switch (this.method) {
+            case EvapMethod.CONSTANT:   return this.constRate;
+            case EvapMethod.MONTHLY:    return this.monthlyRate[this.month];
+            case EvapMethod.HARGREAVES: return this.hargreaves();
+            default:                    return 0.0;
+        }
+    }
+
+    static adjustForSoilMoisture(etPotential, moisture,
+                                  fieldCap) {
+        if (fieldCap <= 0.0) return 0.0;
+        const ks = Math.min(moisture / fieldCap, 1.0);
+        return etPotential * ks;
+    }
+}
+
+export { Climate, EvapMethod };`,
+    go: `// climate.go — Climate/Evaporation Processing
+// SWMM5 Engine in Go — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+package swmm
+
+import "math"
+
+type EvapMethod int
+
+const (
+    EvapConstant   EvapMethod = iota
+    EvapMonthly
+    EvapTimeSeries
+    EvapHargreaves
+)
+
+type Climate struct {
+    Method      EvapMethod
+    ConstRate   float64
+    MonthlyRate [12]float64
+    TMin        float64
+    TMax        float64
+    Ra          float64
+    WindSpeed   float64
+    Month       int
+}
+
+func (c *Climate) Hargreaves() float64 {
+    tMean := (c.TMax + c.TMin) / 2.0
+    tRange := math.Max(c.TMax-c.TMin, 0.0)
+    return 0.0023 * c.Ra * (tMean + 17.8) *
+        math.Sqrt(tRange)
+}
+
+func (c *Climate) GetEvapRate() float64 {
+    switch c.Method {
+    case EvapConstant:
+        return c.ConstRate
+    case EvapMonthly:
+        return c.MonthlyRate[c.Month]
+    case EvapHargreaves:
+        return c.Hargreaves()
+    default:
+        return 0.0
+    }
+}
+
+func AdjustForSoilMoisture(etPot, moisture,
+    fieldCap float64) float64 {
+    if fieldCap <= 0.0 {
+        return 0.0
+    }
+    ks := math.Min(moisture/fieldCap, 1.0)
+    return etPot * ks
+}`,
+    zig: `// climate.zig — Climate/Evaporation Processing
+// SWMM5 Engine in Zig — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+const std = @import("std");
+const math = std.math;
+
+const EvapMethod = enum {
+    constant,
+    monthly,
+    time_series,
+    hargreaves,
+};
+
+const Climate = struct {
+    method: EvapMethod,
+    const_rate: f64,
+    monthly_rate: [12]f64,
+    t_min: f64,
+    t_max: f64,
+    ra: f64,
+    wind_speed: f64,
+    month: usize,
+
+    pub fn calcHargreaves(self: Climate) f64 {
+        const t_mean = (self.t_max + self.t_min) / 2.0;
+        const t_range = @max(self.t_max - self.t_min, 0.0);
+        return 0.0023 * self.ra * (t_mean + 17.8) *
+            @sqrt(t_range);
+    }
+
+    pub fn getEvapRate(self: Climate) f64 {
+        return switch (self.method) {
+            .constant => self.const_rate,
+            .monthly => self.monthly_rate[self.month],
+            .hargreaves => self.calcHargreaves(),
+            .time_series => 0.0,
+        };
+    }
+
+    pub fn adjustForSoilMoisture(et_pot: f64,
+        moisture: f64, field_cap: f64) f64 {
+        if (field_cap <= 0.0) return 0.0;
+        const ks = @min(moisture / field_cap, 1.0);
+        return et_pot * ks;
+    }
+};`,
+    cpp: `// climate.cpp — Climate/Evaporation Processing
+// SWMM5 Engine in C++ — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+#include <cmath>
+#include <algorithm>
+#include <array>
+
+namespace swmm {
+
+enum class EvapMethod {
+    Constant, Monthly, TimeSeries, Hargreaves
+};
+
+struct Climate {
+    EvapMethod method;
+    double constRate;
+    std::array<double, 12> monthlyRate;
+    double tMin, tMax;
+    double ra;
+    double windSpeed;
+    int month;
+
+    double hargreaves() const {
+        double tMean = (tMax + tMin) / 2.0;
+        double tRange = std::max(tMax - tMin, 0.0);
+        return 0.0023 * ra * (tMean + 17.8)
+               * std::sqrt(tRange);
+    }
+
+    double getEvapRate() const {
+        switch (method) {
+            case EvapMethod::Constant:   return constRate;
+            case EvapMethod::Monthly:    return monthlyRate[month];
+            case EvapMethod::Hargreaves: return hargreaves();
+            default:                     return 0.0;
+        }
+    }
+
+    static double adjustForSoilMoisture(
+        double etPot, double moisture, double fieldCap)
+    {
+        if (fieldCap <= 0.0) return 0.0;
+        double ks = std::min(moisture / fieldCap, 1.0);
+        return etPot * ks;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Climate.cs — Climate/Evaporation Processing
+// SWMM5 Engine in C# — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+using System;
+
+namespace Swmm
+{
+    public enum EvapMethod
+    {
+        Constant, Monthly, TimeSeries, Hargreaves
+    }
+
+    public class Climate
+    {
+        public EvapMethod Method { get; set; }
+        public double ConstRate { get; set; }
+        public double[] MonthlyRate { get; set; }
+        public double TMin { get; set; }
+        public double TMax { get; set; }
+        public double Ra { get; set; }
+        public double WindSpeed { get; set; }
+        public int Month { get; set; }
+
+        public Climate()
+        {
+            MonthlyRate = new double[12];
+        }
+
+        public double Hargreaves()
+        {
+            double tMean = (TMax + TMin) / 2.0;
+            double tRange = Math.Max(TMax - TMin, 0.0);
+            return 0.0023 * Ra * (tMean + 17.8)
+                   * Math.Sqrt(tRange);
+        }
+
+        public double GetEvapRate()
+        {
+            switch (Method)
+            {
+                case EvapMethod.Constant:   return ConstRate;
+                case EvapMethod.Monthly:    return MonthlyRate[Month];
+                case EvapMethod.Hargreaves: return Hargreaves();
+                default:                    return 0.0;
+            }
+        }
+
+        public static double AdjustForSoilMoisture(
+            double etPot, double moisture, double fieldCap)
+        {
+            if (fieldCap <= 0.0) return 0.0;
+            double ks = Math.Min(moisture / fieldCap, 1.0);
+            return etPot * ks;
+        }
+    }
+}`,
+    matlab: `% climate.m — Climate/Evaporation Processing
+% SWMM5 Engine in MATLAB — Evaporation & Temperature
+% Supports constant, monthly, time series, and
+% Hargreaves temperature-based evaporation methods
+
+function c = create_climate(method, const_rate, ...
+                             monthly_rate, t_min, ...
+                             t_max, ra, wind_speed, month)
+    c.method       = method;
+    c.const_rate   = const_rate;
+    c.monthly_rate = monthly_rate;
+    c.t_min        = t_min;
+    c.t_max        = t_max;
+    c.ra           = ra;
+    c.wind_speed   = wind_speed;
+    c.month        = month;
+end
+
+function et = hargreaves(c)
+    t_mean  = (c.t_max + c.t_min) / 2.0;
+    t_range = max(c.t_max - c.t_min, 0.0);
+    et = 0.0023 * c.ra * (t_mean + 17.8) ...
+         * sqrt(t_range);
+end
+
+function rate = get_evap_rate(c)
+    switch c.method
+        case 0  % CONSTANT
+            rate = c.const_rate;
+        case 1  % MONTHLY
+            rate = c.monthly_rate(c.month);
+        case 3  % HARGREAVES
+            rate = hargreaves(c);
+        otherwise
+            rate = 0.0;
+    end
+end
+
+function et = adjust_for_soil_moisture(et_pot, ...
+                                        moisture, ...
+                                        field_cap)
+    if field_cap <= 0.0
+        et = 0.0;
+        return;
+    end
+    ks = min(moisture / field_cap, 1.0);
+    et = et_pot * ks;
+end`,
+    r: `# climate.R — Climate/Evaporation Processing
+# SWMM5 Engine in R — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+EVAP_CONSTANT   <- 0L
+EVAP_MONTHLY    <- 1L
+EVAP_TIMESERIES <- 2L
+EVAP_HARGREAVES <- 3L
+
+create_climate <- function(method, const_rate,
+                            monthly_rate, t_min,
+                            t_max, ra, wind_speed,
+                            month) {
+    list(method       = method,
+         const_rate   = const_rate,
+         monthly_rate = monthly_rate,
+         t_min        = t_min,
+         t_max        = t_max,
+         ra           = ra,
+         wind_speed   = wind_speed,
+         month        = month)
+}
+
+hargreaves <- function(c) {
+    t_mean  <- (c$t_max + c$t_min) / 2.0
+    t_range <- max(c$t_max - c$t_min, 0.0)
+    0.0023 * c$ra * (t_mean + 17.8) * sqrt(t_range)
+}
+
+get_evap_rate <- function(c) {
+    if (c$method == EVAP_CONSTANT)   return(c$const_rate)
+    if (c$method == EVAP_MONTHLY)    return(c$monthly_rate[c$month])
+    if (c$method == EVAP_HARGREAVES) return(hargreaves(c))
+    0.0
+}
+
+adjust_for_soil_moisture <- function(et_pot, moisture,
+                                      field_cap) {
+    if (field_cap <= 0.0) return(0.0)
+    ks <- min(moisture / field_cap, 1.0)
+    et_pot * ks
+}`,
+    delphi: `{ climate.pas — Climate/Evaporation Processing }
+{ SWMM5 Engine in Delphi — Evaporation & Temperature }
+{ Supports constant, monthly, time series, and }
+{ Hargreaves temperature-based evaporation methods }
+
+unit Climate;
+
+interface
+
+type
+  TEvapMethod = (emConstant, emMonthly,
+                 emTimeSeries, emHargreaves);
+
+  TClimate = class
+  private
+    FMethod: TEvapMethod;
+    FConstRate: Double;
+    FMonthlyRate: array[0..11] of Double;
+    FTMin: Double;
+    FTMax: Double;
+    FRa: Double;
+    FWindSpeed: Double;
+    FMonth: Integer;
+  public
+    constructor Create(AMethod: TEvapMethod;
+                       AConstRate: Double);
+    function Hargreaves: Double;
+    function GetEvapRate: Double;
+    class function AdjustForSoilMoisture(
+      ETPot, Moisture, FieldCap: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TClimate.Create(AMethod: TEvapMethod;
+                             AConstRate: Double);
+begin
+  FMethod    := AMethod;
+  FConstRate := AConstRate;
+end;
+
+function TClimate.Hargreaves: Double;
+var
+  TMean, TRange: Double;
+begin
+  TMean  := (FTMax + FTMin) / 2.0;
+  TRange := Max(FTMax - FTMin, 0.0);
+  Result := 0.0023 * FRa * (TMean + 17.8)
+            * Sqrt(TRange);
+end;
+
+function TClimate.GetEvapRate: Double;
+begin
+  case FMethod of
+    emConstant:   Result := FConstRate;
+    emMonthly:    Result := FMonthlyRate[FMonth];
+    emHargreaves: Result := Hargreaves;
+  else
+    Result := 0.0;
+  end;
+end;
+
+class function TClimate.AdjustForSoilMoisture(
+  ETPot, Moisture, FieldCap: Double): Double;
+var
+  Ks: Double;
+begin
+  if FieldCap <= 0.0 then Exit(0.0);
+  Ks := Min(Moisture / FieldCap, 1.0);
+  Result := ETPot * Ks;
+end;
+
+end.`,
+    typescript: `// climate.ts — Climate/Evaporation Processing
+// SWMM5 Engine in TypeScript — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+enum EvapMethod {
+    Constant = 0,
+    Monthly = 1,
+    TimeSeries = 2,
+    Hargreaves = 3,
+}
+
+interface ClimateParams {
+    method: EvapMethod;
+    constRate: number;
+    monthlyRate: number[];
+    tMin: number;
+    tMax: number;
+    ra: number;
+    windSpeed: number;
+    month: number;
+}
+
+class Climate {
+    method: EvapMethod;
+    constRate: number;
+    monthlyRate: number[];
+    tMin: number;
+    tMax: number;
+    ra: number;
+    windSpeed: number;
+    month: number;
+
+    constructor(p: ClimateParams) {
+        this.method = p.method;
+        this.constRate = p.constRate;
+        this.monthlyRate = p.monthlyRate;
+        this.tMin = p.tMin;
+        this.tMax = p.tMax;
+        this.ra = p.ra;
+        this.windSpeed = p.windSpeed;
+        this.month = p.month;
+    }
+
+    hargreaves(): number {
+        const tMean: number = (this.tMax + this.tMin) / 2.0;
+        const tRange: number =
+            Math.max(this.tMax - this.tMin, 0.0);
+        return 0.0023 * this.ra * (tMean + 17.8)
+               * Math.sqrt(tRange);
+    }
+
+    getEvapRate(): number {
+        switch (this.method) {
+            case EvapMethod.Constant:   return this.constRate;
+            case EvapMethod.Monthly:    return this.monthlyRate[this.month];
+            case EvapMethod.Hargreaves: return this.hargreaves();
+            default:                    return 0.0;
+        }
+    }
+
+    static adjustForSoilMoisture(
+        etPot: number, moisture: number,
+        fieldCap: number): number {
+        if (fieldCap <= 0.0) return 0.0;
+        const ks: number =
+            Math.min(moisture / fieldCap, 1.0);
+        return etPot * ks;
+    }
+}
+
+export { Climate, EvapMethod };`,
+    cuda: `// climate.cu — Climate/Evaporation Processing
+// SWMM5 Engine in CUDA — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+#include <math.h>
+
+enum EvapMethod {
+    EVAP_CONSTANT   = 0,
+    EVAP_MONTHLY    = 1,
+    EVAP_TIMESERIES = 2,
+    EVAP_HARGREAVES = 3
+};
+
+struct Climate {
+    int   method;
+    float constRate;
+    float monthlyRate[12];
+    float tMin, tMax;
+    float ra;
+    float windSpeed;
+    int   month;
+};
+
+__device__ float hargreaves(const Climate* c)
+{
+    float tMean  = (c->tMax + c->tMin) / 2.0f;
+    float tRange = fmaxf(c->tMax - c->tMin, 0.0f);
+    return 0.0023f * c->ra * (tMean + 17.8f)
+           * sqrtf(tRange);
+}
+
+__device__ float getEvapRate(const Climate* c)
+{
+    switch (c->method) {
+        case EVAP_CONSTANT:   return c->constRate;
+        case EVAP_MONTHLY:    return c->monthlyRate[c->month];
+        case EVAP_HARGREAVES: return hargreaves(c);
+        default:              return 0.0f;
+    }
+}
+
+__global__ void evapKernel(Climate* climates,
+    float* moisture, float* fieldCap,
+    float* etOut, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    float etPot = getEvapRate(&climates[idx]);
+    float fc = fieldCap[idx];
+    if (fc <= 0.0f) {
+        etOut[idx] = 0.0f;
+        return;
+    }
+    float ks = fminf(moisture[idx] / fc, 1.0f);
+    etOut[idx] = etPot * ks;
+}`,
+    wasm: `;; climate.wat — Climate/Evaporation Processing
+;; SWMM5 Engine in WebAssembly — Evaporation & Temperature
+;; Hargreaves method: ET = 0.0023 * Ra * (Tmean+17.8) * sqrt(Trange)
+
+(module
+  (func $hargreaves
+    (param $t_min f64) (param $t_max f64)
+    (param $ra f64)
+    (result f64)
+    (local $t_mean f64)
+    (local $t_range f64)
+
+    (local.set $t_mean
+      (f64.div
+        (f64.add (local.get $t_max) (local.get $t_min))
+        (f64.const 2.0)))
+
+    (local.set $t_range
+      (f64.max
+        (f64.sub (local.get $t_max) (local.get $t_min))
+        (f64.const 0.0)))
+
+    (f64.mul
+      (f64.mul
+        (f64.const 0.0023)
+        (local.get $ra))
+      (f64.mul
+        (f64.add (local.get $t_mean) (f64.const 17.8))
+        (f64.sqrt (local.get $t_range))))
+  )
+
+  (func $adjustForSoilMoisture
+    (param $et_pot f64) (param $moisture f64)
+    (param $field_cap f64)
+    (result f64)
+    (local $ks f64)
+
+    (if (result f64)
+      (f64.le (local.get $field_cap) (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (local.set $ks
+          (f64.min
+            (f64.div (local.get $moisture)
+                     (local.get $field_cap))
+            (f64.const 1.0)))
+        (f64.mul (local.get $et_pot) (local.get $ks))))
+  )
+
+  (export "hargreaves" (func $hargreaves))
+  (export "adjustForSoilMoisture"
+          (func $adjustForSoilMoisture))
+)`,
+    mojo: `# climate.mojo — Climate/Evaporation Processing
+# SWMM5 Engine in Mojo — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+from math import sqrt, min, max
+
+alias EVAP_CONSTANT   = 0
+alias EVAP_MONTHLY    = 1
+alias EVAP_TIMESERIES = 2
+alias EVAP_HARGREAVES = 3
+
+struct Climate:
+    var method: Int
+    var const_rate: Float64
+    var monthly_rate: StaticTuple[Float64, 12]
+    var t_min: Float64
+    var t_max: Float64
+    var ra: Float64
+    var wind_speed: Float64
+    var month: Int
+
+    fn hargreaves(self) -> Float64:
+        let t_mean = (self.t_max + self.t_min) / 2.0
+        let t_range = max(self.t_max - self.t_min, 0.0)
+        return 0.0023 * self.ra * (t_mean + 17.8) * sqrt(t_range)
+
+    fn get_evap_rate(self) -> Float64:
+        if self.method == EVAP_CONSTANT:
+            return self.const_rate
+        elif self.method == EVAP_MONTHLY:
+            return self.monthly_rate[self.month]
+        elif self.method == EVAP_HARGREAVES:
+            return self.hargreaves()
+        return 0.0
+
+    @staticmethod
+    fn adjust_for_soil_moisture(et_pot: Float64,
+        moisture: Float64,
+        field_cap: Float64) -> Float64:
+        if field_cap <= 0.0:
+            return 0.0
+        let ks = min(moisture / field_cap, 1.0)
+        return et_pot * ks`,
+    java: `// Climate.java — Climate/Evaporation Processing
+// SWMM5 Engine in Java — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+package swmm;
+
+public class Climate {
+
+    public enum EvapMethod {
+        CONSTANT, MONTHLY, TIMESERIES, HARGREAVES
+    }
+
+    private EvapMethod method;
+    private double constRate;
+    private double[] monthlyRate;
+    private double tMin, tMax;
+    private double ra;
+    private double windSpeed;
+    private int month;
+
+    public Climate(EvapMethod method, double constRate,
+                   double[] monthlyRate, double tMin,
+                   double tMax, double ra,
+                   double windSpeed, int month) {
+        this.method = method;
+        this.constRate = constRate;
+        this.monthlyRate = monthlyRate;
+        this.tMin = tMin;
+        this.tMax = tMax;
+        this.ra = ra;
+        this.windSpeed = windSpeed;
+        this.month = month;
+    }
+
+    public double hargreaves() {
+        double tMean = (tMax + tMin) / 2.0;
+        double tRange = Math.max(tMax - tMin, 0.0);
+        return 0.0023 * ra * (tMean + 17.8)
+               * Math.sqrt(tRange);
+    }
+
+    public double getEvapRate() {
+        switch (method) {
+            case CONSTANT:   return constRate;
+            case MONTHLY:    return monthlyRate[month];
+            case HARGREAVES: return hargreaves();
+            default:         return 0.0;
+        }
+    }
+
+    public static double adjustForSoilMoisture(
+        double etPot, double moisture, double fieldCap) {
+        if (fieldCap <= 0.0) return 0.0;
+        double ks = Math.min(moisture / fieldCap, 1.0);
+        return etPot * ks;
+    }
+}`,
+    nim: `# climate.nim — Climate/Evaporation Processing
+# SWMM5 Engine in Nim — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+import math
+
+type
+  EvapMethod = enum
+    emConstant, emMonthly, emTimeSeries, emHargreaves
+
+  Climate = object
+    method: EvapMethod
+    constRate: float
+    monthlyRate: array[12, float]
+    tMin, tMax: float
+    ra: float
+    windSpeed: float
+    month: int
+
+proc hargreaves(c: Climate): float =
+  let tMean = (c.tMax + c.tMin) / 2.0
+  let tRange = max(c.tMax - c.tMin, 0.0)
+  result = 0.0023 * c.ra * (tMean + 17.8) * sqrt(tRange)
+
+proc getEvapRate(c: Climate): float =
+  case c.method
+  of emConstant:   result = c.constRate
+  of emMonthly:    result = c.monthlyRate[c.month]
+  of emHargreaves: result = hargreaves(c)
+  of emTimeSeries: result = 0.0
+
+proc adjustForSoilMoisture(etPot, moisture,
+                            fieldCap: float): float =
+  if fieldCap <= 0.0: return 0.0
+  let ks = min(moisture / fieldCap, 1.0)
+  result = etPot * ks`,
+    ada: `-- climate.adb — Climate/Evaporation Processing
+-- SWMM5 Engine in Ada — Evaporation & Temperature
+-- Supports constant, monthly, time series, and
+-- Hargreaves temperature-based evaporation methods
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Climate_Pkg is
+
+   type Evap_Method is (Constant, Monthly,
+                        Time_Series, Hargreaves_M);
+
+   type Month_Array is array (0 .. 11) of Float;
+
+   type Climate is record
+      Method       : Evap_Method;
+      Const_Rate   : Float;
+      Monthly_Rate : Month_Array;
+      T_Min        : Float;
+      T_Max        : Float;
+      Ra           : Float;
+      Wind_Speed   : Float;
+      Month        : Integer;
+   end record;
+
+   function Hargreaves (C : Climate) return Float is
+      T_Mean  : Float := (C.T_Max + C.T_Min) / 2.0;
+      T_Range : Float := Float'Max(C.T_Max - C.T_Min, 0.0);
+   begin
+      return 0.0023 * C.Ra * (T_Mean + 17.8)
+             * Sqrt(T_Range);
+   end Hargreaves;
+
+   function Get_Evap_Rate (C : Climate) return Float is
+   begin
+      case C.Method is
+         when Constant     => return C.Const_Rate;
+         when Monthly      => return C.Monthly_Rate(C.Month);
+         when Hargreaves_M => return Hargreaves(C);
+         when others       => return 0.0;
+      end case;
+   end Get_Evap_Rate;
+
+   function Adjust_For_Soil_Moisture
+     (ET_Pot    : Float;
+      Moisture  : Float;
+      Field_Cap : Float) return Float
+   is
+      Ks : Float;
+   begin
+      if Field_Cap <= 0.0 then
+         return 0.0;
+      end if;
+      Ks := Float'Min(Moisture / Field_Cap, 1.0);
+      return ET_Pot * Ks;
+   end Adjust_For_Soil_Moisture;
+
+end Climate_Pkg;`,
+    chapel: `// climate.chpl — Climate/Evaporation Processing
+// SWMM5 Engine in Chapel — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+enum EvapMethod { constant, monthly,
+                  timeSeries, hargreaves }
+
+record Climate {
+    var method: EvapMethod;
+    var constRate: real;
+    var monthlyRate: [0..11] real;
+    var tMin: real;
+    var tMax: real;
+    var ra: real;
+    var windSpeed: real;
+    var month: int;
+
+    proc calcHargreaves(): real {
+        const tMean = (tMax + tMin) / 2.0;
+        const tRange = max(tMax - tMin, 0.0);
+        return 0.0023 * ra * (tMean + 17.8)
+               * sqrt(tRange);
+    }
+
+    proc getEvapRate(): real {
+        select method {
+            when EvapMethod.constant   do return constRate;
+            when EvapMethod.monthly    do return monthlyRate[month];
+            when EvapMethod.hargreaves do return calcHargreaves();
+            otherwise                  do return 0.0;
+        }
+    }
+}
+
+proc adjustForSoilMoisture(etPot: real, moisture: real,
+                            fieldCap: real): real {
+    if fieldCap <= 0.0 then return 0.0;
+    const ks = min(moisture / fieldCap, 1.0);
+    return etPot * ks;
+}`,
+    swift: `// climate.swift — Climate/Evaporation Processing
+// SWMM5 Engine in Swift — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+import Foundation
+
+enum EvapMethod {
+    case constant, monthly, timeSeries, hargreaves
+}
+
+struct Climate {
+    var method: EvapMethod
+    var constRate: Double
+    var monthlyRate: [Double]
+    var tMin: Double
+    var tMax: Double
+    var ra: Double
+    var windSpeed: Double
+    var month: Int
+
+    func hargreaves() -> Double {
+        let tMean = (tMax + tMin) / 2.0
+        let tRange = max(tMax - tMin, 0.0)
+        return 0.0023 * ra * (tMean + 17.8)
+               * sqrt(tRange)
+    }
+
+    func getEvapRate() -> Double {
+        switch method {
+        case .constant:   return constRate
+        case .monthly:    return monthlyRate[month]
+        case .hargreaves: return hargreaves()
+        case .timeSeries: return 0.0
+        }
+    }
+
+    static func adjustForSoilMoisture(
+        etPot: Double, moisture: Double,
+        fieldCap: Double) -> Double {
+        guard fieldCap > 0.0 else { return 0.0 }
+        let ks = min(moisture / fieldCap, 1.0)
+        return etPot * ks
+    }
+}`,
+    kotlin: `// Climate.kt — Climate/Evaporation Processing
+// SWMM5 Engine in Kotlin — Evaporation & Temperature
+// Supports constant, monthly, time series, and
+// Hargreaves temperature-based evaporation methods
+
+import kotlin.math.sqrt
+import kotlin.math.max
+import kotlin.math.min
+
+enum class EvapMethod {
+    CONSTANT, MONTHLY, TIMESERIES, HARGREAVES
+}
+
+data class Climate(
+    val method: EvapMethod,
+    val constRate: Double,
+    val monthlyRate: DoubleArray,
+    val tMin: Double,
+    val tMax: Double,
+    val ra: Double,
+    val windSpeed: Double,
+    val month: Int
+) {
+    fun hargreaves(): Double {
+        val tMean = (tMax + tMin) / 2.0
+        val tRange = max(tMax - tMin, 0.0)
+        return 0.0023 * ra * (tMean + 17.8) *
+               sqrt(tRange)
+    }
+
+    fun getEvapRate(): Double = when (method) {
+        EvapMethod.CONSTANT   -> constRate
+        EvapMethod.MONTHLY    -> monthlyRate[month]
+        EvapMethod.HARGREAVES -> hargreaves()
+        EvapMethod.TIMESERIES -> 0.0
+    }
+
+    companion object {
+        fun adjustForSoilMoisture(
+            etPot: Double, moisture: Double,
+            fieldCap: Double
+        ): Double {
+            if (fieldCap <= 0.0) return 0.0
+            val ks = min(moisture / fieldCap, 1.0)
+            return etPot * ks
+        }
+    }
+}`,
+  },
+  "controls.c — Rule-Based Controls": {
+    category: "Operations",
+    difficulty: "intermediate",
+    tags: ["controls", "rules", "pump", "gate", "orifice", "weir", "operational", "real-time", "conditional"],
+    description: "Implements the rule-based control system that operates pumps, gates, orifices, and weirs during a simulation. Each control rule has a condition (IF node depth > 5 ft) and an action (THEN set pump ON). Rules are evaluated each timestep and can depend on simulation time, node depth/head, link flow, or other system variables. This is how SWMM5 models real-time operational strategies.",
+    equations: "IF condition THEN action PRIORITY p; Action: setting = target_value (0=off, 1=on, fraction for throttled)",
+    inputs: "Control rules (condition/action pairs), current system state (depths, flows, time)",
+    outputs: "Updated pump/gate/orifice settings",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// controls.c — Rule-Based Controls
+// EPA SWMM5 Engine — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+#include <math.h>
+
+#define REL_EQ  0
+#define REL_NEQ 1
+#define REL_LT  2
+#define REL_LE  3
+#define REL_GT  4
+#define REL_GE  5
+
+typedef struct {
+    int    objectType;   // 0=node, 1=link
+    int    objectIndex;  // index of node or link
+    int    attribute;    // 0=depth, 1=head, 2=flow
+    int    relation;     // comparison operator
+    double value;        // threshold value
+} TCondition;
+
+typedef struct {
+    int    linkIndex;    // target link to control
+    double setting;      // new setting (0=off, 1=on)
+} TAction;
+
+typedef struct {
+    TCondition condition;
+    TAction    action;
+    int        priority;  // rule priority (higher = first)
+} TControlRule;
+
+int controls_checkCondition(TCondition* cond,
+    double* nodeDepths, double* linkFlows)
+{
+    double measuredValue;
+
+    if (cond->objectType == 0)
+        measuredValue = nodeDepths[cond->objectIndex];
+    else
+        measuredValue = linkFlows[cond->objectIndex];
+
+    switch (cond->relation) {
+        case REL_EQ:  return measuredValue == cond->value;
+        case REL_NEQ: return measuredValue != cond->value;
+        case REL_LT:  return measuredValue <  cond->value;
+        case REL_LE:  return measuredValue <= cond->value;
+        case REL_GT:  return measuredValue >  cond->value;
+        case REL_GE:  return measuredValue >= cond->value;
+        default:      return 0;
+    }
+}
+
+void controls_applyAction(TAction* act,
+    double* linkSettings)
+{
+    linkSettings[act->linkIndex] = act->setting;
+}
+
+void controls_evaluate(TControlRule* rules, int nRules,
+    double* nodeDepths, double* linkFlows,
+    double* linkSettings)
+{
+    int i;
+    for (i = 0; i < nRules; i++) {
+        if (controls_checkCondition(&rules[i].condition,
+                nodeDepths, linkFlows))
+        {
+            controls_applyAction(&rules[i].action,
+                linkSettings);
+        }
+    }
+}`,
+    rust: `// controls.rs — Rule-Based Controls
+// SWMM5 Engine in Rust — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum Relation {
+    Eq, Neq, Lt, Le, Gt, Ge,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+pub enum ObjectType {
+    Node, Link,
+}
+
+pub struct Condition {
+    pub object_type: ObjectType,
+    pub object_index: usize,
+    pub attribute: u8,
+    pub relation: Relation,
+    pub value: f64,
+}
+
+pub struct Action {
+    pub link_index: usize,
+    pub setting: f64,
+}
+
+pub struct ControlRule {
+    pub condition: Condition,
+    pub action: Action,
+    pub priority: i32,
+}
+
+impl Condition {
+    pub fn check(&self, node_depths: &[f64],
+                 link_flows: &[f64]) -> bool {
+        let measured = match self.object_type {
+            ObjectType::Node => node_depths[self.object_index],
+            ObjectType::Link => link_flows[self.object_index],
+        };
+        match self.relation {
+            Relation::Eq  => measured == self.value,
+            Relation::Neq => measured != self.value,
+            Relation::Lt  => measured <  self.value,
+            Relation::Le  => measured <= self.value,
+            Relation::Gt  => measured >  self.value,
+            Relation::Ge  => measured >= self.value,
+        }
+    }
+}
+
+pub fn apply_action(action: &Action,
+                    link_settings: &mut [f64]) {
+    link_settings[action.link_index] = action.setting;
+}
+
+pub fn evaluate(rules: &[ControlRule],
+                node_depths: &[f64], link_flows: &[f64],
+                link_settings: &mut [f64]) {
+    for rule in rules {
+        if rule.condition.check(node_depths, link_flows) {
+            apply_action(&rule.action, link_settings);
+        }
+    }
+}`,
+    python: `# controls.py — Rule-Based Controls
+# SWMM5 Engine in Python — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+from dataclasses import dataclass
+from enum import Enum
+from typing import List
+
+class Relation(Enum):
+    EQ = 0; NEQ = 1; LT = 2; LE = 3; GT = 4; GE = 5
+
+class ObjectType(Enum):
+    NODE = 0; LINK = 1
+
+@dataclass
+class Condition:
+    object_type: ObjectType
+    object_index: int
+    attribute: int      # 0=depth, 1=head, 2=flow
+    relation: Relation
+    value: float
+
+    def check(self, node_depths: List[float],
+              link_flows: List[float]) -> bool:
+        if self.object_type == ObjectType.NODE:
+            measured = node_depths[self.object_index]
+        else:
+            measured = link_flows[self.object_index]
+
+        if self.relation == Relation.EQ:  return measured == self.value
+        if self.relation == Relation.NEQ: return measured != self.value
+        if self.relation == Relation.LT:  return measured <  self.value
+        if self.relation == Relation.LE:  return measured <= self.value
+        if self.relation == Relation.GT:  return measured >  self.value
+        if self.relation == Relation.GE:  return measured >= self.value
+        return False
+
+@dataclass
+class Action:
+    link_index: int
+    setting: float       # 0=off, 1=on, fraction
+
+    def apply(self, link_settings: List[float]):
+        link_settings[self.link_index] = self.setting
+
+@dataclass
+class ControlRule:
+    condition: Condition
+    action: Action
+    priority: int = 0
+
+def evaluate(rules: List[ControlRule],
+             node_depths: List[float],
+             link_flows: List[float],
+             link_settings: List[float]):
+    for rule in sorted(rules, key=lambda r: -r.priority):
+        if rule.condition.check(node_depths, link_flows):
+            rule.action.apply(link_settings)`,
+    fortran: `! controls.f90 — Rule-Based Controls
+! SWMM5 Engine in Fortran — Rule-Based Control System
+! Evaluates conditional rules each timestep to
+! operate pumps, gates, orifices, and weirs
+
+module controls_module
+    implicit none
+
+    integer, parameter :: REL_EQ=0, REL_NEQ=1, REL_LT=2
+    integer, parameter :: REL_LE=3, REL_GT=4, REL_GE=5
+
+    type :: Condition
+        integer :: object_type   ! 0=node, 1=link
+        integer :: object_index
+        integer :: attribute     ! 0=depth, 1=head, 2=flow
+        integer :: relation
+        real(8) :: value
+    end type Condition
+
+    type :: Action
+        integer :: link_index
+        real(8) :: setting       ! 0=off, 1=on
+    end type Action
+
+    type :: ControlRule
+        type(Condition) :: cond
+        type(Action)    :: act
+        integer         :: priority
+    end type ControlRule
+
+contains
+
+    logical function check_condition(c, node_depths, &
+                                     link_flows)
+        type(Condition), intent(in) :: c
+        real(8), intent(in) :: node_depths(:), link_flows(:)
+        real(8) :: measured
+
+        if (c%object_type == 0) then
+            measured = node_depths(c%object_index)
+        else
+            measured = link_flows(c%object_index)
+        end if
+
+        select case (c%relation)
+            case (REL_EQ);  check_condition = measured == c%value
+            case (REL_NEQ); check_condition = measured /= c%value
+            case (REL_LT);  check_condition = measured <  c%value
+            case (REL_LE);  check_condition = measured <= c%value
+            case (REL_GT);  check_condition = measured >  c%value
+            case (REL_GE);  check_condition = measured >= c%value
+            case default;   check_condition = .false.
+        end select
+    end function check_condition
+
+    subroutine apply_action(act, link_settings)
+        type(Action), intent(in) :: act
+        real(8), intent(inout) :: link_settings(:)
+        link_settings(act%link_index) = act%setting
+    end subroutine apply_action
+
+    subroutine evaluate(rules, n, node_depths, &
+                        link_flows, link_settings)
+        type(ControlRule), intent(in) :: rules(:)
+        integer, intent(in) :: n
+        real(8), intent(in) :: node_depths(:), link_flows(:)
+        real(8), intent(inout) :: link_settings(:)
+        integer :: i
+
+        do i = 1, n
+            if (check_condition(rules(i)%cond, &
+                    node_depths, link_flows)) then
+                call apply_action(rules(i)%act, &
+                    link_settings)
+            end if
+        end do
+    end subroutine evaluate
+
+end module controls_module`,
+    julia: `# controls.jl — Rule-Based Controls
+# SWMM5 Engine in Julia — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+@enum Relation REL_EQ REL_NEQ REL_LT REL_LE REL_GT REL_GE
+@enum ObjectType OBJ_NODE OBJ_LINK
+
+struct Condition
+    object_type::ObjectType
+    object_index::Int
+    attribute::Int        # 0=depth, 1=head, 2=flow
+    relation::Relation
+    value::Float64
+end
+
+struct Action
+    link_index::Int
+    setting::Float64      # 0=off, 1=on, fraction
+end
+
+struct ControlRule
+    condition::Condition
+    action::Action
+    priority::Int
+end
+
+function check_condition(c::Condition,
+        node_depths::Vector{Float64},
+        link_flows::Vector{Float64})::Bool
+    measured = if c.object_type == OBJ_NODE
+        node_depths[c.object_index]
+    else
+        link_flows[c.object_index]
+    end
+
+    c.relation == REL_EQ  && return measured == c.value
+    c.relation == REL_NEQ && return measured != c.value
+    c.relation == REL_LT  && return measured <  c.value
+    c.relation == REL_LE  && return measured <= c.value
+    c.relation == REL_GT  && return measured >  c.value
+    c.relation == REL_GE  && return measured >= c.value
+    return false
+end
+
+function apply_action!(act::Action,
+        link_settings::Vector{Float64})
+    link_settings[act.link_index] = act.setting
+end
+
+function evaluate!(rules::Vector{ControlRule},
+        node_depths::Vector{Float64},
+        link_flows::Vector{Float64},
+        link_settings::Vector{Float64})
+    sorted = sort(rules, by=r -> -r.priority)
+    for rule in sorted
+        if check_condition(rule.condition,
+                node_depths, link_flows)
+            apply_action!(rule.action, link_settings)
+        end
+    end
+end`,
+    javascript: `// controls.js — Rule-Based Controls
+// SWMM5 Engine in JavaScript — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+const Relation = Object.freeze({
+    EQ: 0, NEQ: 1, LT: 2, LE: 3, GT: 4, GE: 5
+});
+
+const ObjectType = Object.freeze({
+    NODE: 0, LINK: 1
+});
+
+class Condition {
+    constructor(objectType, objectIndex, attribute,
+                relation, value) {
+        this.objectType = objectType;
+        this.objectIndex = objectIndex;
+        this.attribute = attribute;
+        this.relation = relation;
+        this.value = value;
+    }
+
+    check(nodeDepths, linkFlows) {
+        const measured = this.objectType === ObjectType.NODE
+            ? nodeDepths[this.objectIndex]
+            : linkFlows[this.objectIndex];
+
+        switch (this.relation) {
+            case Relation.EQ:  return measured === this.value;
+            case Relation.NEQ: return measured !== this.value;
+            case Relation.LT:  return measured <  this.value;
+            case Relation.LE:  return measured <= this.value;
+            case Relation.GT:  return measured >  this.value;
+            case Relation.GE:  return measured >= this.value;
+            default: return false;
+        }
+    }
+}
+
+class Action {
+    constructor(linkIndex, setting) {
+        this.linkIndex = linkIndex;
+        this.setting = setting;
+    }
+
+    apply(linkSettings) {
+        linkSettings[this.linkIndex] = this.setting;
+    }
+}
+
+class ControlRule {
+    constructor(condition, action, priority = 0) {
+        this.condition = condition;
+        this.action = action;
+        this.priority = priority;
+    }
+}
+
+function evaluate(rules, nodeDepths, linkFlows,
+                  linkSettings) {
+    const sorted = [...rules].sort(
+        (a, b) => b.priority - a.priority);
+    for (const rule of sorted) {
+        if (rule.condition.check(nodeDepths, linkFlows)) {
+            rule.action.apply(linkSettings);
+        }
+    }
+}
+
+export { Condition, Action, ControlRule, evaluate };`,
+    go: `// controls.go — Rule-Based Controls
+// SWMM5 Engine in Go — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+package swmm
+
+import "sort"
+
+const (
+    RelEq  = 0; RelNeq = 1; RelLt = 2
+    RelLe  = 3; RelGt  = 4; RelGe = 5
+    ObjNode = 0; ObjLink = 1
+)
+
+type Condition struct {
+    ObjectType  int
+    ObjectIndex int
+    Attribute   int
+    Relation    int
+    Value       float64
+}
+
+type Action struct {
+    LinkIndex int
+    Setting   float64
+}
+
+type ControlRule struct {
+    Cond     Condition
+    Act      Action
+    Priority int
+}
+
+func (c *Condition) Check(nodeDepths, linkFlows []float64) bool {
+    var measured float64
+    if c.ObjectType == ObjNode {
+        measured = nodeDepths[c.ObjectIndex]
+    } else {
+        measured = linkFlows[c.ObjectIndex]
+    }
+
+    switch c.Relation {
+    case RelEq:  return measured == c.Value
+    case RelNeq: return measured != c.Value
+    case RelLt:  return measured <  c.Value
+    case RelLe:  return measured <= c.Value
+    case RelGt:  return measured >  c.Value
+    case RelGe:  return measured >= c.Value
+    default:     return false
+    }
+}
+
+func ApplyAction(act *Action, linkSettings []float64) {
+    linkSettings[act.LinkIndex] = act.Setting
+}
+
+func Evaluate(rules []ControlRule, nodeDepths,
+    linkFlows, linkSettings []float64) {
+    sort.Slice(rules, func(i, j int) bool {
+        return rules[i].Priority > rules[j].Priority
+    })
+    for _, rule := range rules {
+        if rule.Cond.Check(nodeDepths, linkFlows) {
+            ApplyAction(&rule.Act, linkSettings)
+        }
+    }
+}`,
+    zig: `// controls.zig — Rule-Based Controls
+// SWMM5 Engine in Zig — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+const std = @import("std");
+
+const Relation = enum { eq, neq, lt, le, gt, ge };
+const ObjectType = enum { node, link };
+
+const Condition = struct {
+    object_type: ObjectType,
+    object_index: usize,
+    attribute: u8,
+    relation: Relation,
+    value: f64,
+
+    pub fn check(self: Condition, node_depths: []const f64,
+                 link_flows: []const f64) bool {
+        const measured = switch (self.object_type) {
+            .node => node_depths[self.object_index],
+            .link => link_flows[self.object_index],
+        };
+        return switch (self.relation) {
+            .eq  => measured == self.value,
+            .neq => measured != self.value,
+            .lt  => measured <  self.value,
+            .le  => measured <= self.value,
+            .gt  => measured >  self.value,
+            .ge  => measured >= self.value,
+        };
+    }
+};
+
+const Action = struct {
+    link_index: usize,
+    setting: f64,
+
+    pub fn apply(self: Action, link_settings: []f64) void {
+        link_settings[self.link_index] = self.setting;
+    }
+};
+
+const ControlRule = struct {
+    condition: Condition,
+    action: Action,
+    priority: i32,
+};
+
+pub fn evaluate(rules: []const ControlRule,
+    node_depths: []const f64, link_flows: []const f64,
+    link_settings: []f64) void {
+    for (rules) |rule| {
+        if (rule.condition.check(node_depths, link_flows)) {
+            rule.action.apply(link_settings);
+        }
+    }
+}`,
+    cpp: `// controls.cpp — Rule-Based Controls
+// SWMM5 Engine in C++ — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+#include <vector>
+#include <algorithm>
+
+namespace swmm {
+
+enum class Relation { Eq, Neq, Lt, Le, Gt, Ge };
+enum class ObjectType { Node, Link };
+
+struct Condition {
+    ObjectType objectType;
+    int objectIndex;
+    int attribute;
+    Relation relation;
+    double value;
+
+    bool check(const std::vector<double>& nodeDepths,
+               const std::vector<double>& linkFlows) const {
+        double measured = (objectType == ObjectType::Node)
+            ? nodeDepths[objectIndex]
+            : linkFlows[objectIndex];
+
+        switch (relation) {
+            case Relation::Eq:  return measured == value;
+            case Relation::Neq: return measured != value;
+            case Relation::Lt:  return measured <  value;
+            case Relation::Le:  return measured <= value;
+            case Relation::Gt:  return measured >  value;
+            case Relation::Ge:  return measured >= value;
+            default: return false;
+        }
+    }
+};
+
+struct Action {
+    int linkIndex;
+    double setting;
+
+    void apply(std::vector<double>& linkSettings) const {
+        linkSettings[linkIndex] = setting;
+    }
+};
+
+struct ControlRule {
+    Condition condition;
+    Action action;
+    int priority;
+};
+
+void evaluate(std::vector<ControlRule>& rules,
+    const std::vector<double>& nodeDepths,
+    const std::vector<double>& linkFlows,
+    std::vector<double>& linkSettings) {
+    std::sort(rules.begin(), rules.end(),
+        [](const auto& a, const auto& b) {
+            return a.priority > b.priority;
+        });
+    for (const auto& rule : rules) {
+        if (rule.condition.check(nodeDepths, linkFlows)) {
+            rule.action.apply(linkSettings);
+        }
+    }
+}
+
+} // namespace swmm`,
+    csharp: `// Controls.cs — Rule-Based Controls
+// SWMM5 Engine in C# — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+using System;
+using System.Collections.Generic;
+using System.Linq;
+
+namespace Swmm
+{
+    public enum Relation { Eq, Neq, Lt, Le, Gt, Ge }
+    public enum ObjectType { Node, Link }
+
+    public class Condition
+    {
+        public ObjectType ObjectType { get; set; }
+        public int ObjectIndex { get; set; }
+        public int Attribute { get; set; }
+        public Relation Relation { get; set; }
+        public double Value { get; set; }
+
+        public bool Check(double[] nodeDepths,
+                          double[] linkFlows)
+        {
+            double measured = ObjectType == ObjectType.Node
+                ? nodeDepths[ObjectIndex]
+                : linkFlows[ObjectIndex];
+
+            return Relation switch {
+                Relation.Eq  => measured == Value,
+                Relation.Neq => measured != Value,
+                Relation.Lt  => measured <  Value,
+                Relation.Le  => measured <= Value,
+                Relation.Gt  => measured >  Value,
+                Relation.Ge  => measured >= Value,
+                _ => false,
+            };
+        }
+    }
+
+    public class Action
+    {
+        public int LinkIndex { get; set; }
+        public double Setting { get; set; }
+
+        public void Apply(double[] linkSettings)
+        {
+            linkSettings[LinkIndex] = Setting;
+        }
+    }
+
+    public class ControlRule
+    {
+        public Condition Condition { get; set; }
+        public Action Action { get; set; }
+        public int Priority { get; set; }
+    }
+
+    public static class Controls
+    {
+        public static void Evaluate(List<ControlRule> rules,
+            double[] nodeDepths, double[] linkFlows,
+            double[] linkSettings)
+        {
+            foreach (var rule in rules
+                .OrderByDescending(r => r.Priority))
+            {
+                if (rule.Condition.Check(nodeDepths,
+                        linkFlows))
+                    rule.Action.Apply(linkSettings);
+            }
+        }
+    }
+}`,
+    matlab: `% controls.m — Rule-Based Controls
+% SWMM5 Engine in MATLAB — Rule-Based Control System
+% Evaluates conditional rules each timestep to
+% operate pumps, gates, orifices, and weirs
+
+function rule = create_rule(obj_type, obj_index, ...
+        attribute, relation, value, ...
+        link_index, setting, priority)
+    rule.obj_type   = obj_type;    % 0=node, 1=link
+    rule.obj_index  = obj_index;
+    rule.attribute  = attribute;
+    rule.relation   = relation;    % 0-5: eq,neq,lt,le,gt,ge
+    rule.value      = value;
+    rule.link_index = link_index;
+    rule.setting    = setting;
+    rule.priority   = priority;
+end
+
+function result = check_condition(rule, node_depths, ...
+                                   link_flows)
+    if rule.obj_type == 0
+        measured = node_depths(rule.obj_index);
+    else
+        measured = link_flows(rule.obj_index);
+    end
+
+    switch rule.relation
+        case 0; result = measured == rule.value;
+        case 1; result = measured ~= rule.value;
+        case 2; result = measured <  rule.value;
+        case 3; result = measured <= rule.value;
+        case 4; result = measured >  rule.value;
+        case 5; result = measured >= rule.value;
+        otherwise; result = false;
+    end
+end
+
+function link_settings = apply_action(rule, link_settings)
+    link_settings(rule.link_index) = rule.setting;
+end
+
+function link_settings = evaluate(rules, node_depths, ...
+                                   link_flows, link_settings)
+    priorities = [rules.priority];
+    [~, idx] = sort(priorities, 'descend');
+    for i = 1:length(idx)
+        rule = rules(idx(i));
+        if check_condition(rule, node_depths, link_flows)
+            link_settings = apply_action(rule, ...
+                link_settings);
+        end
+    end
+end`,
+    r: `# controls.R — Rule-Based Controls
+# SWMM5 Engine in R — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+create_rule <- function(obj_type, obj_index, attribute,
+                        relation, value, link_index,
+                        setting, priority = 0) {
+    list(
+        obj_type   = obj_type,    # 0=node, 1=link
+        obj_index  = obj_index,
+        attribute  = attribute,
+        relation   = relation,    # 0-5: eq,neq,lt,le,gt,ge
+        value      = value,
+        link_index = link_index,
+        setting    = setting,
+        priority   = priority
+    )
+}
+
+check_condition <- function(rule, node_depths,
+                             link_flows) {
+    if (rule$obj_type == 0)
+        measured <- node_depths[rule$obj_index]
+    else
+        measured <- link_flows[rule$obj_index]
+
+    switch(as.character(rule$relation),
+        "0" = measured == rule$value,
+        "1" = measured != rule$value,
+        "2" = measured <  rule$value,
+        "3" = measured <= rule$value,
+        "4" = measured >  rule$value,
+        "5" = measured >= rule$value,
+        FALSE
+    )
+}
+
+apply_action <- function(rule, link_settings) {
+    link_settings[rule$link_index] <- rule$setting
+    link_settings
+}
+
+evaluate_controls <- function(rules, node_depths,
+                               link_flows, link_settings) {
+    priorities <- sapply(rules, function(r) r$priority)
+    idx <- order(priorities, decreasing = TRUE)
+    for (i in idx) {
+        if (check_condition(rules[[i]], node_depths,
+                link_flows)) {
+            link_settings <- apply_action(rules[[i]],
+                link_settings)
+        }
+    }
+    link_settings
+}`,
+    delphi: `{ controls.pas — Rule-Based Controls }
+{ SWMM5 Engine in Delphi — Rule-Based Control System }
+{ Evaluates conditional rules each timestep to }
+{ operate pumps, gates, orifices, and weirs }
+
+unit Controls;
+
+interface
+
+type
+  TRelation = (relEq, relNeq, relLt, relLe, relGt, relGe);
+  TObjectType = (otNode, otLink);
+
+  TCondition = record
+    ObjectType:  TObjectType;
+    ObjectIndex: Integer;
+    Attribute:   Integer;
+    Relation:    TRelation;
+    Value:       Double;
+  end;
+
+  TAction = record
+    LinkIndex: Integer;
+    Setting:   Double;
+  end;
+
+  TControlRule = record
+    Condition: TCondition;
+    Action:    TAction;
+    Priority:  Integer;
+  end;
+
+  TControls = class
+  public
+    class function CheckCondition(
+        const Cond: TCondition;
+        const NodeDepths: array of Double;
+        const LinkFlows: array of Double): Boolean;
+    class procedure ApplyAction(
+        const Act: TAction;
+        var LinkSettings: array of Double);
+    class procedure Evaluate(
+        var Rules: array of TControlRule;
+        const NodeDepths: array of Double;
+        const LinkFlows: array of Double;
+        var LinkSettings: array of Double);
+  end;
+
+implementation
+
+class function TControls.CheckCondition(
+    const Cond: TCondition;
+    const NodeDepths: array of Double;
+    const LinkFlows: array of Double): Boolean;
+var
+  Measured: Double;
+begin
+  if Cond.ObjectType = otNode then
+    Measured := NodeDepths[Cond.ObjectIndex]
+  else
+    Measured := LinkFlows[Cond.ObjectIndex];
+
+  case Cond.Relation of
+    relEq:  Result := Measured = Cond.Value;
+    relNeq: Result := Measured <> Cond.Value;
+    relLt:  Result := Measured < Cond.Value;
+    relLe:  Result := Measured <= Cond.Value;
+    relGt:  Result := Measured > Cond.Value;
+    relGe:  Result := Measured >= Cond.Value;
+  else
+    Result := False;
+  end;
+end;
+
+class procedure TControls.ApplyAction(
+    const Act: TAction;
+    var LinkSettings: array of Double);
+begin
+  LinkSettings[Act.LinkIndex] := Act.Setting;
+end;
+
+class procedure TControls.Evaluate(
+    var Rules: array of TControlRule;
+    const NodeDepths: array of Double;
+    const LinkFlows: array of Double;
+    var LinkSettings: array of Double);
+var
+  I: Integer;
+begin
+  for I := Low(Rules) to High(Rules) do
+    if CheckCondition(Rules[I].Condition,
+        NodeDepths, LinkFlows) then
+      ApplyAction(Rules[I].Action, LinkSettings);
+end;
+
+end.`,
+    typescript: `// controls.ts — Rule-Based Controls
+// SWMM5 Engine in TypeScript — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+enum Relation { Eq, Neq, Lt, Le, Gt, Ge }
+enum ObjectType { Node, Link }
+
+interface ICondition {
+    objectType: ObjectType;
+    objectIndex: number;
+    attribute: number;
+    relation: Relation;
+    value: number;
+}
+
+interface IAction {
+    linkIndex: number;
+    setting: number;
+}
+
+interface IControlRule {
+    condition: ICondition;
+    action: IAction;
+    priority: number;
+}
+
+class Condition implements ICondition {
+    constructor(
+        public objectType: ObjectType,
+        public objectIndex: number,
+        public attribute: number,
+        public relation: Relation,
+        public value: number
+    ) {}
+
+    check(nodeDepths: number[],
+          linkFlows: number[]): boolean {
+        const measured: number =
+            this.objectType === ObjectType.Node
+                ? nodeDepths[this.objectIndex]
+                : linkFlows[this.objectIndex];
+
+        switch (this.relation) {
+            case Relation.Eq:  return measured === this.value;
+            case Relation.Neq: return measured !== this.value;
+            case Relation.Lt:  return measured <  this.value;
+            case Relation.Le:  return measured <= this.value;
+            case Relation.Gt:  return measured >  this.value;
+            case Relation.Ge:  return measured >= this.value;
+            default: return false;
+        }
+    }
+}
+
+function applyAction(action: IAction,
+                     linkSettings: number[]): void {
+    linkSettings[action.linkIndex] = action.setting;
+}
+
+function evaluate(rules: IControlRule[],
+                  nodeDepths: number[],
+                  linkFlows: number[],
+                  linkSettings: number[]): void {
+    const sorted = [...rules].sort(
+        (a, b) => b.priority - a.priority);
+    for (const rule of sorted) {
+        const cond = new Condition(
+            rule.condition.objectType,
+            rule.condition.objectIndex,
+            rule.condition.attribute,
+            rule.condition.relation,
+            rule.condition.value);
+        if (cond.check(nodeDepths, linkFlows)) {
+            applyAction(rule.action, linkSettings);
+        }
+    }
+}
+
+export { Condition, evaluate, Relation, ObjectType };`,
+    cuda: `// controls.cu — Rule-Based Controls
+// SWMM5 Engine in CUDA — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+#define REL_EQ  0
+#define REL_NEQ 1
+#define REL_LT  2
+#define REL_LE  3
+#define REL_GT  4
+#define REL_GE  5
+
+#define OBJ_NODE 0
+#define OBJ_LINK 1
+
+struct Condition {
+    int objectType;
+    int objectIndex;
+    int attribute;
+    int relation;
+    float value;
+};
+
+struct Action {
+    int linkIndex;
+    float setting;
+};
+
+struct ControlRule {
+    Condition condition;
+    Action action;
+    int priority;
+};
+
+__device__ bool checkCondition(const Condition* cond,
+    const float* nodeDepths, const float* linkFlows)
+{
+    float measured;
+    if (cond->objectType == OBJ_NODE)
+        measured = nodeDepths[cond->objectIndex];
+    else
+        measured = linkFlows[cond->objectIndex];
+
+    switch (cond->relation) {
+        case REL_EQ:  return measured == cond->value;
+        case REL_NEQ: return measured != cond->value;
+        case REL_LT:  return measured <  cond->value;
+        case REL_LE:  return measured <= cond->value;
+        case REL_GT:  return measured >  cond->value;
+        case REL_GE:  return measured >= cond->value;
+        default:      return false;
+    }
+}
+
+__global__ void evaluateKernel(ControlRule* rules,
+    int nRules, float* nodeDepths, float* linkFlows,
+    float* linkSettings)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nRules) return;
+
+    if (checkCondition(&rules[idx].condition,
+            nodeDepths, linkFlows)) {
+        linkSettings[rules[idx].action.linkIndex] =
+            rules[idx].action.setting;
+    }
+}`,
+    wasm: `;; controls.wat — Rule-Based Controls
+;; SWMM5 Engine in WebAssembly — Rule-Based Control System
+;; Evaluates conditional rules each timestep to
+;; operate pumps, gates, orifices, and weirs
+
+(module
+  ;; Memory layout: node_depths at 0, link_flows at 1024,
+  ;; link_settings at 2048
+  (memory (export "memory") 1)
+
+  ;; check_condition: relation, measured, value -> 0 or 1
+  (func $checkCondition
+    (param $relation i32) (param $measured f64)
+    (param $value f64) (result i32)
+    (if (i32.eq (local.get $relation) (i32.const 0))
+      (then (return (f64.eq (local.get $measured)
+                            (local.get $value)))))
+    (if (i32.eq (local.get $relation) (i32.const 1))
+      (then (return (f64.ne (local.get $measured)
+                            (local.get $value)))))
+    (if (i32.eq (local.get $relation) (i32.const 2))
+      (then (return (f64.lt (local.get $measured)
+                            (local.get $value)))))
+    (if (i32.eq (local.get $relation) (i32.const 3))
+      (then (return (f64.le (local.get $measured)
+                            (local.get $value)))))
+    (if (i32.eq (local.get $relation) (i32.const 4))
+      (then (return (f64.gt (local.get $measured)
+                            (local.get $value)))))
+    (if (i32.eq (local.get $relation) (i32.const 5))
+      (then (return (f64.ge (local.get $measured)
+                            (local.get $value)))))
+    (i32.const 0)
+  )
+
+  ;; apply_action: write setting to link_settings[index]
+  (func $applyAction
+    (param $linkIndex i32) (param $setting f64)
+    (f64.store
+      (i32.add (i32.const 2048)
+        (i32.mul (local.get $linkIndex) (i32.const 8)))
+      (local.get $setting))
+  )
+
+  (export "checkCondition" (func $checkCondition))
+  (export "applyAction" (func $applyAction))
+)`,
+    mojo: `# controls.mojo — Rule-Based Controls
+# SWMM5 Engine in Mojo — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+@value
+struct Condition:
+    var object_type: Int     # 0=node, 1=link
+    var object_index: Int
+    var attribute: Int
+    var relation: Int        # 0-5: eq,neq,lt,le,gt,ge
+    var value: Float64
+
+    fn check(self, node_depths: DynamicVector[Float64],
+             link_flows: DynamicVector[Float64]) -> Bool:
+        var measured: Float64
+        if self.object_type == 0:
+            measured = node_depths[self.object_index]
+        else:
+            measured = link_flows[self.object_index]
+
+        if self.relation == 0: return measured == self.value
+        if self.relation == 1: return measured != self.value
+        if self.relation == 2: return measured <  self.value
+        if self.relation == 3: return measured <= self.value
+        if self.relation == 4: return measured >  self.value
+        if self.relation == 5: return measured >= self.value
+        return False
+
+@value
+struct Action:
+    var link_index: Int
+    var setting: Float64
+
+    fn apply(self, inout link_settings: DynamicVector[Float64]):
+        link_settings[self.link_index] = self.setting
+
+@value
+struct ControlRule:
+    var condition: Condition
+    var action: Action
+    var priority: Int
+
+fn evaluate(rules: DynamicVector[ControlRule],
+            node_depths: DynamicVector[Float64],
+            link_flows: DynamicVector[Float64],
+            inout link_settings: DynamicVector[Float64]):
+    for i in range(len(rules)):
+        let rule = rules[i]
+        if rule.condition.check(node_depths, link_flows):
+            rule.action.apply(link_settings)`,
+    java: `// Controls.java — Rule-Based Controls
+// SWMM5 Engine in Java — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+package swmm;
+
+import java.util.Arrays;
+import java.util.Comparator;
+
+enum Relation { EQ, NEQ, LT, LE, GT, GE }
+enum ObjectType { NODE, LINK }
+
+class Condition {
+    ObjectType objectType;
+    int objectIndex;
+    int attribute;
+    Relation relation;
+    double value;
+
+    Condition(ObjectType objectType, int objectIndex,
+              int attribute, Relation relation, double value) {
+        this.objectType = objectType;
+        this.objectIndex = objectIndex;
+        this.attribute = attribute;
+        this.relation = relation;
+        this.value = value;
+    }
+
+    boolean check(double[] nodeDepths, double[] linkFlows) {
+        double measured = objectType == ObjectType.NODE
+            ? nodeDepths[objectIndex]
+            : linkFlows[objectIndex];
+
+        switch (relation) {
+            case EQ:  return measured == value;
+            case NEQ: return measured != value;
+            case LT:  return measured <  value;
+            case LE:  return measured <= value;
+            case GT:  return measured >  value;
+            case GE:  return measured >= value;
+            default:  return false;
+        }
+    }
+}
+
+class Action {
+    int linkIndex;
+    double setting;
+
+    Action(int linkIndex, double setting) {
+        this.linkIndex = linkIndex;
+        this.setting = setting;
+    }
+
+    void apply(double[] linkSettings) {
+        linkSettings[linkIndex] = setting;
+    }
+}
+
+class ControlRule {
+    Condition condition;
+    Action action;
+    int priority;
+
+    ControlRule(Condition condition, Action action,
+                int priority) {
+        this.condition = condition;
+        this.action = action;
+        this.priority = priority;
+    }
+}
+
+public class Controls {
+    public static void evaluate(ControlRule[] rules,
+            double[] nodeDepths, double[] linkFlows,
+            double[] linkSettings) {
+        Arrays.sort(rules,
+            Comparator.comparingInt(
+                (ControlRule r) -> -r.priority));
+        for (ControlRule rule : rules) {
+            if (rule.condition.check(nodeDepths, linkFlows))
+                rule.action.apply(linkSettings);
+        }
+    }
+}`,
+    nim: `# controls.nim — Rule-Based Controls
+# SWMM5 Engine in Nim — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+import algorithm
+
+type
+  Relation = enum
+    relEq, relNeq, relLt, relLe, relGt, relGe
+
+  ObjectType = enum
+    otNode, otLink
+
+  Condition = object
+    objectType: ObjectType
+    objectIndex: int
+    attribute: int
+    relation: Relation
+    value: float
+
+  Action = object
+    linkIndex: int
+    setting: float
+
+  ControlRule = object
+    condition: Condition
+    action: Action
+    priority: int
+
+proc checkCondition(cond: Condition,
+    nodeDepths: seq[float],
+    linkFlows: seq[float]): bool =
+  let measured =
+    if cond.objectType == otNode:
+      nodeDepths[cond.objectIndex]
+    else:
+      linkFlows[cond.objectIndex]
+
+  case cond.relation
+  of relEq:  result = measured == cond.value
+  of relNeq: result = measured != cond.value
+  of relLt:  result = measured <  cond.value
+  of relLe:  result = measured <= cond.value
+  of relGt:  result = measured >  cond.value
+  of relGe:  result = measured >= cond.value
+
+proc applyAction(action: Action,
+    linkSettings: var seq[float]) =
+  linkSettings[action.linkIndex] = action.setting
+
+proc evaluate(rules: var seq[ControlRule],
+    nodeDepths: seq[float], linkFlows: seq[float],
+    linkSettings: var seq[float]) =
+  rules.sort(proc(a, b: ControlRule): int =
+    b.priority - a.priority)
+  for rule in rules:
+    if checkCondition(rule.condition,
+        nodeDepths, linkFlows):
+      applyAction(rule.action, linkSettings)`,
+    ada: `-- controls.adb — Rule-Based Controls
+-- SWMM5 Engine in Ada — Rule-Based Control System
+-- Evaluates conditional rules each timestep to
+-- operate pumps, gates, orifices, and weirs
+
+with Ada.Containers.Vectors;
+
+package Controls is
+
+   type Relation is (Eq, Neq, Lt, Le, Gt, Ge);
+   type Object_Kind is (Node, Link);
+
+   type Condition is record
+      Object_Type  : Object_Kind;
+      Object_Index : Integer;
+      Attribute    : Integer;
+      Rel          : Relation;
+      Value        : Long_Float;
+   end record;
+
+   type Action is record
+      Link_Index : Integer;
+      Setting    : Long_Float;
+   end record;
+
+   type Control_Rule is record
+      Cond     : Condition;
+      Act      : Action;
+      Priority : Integer;
+   end record;
+
+   type Float_Array is array (Natural range <>)
+      of Long_Float;
+
+   function Check_Condition
+      (C           : Condition;
+       Node_Depths : Float_Array;
+       Link_Flows  : Float_Array) return Boolean is
+      Measured : Long_Float;
+   begin
+      if C.Object_Type = Node then
+         Measured := Node_Depths (C.Object_Index);
+      else
+         Measured := Link_Flows (C.Object_Index);
+      end if;
+
+      case C.Rel is
+         when Eq  => return Measured = C.Value;
+         when Neq => return Measured /= C.Value;
+         when Lt  => return Measured < C.Value;
+         when Le  => return Measured <= C.Value;
+         when Gt  => return Measured > C.Value;
+         when Ge  => return Measured >= C.Value;
+      end case;
+   end Check_Condition;
+
+   procedure Apply_Action
+      (Act           : Action;
+       Link_Settings : in out Float_Array) is
+   begin
+      Link_Settings (Act.Link_Index) := Act.Setting;
+   end Apply_Action;
+
+   procedure Evaluate
+      (Rules         : in out array of Control_Rule;
+       Node_Depths   : Float_Array;
+       Link_Flows    : Float_Array;
+       Link_Settings : in out Float_Array) is
+   begin
+      for I in Rules'Range loop
+         if Check_Condition (Rules (I).Cond,
+               Node_Depths, Link_Flows) then
+            Apply_Action (Rules (I).Act,
+               Link_Settings);
+         end if;
+      end loop;
+   end Evaluate;
+
+end Controls;`,
+    chapel: `// controls.chpl — Rule-Based Controls
+// SWMM5 Engine in Chapel — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+enum Relation { eq, neq, lt, le, gt, ge }
+enum ObjectType { node, link }
+
+record Condition {
+    var objectType: ObjectType;
+    var objectIndex: int;
+    var attribute: int;
+    var relation: Relation;
+    var value: real;
+
+    proc check(nodeDepths: [] real,
+               linkFlows: [] real): bool {
+        var measured: real;
+        if objectType == ObjectType.node then
+            measured = nodeDepths[objectIndex];
+        else
+            measured = linkFlows[objectIndex];
+
+        select relation {
+            when Relation.eq  do return measured == value;
+            when Relation.neq do return measured != value;
+            when Relation.lt  do return measured <  value;
+            when Relation.le  do return measured <= value;
+            when Relation.gt  do return measured >  value;
+            when Relation.ge  do return measured >= value;
+        }
+        return false;
+    }
+}
+
+record Action {
+    var linkIndex: int;
+    var setting: real;
+
+    proc apply(ref linkSettings: [] real) {
+        linkSettings[linkIndex] = setting;
+    }
+}
+
+record ControlRule {
+    var condition: Condition;
+    var action: Action;
+    var priority: int;
+}
+
+proc evaluate(rules: [] ControlRule,
+              nodeDepths: [] real,
+              linkFlows: [] real,
+              ref linkSettings: [] real) {
+    for rule in rules {
+        if rule.condition.check(nodeDepths, linkFlows) {
+            rule.action.apply(linkSettings);
+        }
+    }
+}`,
+    swift: `// controls.swift — Rule-Based Controls
+// SWMM5 Engine in Swift — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+enum Relation { case eq, neq, lt, le, gt, ge }
+enum ObjectType { case node, link }
+
+struct Condition {
+    let objectType: ObjectType
+    let objectIndex: Int
+    let attribute: Int
+    let relation: Relation
+    let value: Double
+
+    func check(nodeDepths: [Double],
+               linkFlows: [Double]) -> Bool {
+        let measured: Double
+        switch objectType {
+        case .node: measured = nodeDepths[objectIndex]
+        case .link: measured = linkFlows[objectIndex]
+        }
+
+        switch relation {
+        case .eq:  return measured == value
+        case .neq: return measured != value
+        case .lt:  return measured <  value
+        case .le:  return measured <= value
+        case .gt:  return measured >  value
+        case .ge:  return measured >= value
+        }
+    }
+}
+
+struct Action {
+    let linkIndex: Int
+    let setting: Double
+
+    func apply(linkSettings: inout [Double]) {
+        linkSettings[linkIndex] = setting
+    }
+}
+
+struct ControlRule {
+    let condition: Condition
+    let action: Action
+    let priority: Int
+}
+
+func evaluate(rules: [ControlRule],
+              nodeDepths: [Double],
+              linkFlows: [Double],
+              linkSettings: inout [Double]) {
+    let sorted = rules.sorted { $0.priority > $1.priority }
+    for rule in sorted {
+        if rule.condition.check(nodeDepths: nodeDepths,
+                                linkFlows: linkFlows) {
+            rule.action.apply(linkSettings: &linkSettings)
+        }
+    }
+}`,
+    kotlin: `// Controls.kt — Rule-Based Controls
+// SWMM5 Engine in Kotlin — Rule-Based Control System
+// Evaluates conditional rules each timestep to
+// operate pumps, gates, orifices, and weirs
+
+package swmm
+
+enum class Relation { EQ, NEQ, LT, LE, GT, GE }
+enum class ObjectType { NODE, LINK }
+
+data class Condition(
+    val objectType: ObjectType,
+    val objectIndex: Int,
+    val attribute: Int,
+    val relation: Relation,
+    val value: Double
+) {
+    fun check(nodeDepths: DoubleArray,
+              linkFlows: DoubleArray): Boolean {
+        val measured = when (objectType) {
+            ObjectType.NODE -> nodeDepths[objectIndex]
+            ObjectType.LINK -> linkFlows[objectIndex]
+        }
+        return when (relation) {
+            Relation.EQ  -> measured == value
+            Relation.NEQ -> measured != value
+            Relation.LT  -> measured <  value
+            Relation.LE  -> measured <= value
+            Relation.GT  -> measured >  value
+            Relation.GE  -> measured >= value
+        }
+    }
+}
+
+data class Action(
+    val linkIndex: Int,
+    val setting: Double
+) {
+    fun apply(linkSettings: DoubleArray) {
+        linkSettings[linkIndex] = setting
+    }
+}
+
+data class ControlRule(
+    val condition: Condition,
+    val action: Action,
+    val priority: Int = 0
+)
+
+fun evaluate(rules: List<ControlRule>,
+             nodeDepths: DoubleArray,
+             linkFlows: DoubleArray,
+             linkSettings: DoubleArray) {
+    rules.sortedByDescending { it.priority }.forEach { rule ->
+        if (rule.condition.check(nodeDepths, linkFlows)) {
+            rule.action.apply(linkSettings)
+        }
+    }
+}`,
+  },
+  "qualrout.c — Water Quality Routing": {
+    category: "Water Quality",
+    difficulty: "advanced",
+    tags: ["water quality", "pollutant", "routing", "concentration", "CSTR", "decay", "first-order", "advection", "mixing"],
+    description: "Routes pollutant concentrations through the drainage network. Nodes use complete mixing (CSTR) — the outflow concentration equals the fully-mixed node concentration. Links use a Lagrangian approach or CSTR depending on flow regime. First-order decay (C = C0·exp(-k·dt)) reduces pollutant mass during transport. Handles multiple pollutants simultaneously.",
+    equations: "C_node = (ΣQ_in·C_in + V·C_old/dt) / (ΣQ_in + V/dt) (CSTR mixing); C_decay = C·exp(-k·dt) (first-order decay); Mass_out = Q_out·C_node·dt",
+    inputs: "Upstream pollutant concentrations, node volumes, link flows, decay coefficients",
+    outputs: "Pollutant concentrations at each node and link, mass loads",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// qualrout.c — Water Quality Routing
+// EPA SWMM5 Engine — Pollutant Transport through Drainage Network
+// CSTR mixing at nodes, first-order decay, mass balance
+
+#include <math.h>
+
+typedef struct {
+    double decayRate;    // first-order decay coeff (1/s)
+    double concen;       // current concentration (mg/L)
+} TPollutant;
+
+double qualrout_getDecay(double conc, double k, double dt)
+{
+    if (k <= 0.0 || dt <= 0.0) return conc;
+    return conc * exp(-k * dt);
+}
+
+double qualrout_findNodeQual(double* qIn, double* cIn,
+                              int nInflows, double volume,
+                              double cOld, double dt)
+{
+    double massIn = 0.0, totalQ = 0.0;
+    int i;
+
+    for (i = 0; i < nInflows; i++) {
+        massIn += qIn[i] * cIn[i];
+        totalQ += qIn[i];
+    }
+
+    if (totalQ + volume / dt <= 0.0) return 0.0;
+
+    return (massIn + volume * cOld / dt)
+           / (totalQ + volume / dt);
+}
+
+double qualrout_findLinkQual(double cUp, double cLink,
+                              double flow, double vol,
+                              double dt)
+{
+    if (vol <= 0.0) return cUp;
+    double fraction = flow * dt / vol;
+    if (fraction > 1.0) fraction = 1.0;
+    return cLink + fraction * (cUp - cLink);
+}
+
+double qualrout_getMassFlow(double conc, double flow,
+                             double dt)
+{
+    return conc * fabs(flow) * dt;
+}`,
+    rust: `// qualrout.rs — Water Quality Routing
+// SWMM5 Engine in Rust — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+pub struct Pollutant {
+    pub decay_rate: f64,
+    pub concen: f64,
+}
+
+pub fn get_decay(conc: f64, k: f64, dt: f64) -> f64 {
+    if k <= 0.0 || dt <= 0.0 { return conc; }
+    conc * (-k * dt).exp()
+}
+
+pub fn find_node_qual(q_in: &[f64], c_in: &[f64],
+                      volume: f64, c_old: f64,
+                      dt: f64) -> f64 {
+    let mass_in: f64 = q_in.iter().zip(c_in.iter())
+        .map(|(q, c)| q * c).sum();
+    let total_q: f64 = q_in.iter().sum();
+
+    let denom = total_q + volume / dt;
+    if denom <= 0.0 { return 0.0; }
+
+    (mass_in + volume * c_old / dt) / denom
+}
+
+pub fn find_link_qual(c_up: f64, c_link: f64, flow: f64,
+                      vol: f64, dt: f64) -> f64 {
+    if vol <= 0.0 { return c_up; }
+    let fraction = (flow * dt / vol).min(1.0);
+    c_link + fraction * (c_up - c_link)
+}
+
+pub fn get_mass_flow(conc: f64, flow: f64,
+                     dt: f64) -> f64 {
+    conc * flow.abs() * dt
+}`,
+    python: `# qualrout.py — Water Quality Routing
+# SWMM5 Engine in Python — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+import math
+from dataclasses import dataclass
+
+@dataclass
+class Pollutant:
+    decay_rate: float
+    concen: float
+
+def get_decay(conc: float, k: float, dt: float) -> float:
+    if k <= 0.0 or dt <= 0.0:
+        return conc
+    return conc * math.exp(-k * dt)
+
+def find_node_qual(q_in: list, c_in: list,
+                   volume: float, c_old: float,
+                   dt: float) -> float:
+    mass_in = sum(q * c for q, c in zip(q_in, c_in))
+    total_q = sum(q_in)
+
+    denom = total_q + volume / dt
+    if denom <= 0.0:
+        return 0.0
+
+    return (mass_in + volume * c_old / dt) / denom
+
+def find_link_qual(c_up: float, c_link: float,
+                   flow: float, vol: float,
+                   dt: float) -> float:
+    if vol <= 0.0:
+        return c_up
+    fraction = min(flow * dt / vol, 1.0)
+    return c_link + fraction * (c_up - c_link)
+
+def get_mass_flow(conc: float, flow: float,
+                  dt: float) -> float:
+    return conc * abs(flow) * dt`,
+    fortran: `! qualrout.f90 — Water Quality Routing
+! SWMM5 Engine in Fortran — Pollutant Transport
+! CSTR mixing at nodes, first-order decay, mass balance
+
+module qualrout_module
+    implicit none
+
+    type :: Pollutant
+        real(8) :: decay_rate
+        real(8) :: concen
+    end type Pollutant
+
+contains
+
+    function get_decay(conc, k, dt) result(c_out)
+        real(8), intent(in) :: conc, k, dt
+        real(8) :: c_out
+        if (k <= 0.0d0 .or. dt <= 0.0d0) then
+            c_out = conc
+            return
+        end if
+        c_out = conc * exp(-k * dt)
+    end function get_decay
+
+    function find_node_qual(q_in, c_in, n, volume, &
+                            c_old, dt) result(c_node)
+        integer, intent(in) :: n
+        real(8), intent(in) :: q_in(n), c_in(n)
+        real(8), intent(in) :: volume, c_old, dt
+        real(8) :: c_node, mass_in, total_q, denom
+        integer :: i
+
+        mass_in = 0.0d0
+        total_q = 0.0d0
+        do i = 1, n
+            mass_in = mass_in + q_in(i) * c_in(i)
+            total_q = total_q + q_in(i)
+        end do
+
+        denom = total_q + volume / dt
+        if (denom <= 0.0d0) then
+            c_node = 0.0d0
+            return
+        end if
+        c_node = (mass_in + volume * c_old / dt) / denom
+    end function find_node_qual
+
+    function find_link_qual(c_up, c_link, flow, vol, &
+                            dt) result(c_out)
+        real(8), intent(in) :: c_up, c_link, flow, vol, dt
+        real(8) :: c_out, fraction
+        if (vol <= 0.0d0) then
+            c_out = c_up
+            return
+        end if
+        fraction = flow * dt / vol
+        if (fraction > 1.0d0) fraction = 1.0d0
+        c_out = c_link + fraction * (c_up - c_link)
+    end function find_link_qual
+
+    function get_mass_flow(conc, flow, dt) result(mass)
+        real(8), intent(in) :: conc, flow, dt
+        real(8) :: mass
+        mass = conc * abs(flow) * dt
+    end function get_mass_flow
+
+end module qualrout_module`,
+    julia: `# qualrout.jl — Water Quality Routing
+# SWMM5 Engine in Julia — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+mutable struct Pollutant
+    decay_rate::Float64
+    concen::Float64
+end
+
+function get_decay(conc::Float64, k::Float64,
+                   dt::Float64)::Float64
+    (k ≤ 0.0 || dt ≤ 0.0) && return conc
+    conc * exp(-k * dt)
+end
+
+function find_node_qual(q_in::Vector{Float64},
+                        c_in::Vector{Float64},
+                        volume::Float64, c_old::Float64,
+                        dt::Float64)::Float64
+    mass_in = sum(q_in .* c_in)
+    total_q = sum(q_in)
+
+    denom = total_q + volume / dt
+    denom ≤ 0.0 && return 0.0
+
+    (mass_in + volume * c_old / dt) / denom
+end
+
+function find_link_qual(c_up::Float64, c_link::Float64,
+                        flow::Float64, vol::Float64,
+                        dt::Float64)::Float64
+    vol ≤ 0.0 && return c_up
+    fraction = clamp(flow * dt / vol, 0.0, 1.0)
+    c_link + fraction * (c_up - c_link)
+end
+
+function get_mass_flow(conc::Float64, flow::Float64,
+                       dt::Float64)::Float64
+    conc * abs(flow) * dt
+end`,
+    javascript: `// qualrout.js — Water Quality Routing
+// SWMM5 Engine in JavaScript — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+class Pollutant {
+    constructor(decayRate, concen) {
+        this.decayRate = decayRate;
+        this.concen = concen;
+    }
+}
+
+function getDecay(conc, k, dt) {
+    if (k <= 0.0 || dt <= 0.0) return conc;
+    return conc * Math.exp(-k * dt);
+}
+
+function findNodeQual(qIn, cIn, volume, cOld, dt) {
+    let massIn = 0.0, totalQ = 0.0;
+    for (let i = 0; i < qIn.length; i++) {
+        massIn += qIn[i] * cIn[i];
+        totalQ += qIn[i];
+    }
+
+    const denom = totalQ + volume / dt;
+    if (denom <= 0.0) return 0.0;
+
+    return (massIn + volume * cOld / dt) / denom;
+}
+
+function findLinkQual(cUp, cLink, flow, vol, dt) {
+    if (vol <= 0.0) return cUp;
+    const fraction = Math.min(flow * dt / vol, 1.0);
+    return cLink + fraction * (cUp - cLink);
+}
+
+function getMassFlow(conc, flow, dt) {
+    return conc * Math.abs(flow) * dt;
+}
+
+export { Pollutant, getDecay, findNodeQual,
+         findLinkQual, getMassFlow };`,
+    go: `// qualrout.go — Water Quality Routing
+// SWMM5 Engine in Go — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+package swmm
+
+import "math"
+
+type Pollutant struct {
+    DecayRate float64
+    Concen    float64
+}
+
+func GetDecay(conc, k, dt float64) float64 {
+    if k <= 0.0 || dt <= 0.0 {
+        return conc
+    }
+    return conc * math.Exp(-k*dt)
+}
+
+func FindNodeQual(qIn, cIn []float64, volume,
+    cOld, dt float64) float64 {
+
+    massIn := 0.0
+    totalQ := 0.0
+    for i := range qIn {
+        massIn += qIn[i] * cIn[i]
+        totalQ += qIn[i]
+    }
+
+    denom := totalQ + volume/dt
+    if denom <= 0.0 {
+        return 0.0
+    }
+    return (massIn + volume*cOld/dt) / denom
+}
+
+func FindLinkQual(cUp, cLink, flow, vol,
+    dt float64) float64 {
+
+    if vol <= 0.0 {
+        return cUp
+    }
+    fraction := flow * dt / vol
+    if fraction > 1.0 {
+        fraction = 1.0
+    }
+    return cLink + fraction*(cUp-cLink)
+}
+
+func GetMassFlow(conc, flow, dt float64) float64 {
+    return conc * math.Abs(flow) * dt
+}`,
+    zig: `// qualrout.zig — Water Quality Routing
+// SWMM5 Engine in Zig — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+const std = @import("std");
+const math = std.math;
+
+const Pollutant = struct {
+    decay_rate: f64,
+    concen: f64,
+};
+
+pub fn getDecay(conc: f64, k: f64, dt: f64) f64 {
+    if (k <= 0.0 or dt <= 0.0) return conc;
+    return conc * @exp(-k * dt);
+}
+
+pub fn findNodeQual(q_in: []const f64, c_in: []const f64,
+                    volume: f64, c_old: f64, dt: f64) f64 {
+    var mass_in: f64 = 0.0;
+    var total_q: f64 = 0.0;
+    for (q_in, c_in) |q, c| {
+        mass_in += q * c;
+        total_q += q;
+    }
+
+    const denom = total_q + volume / dt;
+    if (denom <= 0.0) return 0.0;
+
+    return (mass_in + volume * c_old / dt) / denom;
+}
+
+pub fn findLinkQual(c_up: f64, c_link: f64, flow: f64,
+                    vol: f64, dt: f64) f64 {
+    if (vol <= 0.0) return c_up;
+    const fraction = @min(flow * dt / vol, 1.0);
+    return c_link + fraction * (c_up - c_link);
+}
+
+pub fn getMassFlow(conc: f64, flow: f64, dt: f64) f64 {
+    return conc * @fabs(flow) * dt;
+}`,
+    cpp: `// qualrout.cpp — Water Quality Routing
+// SWMM5 Engine in C++ — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+#include <cmath>
+#include <vector>
+#include <algorithm>
+
+namespace swmm {
+
+struct Pollutant {
+    double decayRate;
+    double concen;
+};
+
+double getDecay(double conc, double k, double dt) {
+    if (k <= 0.0 || dt <= 0.0) return conc;
+    return conc * std::exp(-k * dt);
+}
+
+double findNodeQual(const std::vector<double>& qIn,
+                    const std::vector<double>& cIn,
+                    double volume, double cOld,
+                    double dt) {
+    double massIn = 0.0, totalQ = 0.0;
+    for (size_t i = 0; i < qIn.size(); ++i) {
+        massIn += qIn[i] * cIn[i];
+        totalQ += qIn[i];
+    }
+
+    double denom = totalQ + volume / dt;
+    if (denom <= 0.0) return 0.0;
+
+    return (massIn + volume * cOld / dt) / denom;
+}
+
+double findLinkQual(double cUp, double cLink,
+                    double flow, double vol,
+                    double dt) {
+    if (vol <= 0.0) return cUp;
+    double fraction = std::min(flow * dt / vol, 1.0);
+    return cLink + fraction * (cUp - cLink);
+}
+
+double getMassFlow(double conc, double flow,
+                   double dt) {
+    return conc * std::abs(flow) * dt;
+}
+
+} // namespace swmm`,
+    csharp: `// QualRout.cs — Water Quality Routing
+// SWMM5 Engine in C# — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+using System;
+
+namespace Swmm
+{
+    public class Pollutant
+    {
+        public double DecayRate { get; set; }
+        public double Concen { get; set; }
+
+        public Pollutant(double decayRate, double concen)
+        {
+            DecayRate = decayRate;
+            Concen = concen;
+        }
+    }
+
+    public static class QualRout
+    {
+        public static double GetDecay(double conc,
+                                       double k, double dt)
+        {
+            if (k <= 0.0 || dt <= 0.0) return conc;
+            return conc * Math.Exp(-k * dt);
+        }
+
+        public static double FindNodeQual(double[] qIn,
+            double[] cIn, double volume, double cOld,
+            double dt)
+        {
+            double massIn = 0.0, totalQ = 0.0;
+            for (int i = 0; i < qIn.Length; i++)
+            {
+                massIn += qIn[i] * cIn[i];
+                totalQ += qIn[i];
+            }
+
+            double denom = totalQ + volume / dt;
+            if (denom <= 0.0) return 0.0;
+
+            return (massIn + volume * cOld / dt) / denom;
+        }
+
+        public static double FindLinkQual(double cUp,
+            double cLink, double flow, double vol,
+            double dt)
+        {
+            if (vol <= 0.0) return cUp;
+            double fraction = Math.Min(
+                flow * dt / vol, 1.0);
+            return cLink + fraction * (cUp - cLink);
+        }
+
+        public static double GetMassFlow(double conc,
+            double flow, double dt)
+        {
+            return conc * Math.Abs(flow) * dt;
+        }
+    }
+}`,
+    matlab: `% qualrout.m — Water Quality Routing
+% SWMM5 Engine in MATLAB — Pollutant Transport
+% CSTR mixing at nodes, first-order decay, mass balance
+
+function c_out = get_decay(conc, k, dt)
+    if k <= 0.0 || dt <= 0.0
+        c_out = conc;
+        return;
+    end
+    c_out = conc * exp(-k * dt);
+end
+
+function c_node = find_node_qual(q_in, c_in, ...
+                                  volume, c_old, dt)
+    mass_in = sum(q_in .* c_in);
+    total_q = sum(q_in);
+
+    denom = total_q + volume / dt;
+    if denom <= 0.0
+        c_node = 0.0;
+        return;
+    end
+    c_node = (mass_in + volume * c_old / dt) / denom;
+end
+
+function c_out = find_link_qual(c_up, c_link, ...
+                                 flow, vol, dt)
+    if vol <= 0.0
+        c_out = c_up;
+        return;
+    end
+    fraction = min(flow * dt / vol, 1.0);
+    c_out = c_link + fraction * (c_up - c_link);
+end
+
+function mass = get_mass_flow(conc, flow, dt)
+    mass = conc * abs(flow) * dt;
+end`,
+    r: `# qualrout.R — Water Quality Routing
+# SWMM5 Engine in R — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+create_pollutant <- function(decay_rate, concen) {
+    list(decay_rate = decay_rate, concen = concen)
+}
+
+get_decay <- function(conc, k, dt) {
+    if (k <= 0.0 || dt <= 0.0) return(conc)
+    conc * exp(-k * dt)
+}
+
+find_node_qual <- function(q_in, c_in, volume,
+                            c_old, dt) {
+    mass_in <- sum(q_in * c_in)
+    total_q <- sum(q_in)
+
+    denom <- total_q + volume / dt
+    if (denom <= 0.0) return(0.0)
+
+    (mass_in + volume * c_old / dt) / denom
+}
+
+find_link_qual <- function(c_up, c_link, flow,
+                            vol, dt) {
+    if (vol <= 0.0) return(c_up)
+    fraction <- min(flow * dt / vol, 1.0)
+    c_link + fraction * (c_up - c_link)
+}
+
+get_mass_flow <- function(conc, flow, dt) {
+    conc * abs(flow) * dt
+}`,
+    delphi: `{ qualrout.pas — Water Quality Routing }
+{ SWMM5 Engine in Delphi — Pollutant Transport }
+{ CSTR mixing at nodes, first-order decay, mass balance }
+
+unit QualRout;
+
+interface
+
+type
+  TPollutant = class
+  private
+    FDecayRate: Double;
+    FConcen: Double;
+  public
+    constructor Create(ADecayRate, AConcen: Double);
+    property DecayRate: Double read FDecayRate;
+    property Concen: Double read FConcen write FConcen;
+  end;
+
+function GetDecay(Conc, K, Dt: Double): Double;
+function FindNodeQual(const QIn, CIn: array of Double;
+                      Volume, COld, Dt: Double): Double;
+function FindLinkQual(CUp, CLink, Flow,
+                      Vol, Dt: Double): Double;
+function GetMassFlow(Conc, Flow, Dt: Double): Double;
+
+implementation
+
+uses Math;
+
+constructor TPollutant.Create(ADecayRate, AConcen: Double);
+begin
+  FDecayRate := ADecayRate;
+  FConcen := AConcen;
+end;
+
+function GetDecay(Conc, K, Dt: Double): Double;
+begin
+  if (K <= 0.0) or (Dt <= 0.0) then
+    Exit(Conc);
+  Result := Conc * Exp(-K * Dt);
+end;
+
+function FindNodeQual(const QIn, CIn: array of Double;
+                      Volume, COld, Dt: Double): Double;
+var
+  MassIn, TotalQ, Denom: Double;
+  I: Integer;
+begin
+  MassIn := 0.0;
+  TotalQ := 0.0;
+  for I := Low(QIn) to High(QIn) do
+  begin
+    MassIn := MassIn + QIn[I] * CIn[I];
+    TotalQ := TotalQ + QIn[I];
+  end;
+
+  Denom := TotalQ + Volume / Dt;
+  if Denom <= 0.0 then
+    Exit(0.0);
+  Result := (MassIn + Volume * COld / Dt) / Denom;
+end;
+
+function FindLinkQual(CUp, CLink, Flow,
+                      Vol, Dt: Double): Double;
+var
+  Fraction: Double;
+begin
+  if Vol <= 0.0 then
+    Exit(CUp);
+  Fraction := Min(Flow * Dt / Vol, 1.0);
+  Result := CLink + Fraction * (CUp - CLink);
+end;
+
+function GetMassFlow(Conc, Flow, Dt: Double): Double;
+begin
+  Result := Conc * Abs(Flow) * Dt;
+end;
+
+end.`,
+    typescript: `// qualrout.ts — Water Quality Routing
+// SWMM5 Engine in TypeScript — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+interface PollutantParams {
+    decayRate: number;
+    concen: number;
+}
+
+class Pollutant {
+    readonly decayRate: number;
+    concen: number;
+
+    constructor(params: PollutantParams) {
+        this.decayRate = params.decayRate;
+        this.concen = params.concen;
+    }
+}
+
+function getDecay(conc: number, k: number,
+                  dt: number): number {
+    if (k <= 0.0 || dt <= 0.0) return conc;
+    return conc * Math.exp(-k * dt);
+}
+
+function findNodeQual(qIn: number[], cIn: number[],
+                      volume: number, cOld: number,
+                      dt: number): number {
+    let massIn = 0.0, totalQ = 0.0;
+    for (let i = 0; i < qIn.length; i++) {
+        massIn += qIn[i] * cIn[i];
+        totalQ += qIn[i];
+    }
+
+    const denom: number = totalQ + volume / dt;
+    if (denom <= 0.0) return 0.0;
+
+    return (massIn + volume * cOld / dt) / denom;
+}
+
+function findLinkQual(cUp: number, cLink: number,
+                      flow: number, vol: number,
+                      dt: number): number {
+    if (vol <= 0.0) return cUp;
+    const fraction: number = Math.min(
+        flow * dt / vol, 1.0);
+    return cLink + fraction * (cUp - cLink);
+}
+
+function getMassFlow(conc: number, flow: number,
+                     dt: number): number {
+    return conc * Math.abs(flow) * dt;
+}
+
+export { Pollutant, getDecay, findNodeQual,
+         findLinkQual, getMassFlow };`,
+    cuda: `// qualrout.cu — Water Quality Routing
+// SWMM5 Engine in CUDA — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+#include <math.h>
+
+struct Pollutant {
+    float decayRate;
+    float concen;
+};
+
+__device__ float getDecay(float conc, float k, float dt)
+{
+    if (k <= 0.0f || dt <= 0.0f) return conc;
+    return conc * expf(-k * dt);
+}
+
+__global__ void findNodeQualKernel(
+    float* qIn, float* cIn, int* nInflows,
+    float* volumes, float* cOld, float dt,
+    float* cNode, int nNodes)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nNodes) return;
+
+    float massIn = 0.0f, totalQ = 0.0f;
+    int start = 0;
+    for (int j = 0; j < idx; j++) start += nInflows[j];
+
+    for (int i = 0; i < nInflows[idx]; i++) {
+        massIn += qIn[start + i] * cIn[start + i];
+        totalQ += qIn[start + i];
+    }
+
+    float denom = totalQ + volumes[idx] / dt;
+    if (denom <= 0.0f) {
+        cNode[idx] = 0.0f;
+        return;
+    }
+    cNode[idx] = (massIn + volumes[idx] * cOld[idx] / dt)
+                 / denom;
+}
+
+__device__ float findLinkQual(float cUp, float cLink,
+                               float flow, float vol,
+                               float dt)
+{
+    if (vol <= 0.0f) return cUp;
+    float fraction = fminf(flow * dt / vol, 1.0f);
+    return cLink + fraction * (cUp - cLink);
+}
+
+__device__ float getMassFlow(float conc, float flow,
+                              float dt)
+{
+    return conc * fabsf(flow) * dt;
+}`,
+    wasm: `;; qualrout.wat — Water Quality Routing
+;; SWMM5 Engine in WebAssembly — Pollutant Transport
+;; CSTR mixing at nodes, first-order decay, mass balance
+
+(module
+  (func $getDecay
+    (param $conc f64) (param $k f64) (param $dt f64)
+    (result f64)
+    (if (result f64)
+      (i32.or
+        (f64.le (local.get $k) (f64.const 0.0))
+        (f64.le (local.get $dt) (f64.const 0.0)))
+      (then (local.get $conc))
+      (else
+        (f64.mul
+          (local.get $conc)
+          (call $exp
+            (f64.mul
+              (f64.neg (local.get $k))
+              (local.get $dt)))))))
+
+  (func $findLinkQual
+    (param $cUp f64) (param $cLink f64)
+    (param $flow f64) (param $vol f64)
+    (param $dt f64)
+    (result f64)
+    (local $fraction f64)
+    (if (result f64)
+      (f64.le (local.get $vol) (f64.const 0.0))
+      (then (local.get $cUp))
+      (else
+        (local.set $fraction
+          (f64.min
+            (f64.div
+              (f64.mul (local.get $flow) (local.get $dt))
+              (local.get $vol))
+            (f64.const 1.0)))
+        (f64.add
+          (local.get $cLink)
+          (f64.mul
+            (local.get $fraction)
+            (f64.sub
+              (local.get $cUp)
+              (local.get $cLink)))))))
+
+  (func $getMassFlow
+    (param $conc f64) (param $flow f64)
+    (param $dt f64)
+    (result f64)
+    (f64.mul
+      (f64.mul (local.get $conc)
+               (f64.abs (local.get $flow)))
+      (local.get $dt)))
+
+  (func $exp (param f64) (result f64)
+    (f64.const 0.0))
+  (export "getDecay" (func $getDecay))
+  (export "findLinkQual" (func $findLinkQual))
+  (export "getMassFlow" (func $getMassFlow)))`,
+    mojo: `# qualrout.mojo — Water Quality Routing
+# SWMM5 Engine in Mojo — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+from math import exp, abs
+
+struct Pollutant:
+    var decay_rate: Float64
+    var concen: Float64
+
+    fn __init__(inout self, decay_rate: Float64,
+                concen: Float64):
+        self.decay_rate = decay_rate
+        self.concen = concen
+
+fn get_decay(conc: Float64, k: Float64,
+             dt: Float64) -> Float64:
+    if k <= 0.0 or dt <= 0.0:
+        return conc
+    return conc * exp(-k * dt)
+
+fn find_node_qual(q_in: DynamicVector[Float64],
+                  c_in: DynamicVector[Float64],
+                  volume: Float64, c_old: Float64,
+                  dt: Float64) -> Float64:
+    var mass_in: Float64 = 0.0
+    var total_q: Float64 = 0.0
+    for i in range(len(q_in)):
+        mass_in += q_in[i] * c_in[i]
+        total_q += q_in[i]
+
+    let denom = total_q + volume / dt
+    if denom <= 0.0:
+        return 0.0
+    return (mass_in + volume * c_old / dt) / denom
+
+fn find_link_qual(c_up: Float64, c_link: Float64,
+                  flow: Float64, vol: Float64,
+                  dt: Float64) -> Float64:
+    if vol <= 0.0:
+        return c_up
+    var fraction = flow * dt / vol
+    if fraction > 1.0:
+        fraction = 1.0
+    return c_link + fraction * (c_up - c_link)
+
+fn get_mass_flow(conc: Float64, flow: Float64,
+                 dt: Float64) -> Float64:
+    return conc * abs(flow) * dt`,
+    java: `// QualRout.java — Water Quality Routing
+// SWMM5 Engine in Java — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+package swmm;
+
+public class QualRout {
+
+    public static class Pollutant {
+        public double decayRate;
+        public double concen;
+
+        public Pollutant(double decayRate, double concen) {
+            this.decayRate = decayRate;
+            this.concen = concen;
+        }
+    }
+
+    public static double getDecay(double conc,
+                                   double k, double dt) {
+        if (k <= 0.0 || dt <= 0.0) return conc;
+        return conc * Math.exp(-k * dt);
+    }
+
+    public static double findNodeQual(double[] qIn,
+            double[] cIn, double volume,
+            double cOld, double dt) {
+        double massIn = 0.0, totalQ = 0.0;
+        for (int i = 0; i < qIn.length; i++) {
+            massIn += qIn[i] * cIn[i];
+            totalQ += qIn[i];
+        }
+
+        double denom = totalQ + volume / dt;
+        if (denom <= 0.0) return 0.0;
+
+        return (massIn + volume * cOld / dt) / denom;
+    }
+
+    public static double findLinkQual(double cUp,
+            double cLink, double flow,
+            double vol, double dt) {
+        if (vol <= 0.0) return cUp;
+        double fraction = Math.min(
+            flow * dt / vol, 1.0);
+        return cLink + fraction * (cUp - cLink);
+    }
+
+    public static double getMassFlow(double conc,
+            double flow, double dt) {
+        return conc * Math.abs(flow) * dt;
+    }
+}`,
+    nim: `# qualrout.nim — Water Quality Routing
+# SWMM5 Engine in Nim — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+import math
+
+type
+  Pollutant = object
+    decayRate: float64
+    concen: float64
+
+proc getDecay(conc, k, dt: float64): float64 =
+  if k <= 0.0 or dt <= 0.0:
+    return conc
+  result = conc * exp(-k * dt)
+
+proc findNodeQual(qIn, cIn: seq[float64],
+                  volume, cOld, dt: float64): float64 =
+  var massIn = 0.0
+  var totalQ = 0.0
+  for i in 0 ..< qIn.len:
+    massIn += qIn[i] * cIn[i]
+    totalQ += qIn[i]
+
+  let denom = totalQ + volume / dt
+  if denom <= 0.0:
+    return 0.0
+  result = (massIn + volume * cOld / dt) / denom
+
+proc findLinkQual(cUp, cLink, flow,
+                  vol, dt: float64): float64 =
+  if vol <= 0.0:
+    return cUp
+  let fraction = min(flow * dt / vol, 1.0)
+  result = cLink + fraction * (cUp - cLink)
+
+proc getMassFlow(conc, flow, dt: float64): float64 =
+  result = conc * abs(flow) * dt`,
+    ada: `-- qualrout.adb — Water Quality Routing
+-- SWMM5 Engine in Ada — Pollutant Transport
+-- CSTR mixing at nodes, first-order decay, mass balance
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body QualRout is
+
+   type Pollutant is record
+      Decay_Rate : Long_Float := 0.0;
+      Concen     : Long_Float := 0.0;
+   end record;
+
+   type Float_Array is array (Positive range <>)
+      of Long_Float;
+
+   function Get_Decay (Conc, K, Dt : Long_Float)
+      return Long_Float is
+   begin
+      if K <= 0.0 or else Dt <= 0.0 then
+         return Conc;
+      end if;
+      return Conc * Exp (-K * Dt);
+   end Get_Decay;
+
+   function Find_Node_Qual
+      (Q_In, C_In : Float_Array;
+       Volume, C_Old, Dt : Long_Float)
+      return Long_Float is
+      Mass_In : Long_Float := 0.0;
+      Total_Q : Long_Float := 0.0;
+      Denom   : Long_Float;
+   begin
+      for I in Q_In'Range loop
+         Mass_In := Mass_In + Q_In (I) * C_In (I);
+         Total_Q := Total_Q + Q_In (I);
+      end loop;
+
+      Denom := Total_Q + Volume / Dt;
+      if Denom <= 0.0 then
+         return 0.0;
+      end if;
+      return (Mass_In + Volume * C_Old / Dt) / Denom;
+   end Find_Node_Qual;
+
+   function Find_Link_Qual
+      (C_Up, C_Link, Flow, Vol, Dt : Long_Float)
+      return Long_Float is
+      Fraction : Long_Float;
+   begin
+      if Vol <= 0.0 then
+         return C_Up;
+      end if;
+      Fraction := Long_Float'Min (Flow * Dt / Vol, 1.0);
+      return C_Link + Fraction * (C_Up - C_Link);
+   end Find_Link_Qual;
+
+   function Get_Mass_Flow
+      (Conc, Flow, Dt : Long_Float)
+      return Long_Float is
+   begin
+      return Conc * abs (Flow) * Dt;
+   end Get_Mass_Flow;
+
+end QualRout;`,
+    chapel: `// qualrout.chpl — Water Quality Routing
+// SWMM5 Engine in Chapel — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+record Pollutant {
+    var decayRate: real;
+    var concen: real;
+}
+
+proc getDecay(conc: real, k: real, dt: real): real {
+    if k <= 0.0 || dt <= 0.0 then return conc;
+    return conc * exp(-k * dt);
+}
+
+proc findNodeQual(qIn: [] real, cIn: [] real,
+                  volume: real, cOld: real,
+                  dt: real): real {
+    var massIn: real = 0.0;
+    var totalQ: real = 0.0;
+    for i in qIn.domain {
+        massIn += qIn[i] * cIn[i];
+        totalQ += qIn[i];
+    }
+
+    const denom = totalQ + volume / dt;
+    if denom <= 0.0 then return 0.0;
+
+    return (massIn + volume * cOld / dt) / denom;
+}
+
+proc findLinkQual(cUp: real, cLink: real,
+                  flow: real, vol: real,
+                  dt: real): real {
+    if vol <= 0.0 then return cUp;
+    const fraction = min(flow * dt / vol, 1.0);
+    return cLink + fraction * (cUp - cLink);
+}
+
+proc getMassFlow(conc: real, flow: real,
+                 dt: real): real {
+    return conc * abs(flow) * dt;
+}`,
+    swift: `// qualrout.swift — Water Quality Routing
+// SWMM5 Engine in Swift — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+import Foundation
+
+struct Pollutant {
+    var decayRate: Double
+    var concen: Double
+}
+
+func getDecay(conc: Double, k: Double,
+              dt: Double) -> Double {
+    guard k > 0.0, dt > 0.0 else { return conc }
+    return conc * exp(-k * dt)
+}
+
+func findNodeQual(qIn: [Double], cIn: [Double],
+                  volume: Double, cOld: Double,
+                  dt: Double) -> Double {
+    var massIn = 0.0, totalQ = 0.0
+    for i in 0..<qIn.count {
+        massIn += qIn[i] * cIn[i]
+        totalQ += qIn[i]
+    }
+
+    let denom = totalQ + volume / dt
+    guard denom > 0.0 else { return 0.0 }
+
+    return (massIn + volume * cOld / dt) / denom
+}
+
+func findLinkQual(cUp: Double, cLink: Double,
+                  flow: Double, vol: Double,
+                  dt: Double) -> Double {
+    guard vol > 0.0 else { return cUp }
+    let fraction = min(flow * dt / vol, 1.0)
+    return cLink + fraction * (cUp - cLink)
+}
+
+func getMassFlow(conc: Double, flow: Double,
+                 dt: Double) -> Double {
+    return conc * abs(flow) * dt
+}`,
+    kotlin: `// QualRout.kt — Water Quality Routing
+// SWMM5 Engine in Kotlin — Pollutant Transport
+// CSTR mixing at nodes, first-order decay, mass balance
+
+package swmm
+
+import kotlin.math.abs
+import kotlin.math.exp
+import kotlin.math.min
+
+data class Pollutant(
+    val decayRate: Double,
+    var concen: Double
+)
+
+fun getDecay(conc: Double, k: Double,
+             dt: Double): Double {
+    if (k <= 0.0 || dt <= 0.0) return conc
+    return conc * exp(-k * dt)
+}
+
+fun findNodeQual(qIn: DoubleArray, cIn: DoubleArray,
+                 volume: Double, cOld: Double,
+                 dt: Double): Double {
+    var massIn = 0.0
+    var totalQ = 0.0
+    for (i in qIn.indices) {
+        massIn += qIn[i] * cIn[i]
+        totalQ += qIn[i]
+    }
+
+    val denom = totalQ + volume / dt
+    if (denom <= 0.0) return 0.0
+
+    return (massIn + volume * cOld / dt) / denom
+}
+
+fun findLinkQual(cUp: Double, cLink: Double,
+                 flow: Double, vol: Double,
+                 dt: Double): Double {
+    if (vol <= 0.0) return cUp
+    val fraction = min(flow * dt / vol, 1.0)
+    return cLink + fraction * (cUp - cLink)
+}
+
+fun getMassFlow(conc: Double, flow: Double,
+                dt: Double): Double {
+    return conc * abs(flow) * dt
+}`,
+  },
+  "kinwave.c — Kinematic Wave Routing": {
+    category: "Hydraulics",
+    difficulty: "intermediate",
+    tags: ["kinematic wave", "routing", "simplified", "manning", "normal depth", "overland flow", "gravity-driven"],
+    description: "Simplified flow routing that assumes friction slope equals bed slope (Sf = S0). Much simpler than dynamic wave — ignores backwater effects, surcharging, and reverse flow. Uses Manning's equation with a Courant-limited explicit scheme. Appropriate for steep conduits where gravity dominates and backwater effects are negligible. Often used for overland flow routing.",
+    equations: "Q = (1/n)·A·R^(2/3)·S0^(1/2) (Manning's equation with Sf=S0); A_new = A_old + (dt/dx)·(Q_in - Q_out) (continuity); CFL: dt ≤ dx/c_wave (Courant condition)",
+    inputs: "Conduit geometry, bed slope, Manning's n, upstream inflow, time step",
+    outputs: "Outflow rate, flow depth, Courant number",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+      { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+    ],
+    c: `// kinwave.c — Kinematic Wave Routing
+// EPA SWMM5 Engine — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+#include <math.h>
+
+typedef struct {
+    double length;    // conduit length (ft)
+    double slope;     // bed slope (ft/ft)
+    double roughness; // Manning's n
+    double width;     // channel width (ft)
+    double area;      // current flow area (ft²)
+    double qOut;      // current outflow (cfs)
+} TKinWave;
+
+double kinwave_getNormalFlow(TKinWave* kw, double area)
+{
+    double hRadius, qNorm;
+
+    if (area <= 0.0 || kw->slope <= 0.0) return 0.0;
+
+    hRadius = area / kw->width;
+    qNorm = (1.0 / kw->roughness) * area
+            * pow(hRadius, 2.0/3.0)
+            * sqrt(kw->slope);
+    return qNorm;
+}
+
+double kinwave_getWaveCelerity(TKinWave* kw, double area)
+{
+    double hRadius, celerity;
+
+    if (area <= 0.0) return 0.0;
+
+    hRadius = area / kw->width;
+    celerity = (5.0 / 3.0) * (1.0 / kw->roughness)
+               * pow(hRadius, 2.0/3.0)
+               * sqrt(kw->slope);
+    return celerity;
+}
+
+double kinwave_execute(TKinWave* kw, double qIn, double dt)
+{
+    double celerity, courant, aNew;
+
+    celerity = kinwave_getWaveCelerity(kw, kw->area);
+    courant = (celerity * dt) / kw->length;
+
+    if (courant > 1.0) courant = 1.0;
+
+    aNew = kw->area
+           + (dt / kw->length) * (qIn - kw->qOut);
+    if (aNew < 0.0) aNew = 0.0;
+
+    kw->area = aNew;
+    kw->qOut = kinwave_getNormalFlow(kw, aNew);
+    return kw->qOut;
+}`,
+    rust: `// kinwave.rs — Kinematic Wave Routing
+// SWMM5 Engine in Rust — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+pub struct KinWave {
+    pub length: f64,    // conduit length (ft)
+    pub slope: f64,     // bed slope (ft/ft)
+    pub roughness: f64, // Manning's n
+    pub width: f64,     // channel width (ft)
+    pub area: f64,      // current flow area (ft²)
+    pub q_out: f64,     // current outflow (cfs)
+}
+
+impl KinWave {
+    pub fn get_normal_flow(&self, area: f64) -> f64 {
+        if area <= 0.0 || self.slope <= 0.0 { return 0.0; }
+
+        let h_radius = area / self.width;
+        (1.0 / self.roughness) * area
+            * h_radius.powf(2.0 / 3.0)
+            * self.slope.sqrt()
+    }
+
+    pub fn get_wave_celerity(&self, area: f64) -> f64 {
+        if area <= 0.0 { return 0.0; }
+
+        let h_radius = area / self.width;
+        (5.0 / 3.0) * (1.0 / self.roughness)
+            * h_radius.powf(2.0 / 3.0)
+            * self.slope.sqrt()
+    }
+
+    pub fn execute(&mut self, q_in: f64, dt: f64) -> f64 {
+        let celerity = self.get_wave_celerity(self.area);
+        let courant = (celerity * dt / self.length).min(1.0);
+
+        let a_new = (self.area
+            + (dt / self.length) * (q_in - self.q_out))
+            .max(0.0);
+
+        self.area = a_new;
+        self.q_out = self.get_normal_flow(a_new);
+        self.q_out
+    }
+}`,
+    python: `# kinwave.py — Kinematic Wave Routing
+# SWMM5 Engine in Python — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+import math
+from dataclasses import dataclass
+
+@dataclass
+class KinWave:
+    length: float    # conduit length (ft)
+    slope: float     # bed slope (ft/ft)
+    roughness: float # Manning's n
+    width: float     # channel width (ft)
+    area: float      # current flow area (ft²)
+    q_out: float     # current outflow (cfs)
+
+    def get_normal_flow(self, area: float) -> float:
+        if area <= 0.0 or self.slope <= 0.0:
+            return 0.0
+        h_radius = area / self.width
+        return ((1.0 / self.roughness) * area
+                * h_radius ** (2.0 / 3.0)
+                * math.sqrt(self.slope))
+
+    def get_wave_celerity(self, area: float) -> float:
+        if area <= 0.0:
+            return 0.0
+        h_radius = area / self.width
+        return ((5.0 / 3.0) * (1.0 / self.roughness)
+                * h_radius ** (2.0 / 3.0)
+                * math.sqrt(self.slope))
+
+    def execute(self, q_in: float, dt: float) -> float:
+        celerity = self.get_wave_celerity(self.area)
+        courant = min(celerity * dt / self.length, 1.0)
+
+        a_new = max(self.area
+                    + (dt / self.length)
+                    * (q_in - self.q_out), 0.0)
+
+        self.area = a_new
+        self.q_out = self.get_normal_flow(a_new)
+        return self.q_out`,
+    fortran: `! kinwave.f90 — Kinematic Wave Routing
+! SWMM5 Engine in Fortran — Simplified Flow Routing
+! Manning's equation with Sf = S0 assumption
+! Courant-limited explicit finite-difference scheme
+
+module kinwave_module
+    implicit none
+
+    type :: KinWave
+        real(8) :: length    ! conduit length (ft)
+        real(8) :: slope     ! bed slope (ft/ft)
+        real(8) :: roughness ! Manning's n
+        real(8) :: width     ! channel width (ft)
+        real(8) :: area      ! current flow area (ft²)
+        real(8) :: q_out     ! current outflow (cfs)
+    end type KinWave
+
+contains
+
+    function get_normal_flow(kw, area) result(q)
+        type(KinWave), intent(in) :: kw
+        real(8), intent(in) :: area
+        real(8) :: q, h_radius
+
+        if (area <= 0.0d0 .or. kw%slope <= 0.0d0) then
+            q = 0.0d0
+            return
+        end if
+
+        h_radius = area / kw%width
+        q = (1.0d0 / kw%roughness) * area &
+            * h_radius**(2.0d0/3.0d0) &
+            * sqrt(kw%slope)
+    end function get_normal_flow
+
+    function get_wave_celerity(kw, area) result(c)
+        type(KinWave), intent(in) :: kw
+        real(8), intent(in) :: area
+        real(8) :: c, h_radius
+
+        if (area <= 0.0d0) then
+            c = 0.0d0
+            return
+        end if
+
+        h_radius = area / kw%width
+        c = (5.0d0 / 3.0d0) * (1.0d0 / kw%roughness) &
+            * h_radius**(2.0d0/3.0d0) &
+            * sqrt(kw%slope)
+    end function get_wave_celerity
+
+    subroutine execute(kw, q_in, dt)
+        type(KinWave), intent(inout) :: kw
+        real(8), intent(in) :: q_in, dt
+        real(8) :: celerity, courant, a_new
+
+        celerity = get_wave_celerity(kw, kw%area)
+        courant = celerity * dt / kw%length
+        if (courant > 1.0d0) courant = 1.0d0
+
+        a_new = kw%area + (dt / kw%length) &
+                * (q_in - kw%q_out)
+        if (a_new < 0.0d0) a_new = 0.0d0
+
+        kw%area = a_new
+        kw%q_out = get_normal_flow(kw, a_new)
+    end subroutine execute
+
+end module kinwave_module`,
+    julia: `# kinwave.jl — Kinematic Wave Routing
+# SWMM5 Engine in Julia — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+mutable struct KinWave
+    length::Float64    # conduit length (ft)
+    slope::Float64     # bed slope (ft/ft)
+    roughness::Float64 # Manning's n
+    width::Float64     # channel width (ft)
+    area::Float64      # current flow area (ft²)
+    q_out::Float64     # current outflow (cfs)
+end
+
+function get_normal_flow(kw::KinWave, area::Float64)::Float64
+    (area ≤ 0.0 || kw.slope ≤ 0.0) && return 0.0
+
+    h_radius = area / kw.width
+    return (1.0 / kw.roughness) * area *
+           h_radius^(2.0/3.0) * sqrt(kw.slope)
+end
+
+function get_wave_celerity(kw::KinWave, area::Float64)::Float64
+    area ≤ 0.0 && return 0.0
+
+    h_radius = area / kw.width
+    return (5.0 / 3.0) * (1.0 / kw.roughness) *
+           h_radius^(2.0/3.0) * sqrt(kw.slope)
+end
+
+function execute!(kw::KinWave, q_in::Float64,
+                  dt::Float64)::Float64
+    celerity = get_wave_celerity(kw, kw.area)
+    courant = clamp(celerity * dt / kw.length, 0.0, 1.0)
+
+    a_new = max(kw.area + (dt / kw.length) *
+                (q_in - kw.q_out), 0.0)
+
+    kw.area = a_new
+    kw.q_out = get_normal_flow(kw, a_new)
+    return kw.q_out
+end`,
+    javascript: `// kinwave.js — Kinematic Wave Routing
+// SWMM5 Engine in JavaScript — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+class KinWave {
+    constructor(length, slope, roughness, width,
+                area, qOut) {
+        this.length = length;
+        this.slope = slope;
+        this.roughness = roughness;
+        this.width = width;
+        this.area = area;
+        this.qOut = qOut;
+    }
+
+    getNormalFlow(area) {
+        if (area <= 0.0 || this.slope <= 0.0) return 0.0;
+
+        const hRadius = area / this.width;
+        return (1.0 / this.roughness) * area
+               * Math.pow(hRadius, 2.0 / 3.0)
+               * Math.sqrt(this.slope);
+    }
+
+    getWaveCelerity(area) {
+        if (area <= 0.0) return 0.0;
+
+        const hRadius = area / this.width;
+        return (5.0 / 3.0) * (1.0 / this.roughness)
+               * Math.pow(hRadius, 2.0 / 3.0)
+               * Math.sqrt(this.slope);
+    }
+
+    execute(qIn, dt) {
+        const celerity = this.getWaveCelerity(this.area);
+        const courant = Math.min(
+            celerity * dt / this.length, 1.0);
+
+        const aNew = Math.max(this.area
+            + (dt / this.length) * (qIn - this.qOut), 0.0);
+
+        this.area = aNew;
+        this.qOut = this.getNormalFlow(aNew);
+        return this.qOut;
+    }
+}
+
+export { KinWave };`,
+    go: `// kinwave.go — Kinematic Wave Routing
+// SWMM5 Engine in Go — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+package swmm
+
+import "math"
+
+type KinWave struct {
+    Length    float64 // conduit length (ft)
+    Slope    float64 // bed slope (ft/ft)
+    Roughness float64 // Manning's n
+    Width    float64 // channel width (ft)
+    Area     float64 // current flow area (ft²)
+    QOut     float64 // current outflow (cfs)
+}
+
+func (kw *KinWave) GetNormalFlow(area float64) float64 {
+    if area <= 0.0 || kw.Slope <= 0.0 {
+        return 0.0
+    }
+
+    hRadius := area / kw.Width
+    return (1.0 / kw.Roughness) * area *
+        math.Pow(hRadius, 2.0/3.0) *
+        math.Sqrt(kw.Slope)
+}
+
+func (kw *KinWave) GetWaveCelerity(area float64) float64 {
+    if area <= 0.0 {
+        return 0.0
+    }
+
+    hRadius := area / kw.Width
+    return (5.0 / 3.0) * (1.0 / kw.Roughness) *
+        math.Pow(hRadius, 2.0/3.0) *
+        math.Sqrt(kw.Slope)
+}
+
+func (kw *KinWave) Execute(qIn, dt float64) float64 {
+    celerity := kw.GetWaveCelerity(kw.Area)
+    courant := celerity * dt / kw.Length
+    if courant > 1.0 {
+        courant = 1.0
+    }
+
+    aNew := kw.Area + (dt/kw.Length)*(qIn-kw.QOut)
+    if aNew < 0.0 {
+        aNew = 0.0
+    }
+
+    kw.Area = aNew
+    kw.QOut = kw.GetNormalFlow(aNew)
+    return kw.QOut
+}`,
+    zig: `// kinwave.zig — Kinematic Wave Routing
+// SWMM5 Engine in Zig — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+const std = @import("std");
+const math = std.math;
+
+const KinWave = struct {
+    length: f64,    // conduit length (ft)
+    slope: f64,     // bed slope (ft/ft)
+    roughness: f64, // Manning's n
+    width: f64,     // channel width (ft)
+    area: f64,      // current flow area (ft²)
+    q_out: f64,     // current outflow (cfs)
+
+    pub fn getNormalFlow(self: KinWave, area: f64) f64 {
+        if (area <= 0.0 or self.slope <= 0.0) return 0.0;
+
+        const h_radius = area / self.width;
+        return (1.0 / self.roughness) * area *
+            math.pow(f64, h_radius, 2.0 / 3.0) *
+            @sqrt(self.slope);
+    }
+
+    pub fn getWaveCelerity(self: KinWave, area: f64) f64 {
+        if (area <= 0.0) return 0.0;
+
+        const h_radius = area / self.width;
+        return (5.0 / 3.0) * (1.0 / self.roughness) *
+            math.pow(f64, h_radius, 2.0 / 3.0) *
+            @sqrt(self.slope);
+    }
+
+    pub fn execute(self: *KinWave, q_in: f64, dt: f64) f64 {
+        const celerity = self.getWaveCelerity(self.area);
+        _ = math.clamp(celerity * dt / self.length,
+                       0.0, 1.0);
+
+        var a_new = self.area +
+            (dt / self.length) * (q_in - self.q_out);
+        if (a_new < 0.0) a_new = 0.0;
+
+        self.area = a_new;
+        self.q_out = self.getNormalFlow(a_new);
+        return self.q_out;
+    }
+};`,
+    cpp: `// kinwave.cpp — Kinematic Wave Routing
+// SWMM5 Engine in C++ — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+struct KinWave {
+    double length;    // conduit length (ft)
+    double slope;     // bed slope (ft/ft)
+    double roughness; // Manning's n
+    double width;     // channel width (ft)
+    double area;      // current flow area (ft²)
+    double qOut;      // current outflow (cfs)
+
+    double getNormalFlow(double area) const {
+        if (area <= 0.0 || slope <= 0.0) return 0.0;
+
+        double hRadius = area / width;
+        return (1.0 / roughness) * area
+               * std::pow(hRadius, 2.0 / 3.0)
+               * std::sqrt(slope);
+    }
+
+    double getWaveCelerity(double area) const {
+        if (area <= 0.0) return 0.0;
+
+        double hRadius = area / width;
+        return (5.0 / 3.0) * (1.0 / roughness)
+               * std::pow(hRadius, 2.0 / 3.0)
+               * std::sqrt(slope);
+    }
+
+    double execute(double qIn, double dt) {
+        double celerity = getWaveCelerity(area);
+        double courant = std::min(
+            celerity * dt / length, 1.0);
+
+        double aNew = std::max(area
+            + (dt / length) * (qIn - qOut), 0.0);
+
+        area = aNew;
+        qOut = getNormalFlow(aNew);
+        return qOut;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// KinWave.cs — Kinematic Wave Routing
+// SWMM5 Engine in C# — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+using System;
+
+namespace Swmm
+{
+    public class KinWave
+    {
+        public double Length { get; set; }
+        public double Slope { get; set; }
+        public double Roughness { get; set; }
+        public double Width { get; set; }
+        public double Area { get; set; }
+        public double QOut { get; set; }
+
+        public KinWave(double length, double slope,
+                       double roughness, double width,
+                       double area, double qOut)
+        {
+            Length = length;
+            Slope = slope;
+            Roughness = roughness;
+            Width = width;
+            Area = area;
+            QOut = qOut;
+        }
+
+        public double GetNormalFlow(double area)
+        {
+            if (area <= 0.0 || Slope <= 0.0) return 0.0;
+
+            double hRadius = area / Width;
+            return (1.0 / Roughness) * area
+                * Math.Pow(hRadius, 2.0 / 3.0)
+                * Math.Sqrt(Slope);
+        }
+
+        public double GetWaveCelerity(double area)
+        {
+            if (area <= 0.0) return 0.0;
+
+            double hRadius = area / Width;
+            return (5.0 / 3.0) * (1.0 / Roughness)
+                * Math.Pow(hRadius, 2.0 / 3.0)
+                * Math.Sqrt(Slope);
+        }
+
+        public double Execute(double qIn, double dt)
+        {
+            double celerity = GetWaveCelerity(Area);
+            double courant = Math.Min(
+                celerity * dt / Length, 1.0);
+
+            double aNew = Math.Max(Area
+                + (dt / Length) * (qIn - QOut), 0.0);
+
+            Area = aNew;
+            QOut = GetNormalFlow(aNew);
+            return QOut;
+        }
+    }
+}`,
+    matlab: `% kinwave.m — Kinematic Wave Routing
+% SWMM5 Engine in MATLAB — Simplified Flow Routing
+% Manning's equation with Sf = S0 assumption
+% Courant-limited explicit finite-difference scheme
+
+function kw = create_kinwave(len, slope, roughness, ...
+                              width, area, q_out)
+    kw.length    = len;
+    kw.slope     = slope;
+    kw.roughness = roughness;
+    kw.width     = width;
+    kw.area      = area;
+    kw.q_out     = q_out;
+end
+
+function q = get_normal_flow(kw, area)
+    if area <= 0.0 || kw.slope <= 0.0
+        q = 0.0;
+        return;
+    end
+
+    h_radius = area / kw.width;
+    q = (1.0 / kw.roughness) * area ...
+        * h_radius^(2.0/3.0) ...
+        * sqrt(kw.slope);
+end
+
+function c = get_wave_celerity(kw, area)
+    if area <= 0.0
+        c = 0.0;
+        return;
+    end
+
+    h_radius = area / kw.width;
+    c = (5.0/3.0) * (1.0 / kw.roughness) ...
+        * h_radius^(2.0/3.0) ...
+        * sqrt(kw.slope);
+end
+
+function kw = execute(kw, q_in, dt)
+    celerity = get_wave_celerity(kw, kw.area);
+    courant = min(celerity * dt / kw.length, 1.0);
+
+    a_new = max(kw.area ...
+        + (dt / kw.length) * (q_in - kw.q_out), 0.0);
+
+    kw.area  = a_new;
+    kw.q_out = get_normal_flow(kw, a_new);
+end`,
+    r: `# kinwave.R — Kinematic Wave Routing
+# SWMM5 Engine in R — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+create_kinwave <- function(length, slope, roughness,
+                            width, area, q_out) {
+    list(
+        length    = length,
+        slope     = slope,
+        roughness = roughness,
+        width     = width,
+        area      = area,
+        q_out     = q_out
+    )
+}
+
+get_normal_flow <- function(kw, area) {
+    if (area <= 0.0 || kw$slope <= 0.0) return(0.0)
+
+    h_radius <- area / kw$width
+    (1.0 / kw$roughness) * area *
+        h_radius^(2.0 / 3.0) * sqrt(kw$slope)
+}
+
+get_wave_celerity <- function(kw, area) {
+    if (area <= 0.0) return(0.0)
+
+    h_radius <- area / kw$width
+    (5.0 / 3.0) * (1.0 / kw$roughness) *
+        h_radius^(2.0 / 3.0) * sqrt(kw$slope)
+}
+
+execute <- function(kw, q_in, dt) {
+    celerity <- get_wave_celerity(kw, kw$area)
+    courant <- min(celerity * dt / kw$length, 1.0)
+
+    a_new <- max(kw$area +
+        (dt / kw$length) * (q_in - kw$q_out), 0.0)
+
+    kw$area  <- a_new
+    kw$q_out <- get_normal_flow(kw, a_new)
+    kw
+}`,
+    delphi: `{ kinwave.pas — Kinematic Wave Routing }
+{ SWMM5 Engine in Delphi — Simplified Flow Routing }
+{ Manning's equation with Sf = S0 assumption }
+{ Courant-limited explicit finite-difference scheme }
+
+unit KinWave;
+
+interface
+
+type
+  TKinWave = class
+  private
+    FLength: Double;
+    FSlope: Double;
+    FRoughness: Double;
+    FWidth: Double;
+    FArea: Double;
+    FQOut: Double;
+  public
+    constructor Create(ALength, ASlope, ARoughness,
+                       AWidth, AArea, AQOut: Double);
+    function GetNormalFlow(Area: Double): Double;
+    function GetWaveCelerity(Area: Double): Double;
+    function Execute(QIn, Dt: Double): Double;
+    property Area: Double read FArea;
+    property QOut: Double read FQOut;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TKinWave.Create(ALength, ASlope, ARoughness,
+                             AWidth, AArea, AQOut: Double);
+begin
+  FLength    := ALength;
+  FSlope     := ASlope;
+  FRoughness := ARoughness;
+  FWidth     := AWidth;
+  FArea      := AArea;
+  FQOut      := AQOut;
+end;
+
+function TKinWave.GetNormalFlow(Area: Double): Double;
+var
+  HRadius: Double;
+begin
+  if (Area <= 0.0) or (FSlope <= 0.0) then
+    Exit(0.0);
+
+  HRadius := Area / FWidth;
+  Result := (1.0 / FRoughness) * Area
+            * Power(HRadius, 2.0/3.0)
+            * Sqrt(FSlope);
+end;
+
+function TKinWave.GetWaveCelerity(Area: Double): Double;
+var
+  HRadius: Double;
+begin
+  if Area <= 0.0 then
+    Exit(0.0);
+
+  HRadius := Area / FWidth;
+  Result := (5.0/3.0) * (1.0 / FRoughness)
+            * Power(HRadius, 2.0/3.0)
+            * Sqrt(FSlope);
+end;
+
+function TKinWave.Execute(QIn, Dt: Double): Double;
+var
+  Celerity, Courant, ANew: Double;
+begin
+  Celerity := GetWaveCelerity(FArea);
+  Courant := Min(Celerity * Dt / FLength, 1.0);
+
+  ANew := Max(FArea + (Dt / FLength)
+              * (QIn - FQOut), 0.0);
+
+  FArea := ANew;
+  FQOut := GetNormalFlow(ANew);
+  Result := FQOut;
+end;
+
+end.`,
+    typescript: `// kinwave.ts — Kinematic Wave Routing
+// SWMM5 Engine in TypeScript — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+interface KinWaveParams {
+    length: number;
+    slope: number;
+    roughness: number;
+    width: number;
+    area: number;
+    qOut: number;
+}
+
+class KinWave {
+    length: number;
+    slope: number;
+    roughness: number;
+    width: number;
+    area: number;
+    qOut: number;
+
+    constructor(params: KinWaveParams) {
+        this.length = params.length;
+        this.slope = params.slope;
+        this.roughness = params.roughness;
+        this.width = params.width;
+        this.area = params.area;
+        this.qOut = params.qOut;
+    }
+
+    getNormalFlow(area: number): number {
+        if (area <= 0.0 || this.slope <= 0.0) return 0.0;
+
+        const hRadius: number = area / this.width;
+        return (1.0 / this.roughness) * area
+            * Math.pow(hRadius, 2.0 / 3.0)
+            * Math.sqrt(this.slope);
+    }
+
+    getWaveCelerity(area: number): number {
+        if (area <= 0.0) return 0.0;
+
+        const hRadius: number = area / this.width;
+        return (5.0 / 3.0) * (1.0 / this.roughness)
+            * Math.pow(hRadius, 2.0 / 3.0)
+            * Math.sqrt(this.slope);
+    }
+
+    execute(qIn: number, dt: number): number {
+        const celerity: number =
+            this.getWaveCelerity(this.area);
+        const courant: number = Math.min(
+            celerity * dt / this.length, 1.0);
+
+        const aNew: number = Math.max(this.area
+            + (dt / this.length)
+            * (qIn - this.qOut), 0.0);
+
+        this.area = aNew;
+        this.qOut = this.getNormalFlow(aNew);
+        return this.qOut;
+    }
+}
+
+export { KinWave };`,
+    cuda: `// kinwave.cu — Kinematic Wave Routing
+// SWMM5 Engine in CUDA — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+#include <math.h>
+
+struct KinWave {
+    float length;
+    float slope;
+    float roughness;
+    float width;
+    float area;
+    float qOut;
+};
+
+__device__ float getNormalFlow(const KinWave* kw,
+                               float area)
+{
+    if (area <= 0.0f || kw->slope <= 0.0f) return 0.0f;
+
+    float hRadius = area / kw->width;
+    return (1.0f / kw->roughness) * area
+           * powf(hRadius, 2.0f/3.0f)
+           * sqrtf(kw->slope);
+}
+
+__device__ float getWaveCelerity(const KinWave* kw,
+                                  float area)
+{
+    if (area <= 0.0f) return 0.0f;
+
+    float hRadius = area / kw->width;
+    return (5.0f/3.0f) * (1.0f / kw->roughness)
+           * powf(hRadius, 2.0f/3.0f)
+           * sqrtf(kw->slope);
+}
+
+__global__ void kinwaveKernel(KinWave* conduits,
+    float* qIn, float dt, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    KinWave kw = conduits[idx];
+    float celerity = getWaveCelerity(&kw, kw.area);
+    float courant = fminf(
+        celerity * dt / kw.length, 1.0f);
+
+    float aNew = kw.area
+        + (dt / kw.length) * (qIn[idx] - kw.qOut);
+    if (aNew < 0.0f) aNew = 0.0f;
+
+    conduits[idx].area = aNew;
+    conduits[idx].qOut = getNormalFlow(&kw, aNew);
+}`,
+    wasm: `;; kinwave.wat — Kinematic Wave Routing
+;; SWMM5 Engine in WebAssembly — Simplified Flow Routing
+;; Manning's equation with Sf = S0 assumption
+;; Courant-limited explicit finite-difference scheme
+
+(module
+  (func $getNormalFlow
+    (param $roughness f64) (param $width f64)
+    (param $slope f64) (param $area f64)
+    (result f64)
+
+    (if (result f64) (f64.le (local.get $area)
+                              (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (f64.mul
+          (f64.mul
+            (f64.div (f64.const 1.0)
+                     (local.get $roughness))
+            (local.get $area))
+          (f64.mul
+            (call $pow
+              (f64.div (local.get $area)
+                       (local.get $width))
+              (f64.div (f64.const 2.0)
+                       (f64.const 3.0)))
+            (f64.sqrt (local.get $slope)))))))
+
+  (func $getWaveCelerity
+    (param $roughness f64) (param $width f64)
+    (param $slope f64) (param $area f64)
+    (result f64)
+
+    (if (result f64) (f64.le (local.get $area)
+                              (f64.const 0.0))
+      (then (f64.const 0.0))
+      (else
+        (f64.mul
+          (f64.mul
+            (f64.div (f64.const 5.0) (f64.const 3.0))
+            (f64.div (f64.const 1.0)
+                     (local.get $roughness)))
+          (f64.mul
+            (call $pow
+              (f64.div (local.get $area)
+                       (local.get $width))
+              (f64.div (f64.const 2.0)
+                       (f64.const 3.0)))
+            (f64.sqrt (local.get $slope)))))))
+
+  (func $pow (param f64) (param f64) (result f64)
+    f64.const 0.0)
+)`,
+    mojo: `# kinwave.mojo — Kinematic Wave Routing
+# SWMM5 Engine in Mojo — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+from math import sqrt, pow
+
+struct KinWave:
+    var length: Float64
+    var slope: Float64
+    var roughness: Float64
+    var width: Float64
+    var area: Float64
+    var q_out: Float64
+
+    fn __init__(inout self, length: Float64,
+                slope: Float64, roughness: Float64,
+                width: Float64, area: Float64,
+                q_out: Float64):
+        self.length = length
+        self.slope = slope
+        self.roughness = roughness
+        self.width = width
+        self.area = area
+        self.q_out = q_out
+
+    fn get_normal_flow(self, area: Float64) -> Float64:
+        if area <= 0.0 or self.slope <= 0.0:
+            return 0.0
+
+        let h_radius = area / self.width
+        return ((1.0 / self.roughness) * area
+                * pow(h_radius, 2.0 / 3.0)
+                * sqrt(self.slope))
+
+    fn get_wave_celerity(self, area: Float64) -> Float64:
+        if area <= 0.0:
+            return 0.0
+
+        let h_radius = area / self.width
+        return ((5.0 / 3.0) * (1.0 / self.roughness)
+                * pow(h_radius, 2.0 / 3.0)
+                * sqrt(self.slope))
+
+    fn execute(inout self, q_in: Float64,
+               dt: Float64) -> Float64:
+        let celerity = self.get_wave_celerity(self.area)
+        let courant = min(
+            celerity * dt / self.length, 1.0)
+
+        var a_new = self.area + (dt / self.length) \
+                    * (q_in - self.q_out)
+        if a_new < 0.0:
+            a_new = 0.0
+
+        self.area = a_new
+        self.q_out = self.get_normal_flow(a_new)
+        return self.q_out`,
+    java: `// KinWave.java — Kinematic Wave Routing
+// SWMM5 Engine in Java — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+package swmm;
+
+public class KinWave {
+    private double length;
+    private double slope;
+    private double roughness;
+    private double width;
+    private double area;
+    private double qOut;
+
+    public KinWave(double length, double slope,
+                   double roughness, double width,
+                   double area, double qOut) {
+        this.length = length;
+        this.slope = slope;
+        this.roughness = roughness;
+        this.width = width;
+        this.area = area;
+        this.qOut = qOut;
+    }
+
+    public double getNormalFlow(double area) {
+        if (area <= 0.0 || slope <= 0.0) return 0.0;
+
+        double hRadius = area / width;
+        return (1.0 / roughness) * area
+            * Math.pow(hRadius, 2.0 / 3.0)
+            * Math.sqrt(slope);
+    }
+
+    public double getWaveCelerity(double area) {
+        if (area <= 0.0) return 0.0;
+
+        double hRadius = area / width;
+        return (5.0 / 3.0) * (1.0 / roughness)
+            * Math.pow(hRadius, 2.0 / 3.0)
+            * Math.sqrt(slope);
+    }
+
+    public double execute(double qIn, double dt) {
+        double celerity = getWaveCelerity(area);
+        double courant = Math.min(
+            celerity * dt / length, 1.0);
+
+        double aNew = Math.max(area
+            + (dt / length) * (qIn - qOut), 0.0);
+
+        area = aNew;
+        qOut = getNormalFlow(aNew);
+        return qOut;
+    }
+
+    public double getArea() { return area; }
+    public double getQOut() { return qOut; }
+}`,
+    nim: `# kinwave.nim — Kinematic Wave Routing
+# SWMM5 Engine in Nim — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+import math
+
+type
+  KinWave = object
+    length: float64
+    slope: float64
+    roughness: float64
+    width: float64
+    area: float64
+    qOut: float64
+
+proc getNormalFlow(kw: KinWave, area: float64): float64 =
+  if area <= 0.0 or kw.slope <= 0.0:
+    return 0.0
+
+  let hRadius = area / kw.width
+  result = (1.0 / kw.roughness) * area *
+           pow(hRadius, 2.0 / 3.0) *
+           sqrt(kw.slope)
+
+proc getWaveCelerity(kw: KinWave, area: float64): float64 =
+  if area <= 0.0:
+    return 0.0
+
+  let hRadius = area / kw.width
+  result = (5.0 / 3.0) * (1.0 / kw.roughness) *
+           pow(hRadius, 2.0 / 3.0) *
+           sqrt(kw.slope)
+
+proc execute(kw: var KinWave, qIn, dt: float64): float64 =
+  let celerity = kw.getWaveCelerity(kw.area)
+  let courant = min(celerity * dt / kw.length, 1.0)
+
+  var aNew = kw.area +
+    (dt / kw.length) * (qIn - kw.qOut)
+  if aNew < 0.0: aNew = 0.0
+
+  kw.area = aNew
+  kw.qOut = kw.getNormalFlow(aNew)
+  result = kw.qOut`,
+    ada: `-- kinwave.adb — Kinematic Wave Routing
+-- SWMM5 Engine in Ada — Simplified Flow Routing
+-- Manning's equation with Sf = S0 assumption
+-- Courant-limited explicit finite-difference scheme
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body KinWave is
+
+   type KinWave_Record is record
+      Length    : Long_Float;
+      Slope    : Long_Float;
+      Roughness: Long_Float;
+      Width    : Long_Float;
+      Area     : Long_Float;
+      Q_Out    : Long_Float;
+   end record;
+
+   function Get_Normal_Flow
+     (KW : KinWave_Record; Area : Long_Float)
+      return Long_Float
+   is
+      H_Radius : Long_Float;
+   begin
+      if Area <= 0.0 or else KW.Slope <= 0.0 then
+         return 0.0;
+      end if;
+
+      H_Radius := Area / KW.Width;
+      return (1.0 / KW.Roughness) * Area
+         * H_Radius ** (2.0 / 3.0)
+         * Sqrt(KW.Slope);
+   end Get_Normal_Flow;
+
+   function Get_Wave_Celerity
+     (KW : KinWave_Record; Area : Long_Float)
+      return Long_Float
+   is
+      H_Radius : Long_Float;
+   begin
+      if Area <= 0.0 then
+         return 0.0;
+      end if;
+
+      H_Radius := Area / KW.Width;
+      return (5.0 / 3.0) * (1.0 / KW.Roughness)
+         * H_Radius ** (2.0 / 3.0)
+         * Sqrt(KW.Slope);
+   end Get_Wave_Celerity;
+
+   procedure Execute
+     (KW : in out KinWave_Record;
+      Q_In : Long_Float; Dt : Long_Float)
+   is
+      Celerity, Courant, A_New : Long_Float;
+   begin
+      Celerity := Get_Wave_Celerity(KW, KW.Area);
+      Courant := Long_Float'Min(
+         Celerity * Dt / KW.Length, 1.0);
+
+      A_New := Long_Float'Max(KW.Area
+         + (Dt / KW.Length) * (Q_In - KW.Q_Out), 0.0);
+
+      KW.Area  := A_New;
+      KW.Q_Out := Get_Normal_Flow(KW, A_New);
+   end Execute;
+
+end KinWave;`,
+    chapel: `// kinwave.chpl — Kinematic Wave Routing
+// SWMM5 Engine in Chapel — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+record KinWave {
+    var length: real;
+    var slope: real;
+    var roughness: real;
+    var width: real;
+    var area: real;
+    var qOut: real;
+
+    proc getNormalFlow(area: real): real {
+        if area <= 0.0 || slope <= 0.0 then return 0.0;
+
+        const hRadius = area / width;
+        return (1.0 / roughness) * area
+            * hRadius ** (2.0 / 3.0)
+            * sqrt(slope);
+    }
+
+    proc getWaveCelerity(area: real): real {
+        if area <= 0.0 then return 0.0;
+
+        const hRadius = area / width;
+        return (5.0 / 3.0) * (1.0 / roughness)
+            * hRadius ** (2.0 / 3.0)
+            * sqrt(slope);
+    }
+
+    proc ref execute(qIn: real, dt: real): real {
+        const celerity = getWaveCelerity(area);
+        const courant = min(
+            celerity * dt / length, 1.0);
+
+        var aNew = area
+            + (dt / length) * (qIn - qOut);
+        if aNew < 0.0 then aNew = 0.0;
+
+        area = aNew;
+        qOut = getNormalFlow(aNew);
+        return qOut;
+    }
+}`,
+    swift: `// kinwave.swift — Kinematic Wave Routing
+// SWMM5 Engine in Swift — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+import Foundation
+
+struct KinWave {
+    let length: Double
+    let slope: Double
+    let roughness: Double
+    let width: Double
+    var area: Double
+    var qOut: Double
+
+    func getNormalFlow(area: Double) -> Double {
+        guard area > 0.0, slope > 0.0 else { return 0.0 }
+
+        let hRadius = area / width
+        return (1.0 / roughness) * area
+            * pow(hRadius, 2.0 / 3.0)
+            * sqrt(slope)
+    }
+
+    func getWaveCelerity(area: Double) -> Double {
+        guard area > 0.0 else { return 0.0 }
+
+        let hRadius = area / width
+        return (5.0 / 3.0) * (1.0 / roughness)
+            * pow(hRadius, 2.0 / 3.0)
+            * sqrt(slope)
+    }
+
+    mutating func execute(qIn: Double,
+                          dt: Double) -> Double {
+        let celerity = getWaveCelerity(area: area)
+        let courant = min(
+            celerity * dt / length, 1.0)
+
+        let aNew = max(area
+            + (dt / length) * (qIn - qOut), 0.0)
+
+        area = aNew
+        qOut = getNormalFlow(area: aNew)
+        return qOut
+    }
+}`,
+    kotlin: `// KinWave.kt — Kinematic Wave Routing
+// SWMM5 Engine in Kotlin — Simplified Flow Routing
+// Manning's equation with Sf = S0 assumption
+// Courant-limited explicit finite-difference scheme
+
+package swmm
+
+import kotlin.math.*
+
+data class KinWave(
+    val length: Double,
+    val slope: Double,
+    val roughness: Double,
+    val width: Double,
+    var area: Double,
+    var qOut: Double
+) {
+    fun getNormalFlow(area: Double): Double {
+        if (area <= 0.0 || slope <= 0.0) return 0.0
+
+        val hRadius = area / width
+        return (1.0 / roughness) * area *
+            hRadius.pow(2.0 / 3.0) * sqrt(slope)
+    }
+
+    fun getWaveCelerity(area: Double): Double {
+        if (area <= 0.0) return 0.0
+
+        val hRadius = area / width
+        return (5.0 / 3.0) * (1.0 / roughness) *
+            hRadius.pow(2.0 / 3.0) * sqrt(slope)
+    }
+
+    fun execute(qIn: Double, dt: Double): Double {
+        val celerity = getWaveCelerity(area)
+        val courant = min(
+            celerity * dt / length, 1.0)
+
+        val aNew = max(area +
+            (dt / length) * (qIn - qOut), 0.0)
+
+        area = aNew
+        qOut = getNormalFlow(aNew)
+        return qOut
+    }
+}`,
   },};
 
 const languages = [
