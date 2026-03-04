@@ -35,6 +35,14 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app
   - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 8 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
   - `src/appIdeas.js` — Data for 8 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig)
+  - `src/apps/MicroEngine.jsx` — C Micro-Engine: interactive SWMM simulation with canvas network visualization
+  - `src/apps/SwmmLint.jsx` — Rust Linter: .inp file validator with 10+ rules, split-panel editor/results
+  - `src/apps/ScenarioOrchestrator.jsx` — Python Orchestrator: parameter sweep UI with sensitivity charts
+  - `src/apps/HpcSolver.jsx` — Fortran HPC: animated parallel speedup benchmark visualization
+  - `src/apps/UncertaintyLab.jsx` — Julia UQ Lab: Monte Carlo simulation with exceedance probability curves
+  - `src/apps/NetworkVisualizer.jsx` — JavaScript Visualizer: animated network with flow/depth colors, timeline scrubber
+  - `src/apps/ApiServer.jsx` — Go API Server: interactive REST endpoint explorer with simulated responses
+  - `src/apps/WasmEngine.jsx` — Zig WASM Engine: browser-based SWMM solver with performance metrics
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
 - **Port**: 5000 (Vite dev server)

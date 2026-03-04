@@ -1,5 +1,24 @@
 import { useState } from "react";
 import { appIdeas, summaryMatrix } from "./appIdeas.js";
+import MicroEngine from "./apps/MicroEngine.jsx";
+import SwmmLint from "./apps/SwmmLint.jsx";
+import ScenarioOrchestrator from "./apps/ScenarioOrchestrator.jsx";
+import HpcSolver from "./apps/HpcSolver.jsx";
+import UncertaintyLab from "./apps/UncertaintyLab.jsx";
+import NetworkVisualizer from "./apps/NetworkVisualizer.jsx";
+import ApiServer from "./apps/ApiServer.jsx";
+import WasmEngine from "./apps/WasmEngine.jsx";
+
+const demoComponents = {
+  "c-micro-engine": MicroEngine,
+  "rust-linter": SwmmLint,
+  "python-orchestrator": ScenarioOrchestrator,
+  "fortran-hpc": HpcSolver,
+  "julia-uq": UncertaintyLab,
+  "js-visualizer": NetworkVisualizer,
+  "go-api-server": ApiServer,
+  "zig-wasm": WasmEngine,
+};
 
 const highlightSimple = (code, lang) => {
   let html = code.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -39,7 +58,7 @@ const highlightSimple = (code, lang) => {
   return html;
 };
 
-function AppCard({ app, theme, isExpanded, onToggle }) {
+function AppCard({ app, theme, isExpanded, onToggle, showDemo, onToggleDemo }) {
   const t = {
     ...theme,
     cardBg: theme.panelBg,
@@ -148,6 +167,30 @@ function AppCard({ app, theme, isExpanded, onToggle }) {
             }}>{app.architecture}</pre>
           </div>
 
+          {demoComponents[app.id] && (
+            <div style={{ marginBottom: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                <h4 style={{ color: app.languageColor, fontSize: 13, fontWeight: 700, margin: 0, textTransform: "uppercase", letterSpacing: 1 }}>
+                  Interactive Demo
+                </h4>
+                <button onClick={(e) => { e.stopPropagation(); onToggleDemo(); }} style={{
+                  padding: "4px 14px", borderRadius: 4, fontSize: 11, fontWeight: 600, cursor: "pointer",
+                  background: showDemo ? `${app.languageColor}22` : t.tagBg,
+                  color: showDemo ? app.languageColor : t.textMuted,
+                  border: `1px solid ${showDemo ? app.languageColor + "44" : t.border}`,
+                }}>{showDemo ? "Hide Demo" : "Launch Demo"}</button>
+              </div>
+              {showDemo && (
+                <div style={{
+                  border: `1px solid ${app.languageColor}44`, borderRadius: 8,
+                  background: t.codeBg, overflow: "hidden",
+                }}>
+                  {(() => { const Demo = demoComponents[app.id]; return <Demo theme={t} />; })()}
+                </div>
+              )}
+            </div>
+          )}
+
           <div>
             <h4 style={{ color: app.languageColor, fontSize: 13, fontWeight: 700, marginBottom: 8, textTransform: "uppercase", letterSpacing: 1 }}>
               Code Sample ({app.language})
@@ -167,6 +210,7 @@ function AppCard({ app, theme, isExpanded, onToggle }) {
 
 export default function AppShowcase({ theme }) {
   const [expandedId, setExpandedId] = useState(null);
+  const [demoId, setDemoId] = useState(null);
 
   const t = {
     ...theme,
@@ -206,7 +250,9 @@ export default function AppShowcase({ theme }) {
               app={app}
               theme={t}
               isExpanded={expandedId === app.id}
-              onToggle={() => setExpandedId(expandedId === app.id ? null : app.id)}
+              onToggle={() => { setExpandedId(expandedId === app.id ? null : app.id); if (expandedId === app.id) setDemoId(null); }}
+              showDemo={demoId === app.id}
+              onToggleDemo={() => setDemoId(demoId === app.id ? null : app.id)}
             />
           ))}
         </div>
