@@ -13,6 +13,7 @@ const keywordSets = {
   julia: /\b(struct|function|end|return|if|for|in|Float64|Int|Vector|import|using|const|module|export)\b/g,
   javascript: /\b(class|constructor|this|const|let|var|function|return|if|else|for|of|export|new|get|Math)\b/g,
   go: /\b(package|import|type|struct|func|return|if|for|float64|int|var|range|continue)\b/g,
+  zig: /\b(const|var|fn|pub|return|if|else|for|while|struct|enum|union|switch|break|continue|defer|try|catch|error|comptime|inline|export|unreachable|undefined|null|void|bool|u8|u16|u32|u64|i8|i16|i32|i64|f32|f64|usize|isize|anytype)\b/g,
 };
 
 const commentPatterns = {
@@ -23,6 +24,7 @@ const commentPatterns = {
   julia: /(#.*$|"""[\s\S]*?""")/gm,
   javascript: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   go: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  zig: /(\/\/.*$)/gm,
 };
 
 const stringPattern = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;
@@ -396,7 +398,7 @@ export default function SWMM5CodeViewer() {
   const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const shareText = `Compare EPA SWMM5 stormwater algorithms across 7 programming languages — C, Rust, Python, Fortran, Julia, JavaScript, and Go. The SWMM5 Rosetta Stone:`;
+  const shareText = `Compare EPA SWMM5 stormwater algorithms across 8 programming languages — C, Rust, Python, Fortran, Julia, JavaScript, Go, and Zig. The SWMM5 Rosetta Stone:`;
   const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
 
@@ -648,7 +650,7 @@ export default function SWMM5CodeViewer() {
             <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
               target="_blank" rel="noopener noreferrer"
               style={{ color: t.accent, textDecoration: "none" }}>EPA SWMM5</a>
-            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 7 modern programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
+            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 8 modern programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
           </p>
           <div style={{
             display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20,
@@ -677,7 +679,7 @@ export default function SWMM5CodeViewer() {
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
-            }}>7 languages</span>
+            }}>8 languages</span>
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,

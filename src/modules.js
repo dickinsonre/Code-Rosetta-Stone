@@ -335,6 +335,46 @@ func (c *Conduit) GetFlow(Qold, area, hUp, hDown,
     }
     return Qnew
 }`,
+    zig: `// routing.zig — Dynamic Wave Routing
+// SWMM5 Engine in Zig — Saint-Venant Equation Solver
+// Simplified explicit finite-difference scheme for
+// unsteady flow routing through drainage conduits
+
+const std = @import("std");
+const math = std.math;
+
+const GRAVITY: f64 = 32.2; // ft/s²
+
+const Conduit = struct {
+    length: f64,     // conduit length (ft)
+    roughness: f64,  // Manning's n
+    a_full: f64,     // full cross-section area (ft²)
+    width: f64,      // top width at full depth (ft)
+
+    pub fn frictionSlope(self: Conduit, q: f64, area: f64) f64 {
+        if (area <= 0.0 or q == 0.0) return 0.0;
+
+        const h_radius = area / self.width;
+        const sf_base = self.roughness * q /
+            (area * math.pow(f64, h_radius, 2.0 / 3.0));
+        const sf = sf_base * sf_base;
+
+        return if (q < 0.0) -sf else sf;
+    }
+
+    pub fn getFlow(self: Conduit, q_old: f64, area: f64,
+                   h_up: f64, h_down: f64, dt: f64) f64 {
+        if (area <= 0.0) return 0.0;
+
+        const dhdx = (h_up - h_down) / self.length;
+        const sf = self.frictionSlope(q_old, area);
+
+        const q_new = q_old + dt * GRAVITY * area * (dhdx - sf);
+
+        const q_max = area * 50.0;
+        return math.clamp(q_new, -q_max, q_max);
+    }
+};`,
   },
   "dynwave.c — Dynamic Wave Solver": {
     category: "Hydraulics",
@@ -868,6 +908,77 @@ func (l *Link) UpdateFlow(h1, h2, a1, a2, dt float64) {
         l.Froude = 0.0
     }
 }`,
+    zig: `// dynwave.zig — Dynamic Wave Solver
+// SWMM5 Engine in Zig — Saint-Venant Equation Solver
+// Solves full momentum equation using explicit
+// finite-difference scheme for unsteady conduit flow
+
+const std = @import("std");
+const math = std.math;
+
+const GRAVITY: f64 = 32.174; // ft/s²
+
+const Link = struct {
+    length: f64,      // conduit length (ft)
+    roughness: f64,   // Manning's n
+    a_full: f64,      // full cross-section area (ft²)
+    r_full: f64,      // full hydraulic radius (ft)
+    flow: f64,        // current flow (cfs)
+    new_flow: f64,    // updated flow (cfs)
+    velocity: f64,    // flow velocity (ft/s)
+    froude: f64,      // Froude number
+
+    /// Sf = (n * |V| / R^(2/3))^2
+    pub fn getFrictionSlope(self: Link, area: f64,
+                            vel: f64) f64 {
+        if (area <= 0.0) return 0.0;
+        const rh = self.r_full * (area / self.a_full);
+        if (rh <= 0.0) return 0.0;
+
+        const nv = self.roughness * @fabs(vel);
+        return (nv * nv) / math.pow(f64, rh, 4.0 / 3.0);
+    }
+
+    /// Explicit momentum equation update
+    pub fn updateFlow(self: *Link, h1: f64, h2: f64,
+                      a1: f64, a2: f64, dt: f64) void {
+        const a_avg = 0.5 * (a1 + a2);
+        if (a_avg <= 0.0) {
+            self.new_flow = 0.0;
+            return;
+        }
+
+        const vel = self.flow / a_avg;
+        const sf = self.getFrictionSlope(a_avg, vel);
+
+        // Gravity (pressure) term
+        const head_grad = GRAVITY * a_avg *
+            (h1 - h2) / self.length;
+
+        // Friction term
+        var fric_term = GRAVITY * a_avg * sf;
+        if (self.flow < 0.0) fric_term = -fric_term;
+
+        // Convective acceleration term
+        const conv_term = self.flow * @fabs(self.flow) /
+            (a_avg * self.length) * (a2 - a1);
+
+        const dq = (head_grad - fric_term - conv_term) * dt;
+        self.new_flow = self.flow + dq;
+
+        // Clamp flow
+        const q_max = self.a_full * 25.0;
+        self.new_flow = math.clamp(self.new_flow, -q_max, q_max);
+
+        // Update velocity and Froude number
+        self.velocity = self.new_flow / a_avg;
+        const depth = a_avg / self.a_full * (2.0 * self.r_full);
+        self.froude = if (depth > 0.0)
+            @fabs(self.velocity) / @sqrt(GRAVITY * depth)
+        else
+            0.0;
+    }
+};`,
   },
   "flowrout.c — Flow Routing Dispatch": {
     category: "Hydraulics",
@@ -1373,6 +1484,67 @@ func (rp *RoutingParams) Route(method RoutingMethod,
         return 0.0
     }
 }`,
+    zig: `// flowrout.zig — Flow Routing Dispatch
+// SWMM5 Engine in Zig — Routing Method Dispatcher
+// Dispatches flow calculations to steady, kinematic
+// wave, or dynamic wave routing methods
+
+const std = @import("std");
+const math = std.math;
+
+const RoutingMethod = enum {
+    steady_flow,
+    kin_wave,
+    dyn_wave,
+};
+
+const RoutingParams = struct {
+    area: f64,        // cross-section area (ft²)
+    radius: f64,      // hydraulic radius (ft)
+    roughness: f64,   // Manning's n
+    slope: f64,       // conduit slope
+    length: f64,      // conduit length (ft)
+    q_in: f64,        // inflow (cfs)
+    q_out: f64,       // outflow (cfs)
+    q_lat: f64,       // lateral inflow (cfs)
+
+    /// Manning's equation: Q = (1/n) * A * R^(2/3) * S^(1/2)
+    pub fn steadyGetFlow(self: RoutingParams) f64 {
+        if (self.area <= 0.0 or self.slope <= 0.0) return 0.0;
+
+        return (1.0 / self.roughness) *
+            self.area *
+            math.pow(f64, self.radius, 2.0 / 3.0) *
+            @sqrt(self.slope);
+    }
+
+    /// Kinematic wave: Courant-limited explicit scheme
+    pub fn kinwaveGetFlow(self: RoutingParams, dt: f64) f64 {
+        if (self.area <= 0.0) return 0.0;
+
+        var celerity = (5.0 / 3.0) * self.q_in / self.area;
+        if (celerity <= 0.0) celerity = 0.01;
+
+        var courant = celerity * dt / self.length;
+        if (courant > 1.0) courant = 1.0;
+
+        const q_new = self.q_out +
+            courant * (self.q_in - self.q_out) +
+            self.q_lat * self.length;
+
+        return @max(q_new, 0.0);
+    }
+
+    /// Dispatch to appropriate routing method
+    pub fn route(self: RoutingParams, method: RoutingMethod,
+                 dt: f64) f64 {
+        return switch (method) {
+            .steady_flow => self.steadyGetFlow(),
+            .kin_wave => self.kinwaveGetFlow(dt),
+            .dyn_wave => self.q_in,
+        };
+    }
+};`,
   },
   "subcatch.c — Subcatchment Runoff": {
     category: "Hydrology",
@@ -1866,6 +2038,73 @@ func (sc *Subcatch) Route(rain, evap, infil,
 
     return qTotal
 }`,
+    zig: `// subcatch.zig — Subcatchment Runoff
+// SWMM5 Engine in Zig — Nonlinear Reservoir Surface Runoff
+// Models rainfall-runoff using Manning's equation for
+// pervious and impervious sub-areas of a subcatchment
+
+const std = @import("std");
+const math = std.math;
+
+pub const Subcatch = struct {
+    area: f64,           // subcatchment area (ft²)
+    width: f64,          // overland flow width (ft)
+    slope: f64,          // average surface slope
+    n_imperv: f64,       // Manning's n, impervious
+    n_perv: f64,         // Manning's n, pervious
+    d_store_imperv: f64, // depression storage, imperv (ft)
+    d_store_perv: f64,   // depression storage, perv (ft)
+    pct_imperv: f64,     // percent impervious (0–1)
+    depth: f64 = 0.0,    // current ponded depth (ft)
+
+    /// Manning's nonlinear reservoir:
+    /// Q = W * S^0.5 / n * (d - d_store)^(5/3)
+    pub fn getRunoff(self: Subcatch, depth: f64,
+                     n_mannings: f64,
+                     d_store: f64) f64 {
+        const excess = depth - d_store;
+        if (excess <= 0.0) return 0.0;
+
+        const alpha = self.width * @sqrt(self.slope)
+                      / n_mannings;
+        if (alpha <= 0.0) return 0.0;
+
+        return alpha * math.pow(f64, excess, 5.0 / 3.0);
+    }
+
+    /// Water balance depth update
+    pub fn getDepth(depth: f64, area: f64, rain: f64,
+                    evap: f64, infil: f64, runoff: f64,
+                    dt: f64) f64 {
+        const d_new = depth
+            + (rain - evap - infil - runoff) * dt / area;
+        return @max(d_new, 0.0);
+    }
+
+    /// Route runoff over pervious and impervious areas
+    pub fn route(self: *Subcatch, rain: f64, evap: f64,
+                 infil: f64, dt: f64) f64 {
+        // Impervious area runoff (no infiltration)
+        const q_imperv = self.getRunoff(
+            self.depth, self.n_imperv, self.d_store_imperv);
+
+        // Pervious area runoff (after infiltration)
+        const q_perv = self.getRunoff(
+            self.depth, self.n_perv, self.d_store_perv);
+
+        // Weighted total runoff
+        const q_total = self.pct_imperv * q_imperv
+            + (1.0 - self.pct_imperv) * q_perv;
+
+        // Update ponded depth via water balance
+        self.depth = getDepth(
+            self.depth, self.area, rain, evap,
+            infil * (1.0 - self.pct_imperv),
+            q_total, dt);
+
+        return q_total;
+    }
+};`,
   },
   "infil.c — Infiltration Models": {
     category: "Hydrology",
@@ -2258,6 +2497,65 @@ func CnInfiltration(rainfall, cn float64) float64 {
 
     pe := math.Pow(rainfall-ia, 2) / (rainfall - ia + s)
     return rainfall - pe
+}`,
+    zig: `// infil.zig — Infiltration Models
+// SWMM5 Engine in Zig — Horton, Green-Ampt, and SCS-CN
+// Three methods to compute how rainfall infiltrates
+// into soil versus becoming surface runoff
+
+const std = @import("std");
+const math = std.math;
+
+pub const HortonInfil = struct {
+    f0: f64,    // max infiltration rate (in/hr)
+    f_inf: f64, // min infiltration rate (in/hr)
+    decay: f64, // decay constant (1/hr)
+
+    pub fn infiltration(self: HortonInfil, t: f64) f64 {
+        return self.f_inf + (self.f0 - self.f_inf) *
+            @exp(-self.decay * t);
+    }
+};
+
+pub const GreenAmptInfil = struct {
+    ks: f64,        // saturated conductivity
+    psi: f64,       // suction head (in)
+    theta_d: f64,   // moisture deficit
+    cum_infil: f64, // cumulative infiltration (in)
+
+    pub fn infiltration(self: *GreenAmptInfil,
+        rainfall: f64, dt: f64) f64 {
+
+        if (self.cum_infil <= 0.0) {
+            self.cum_infil = 0.001;
+        }
+
+        var f = self.ks *
+            (1.0 + self.psi * self.theta_d / self.cum_infil);
+        if (f > rainfall) {
+            f = rainfall;
+        }
+
+        self.cum_infil += f * dt;
+        return f;
+    }
+};
+
+pub fn cnInfiltration(rainfall: f64, cn: f64) f64 {
+    if (cn <= 0.0 or cn >= 100.0) {
+        return 0.0;
+    }
+
+    const s = (1000.0 / cn) - 10.0;
+    const ia = 0.2 * s;
+
+    if (rainfall <= ia) {
+        return rainfall;
+    }
+
+    const pe = math.pow(f64, rainfall - ia, 2) /
+        (rainfall - ia + s);
+    return rainfall - pe;
 }`,
   },
   "lid.c — LID/Green Infrastructure": {
@@ -2794,6 +3092,77 @@ func (lid *LidUnit) GetRunoff(rainfall, surfDepth, soilMoist,
         }
         return overflow
 }`,
+    zig: `// lid.zig — LID/Green Infrastructure Controls
+// SWMM5 Engine in Zig — Low Impact Development
+// Models bioretention, permeable pavement, infiltration
+// trenches, and vegetated swales with layered water balance
+
+const std = @import("std");
+const math = std.math;
+
+pub const LidType = enum {
+    bio_cell,      // bioretention cell / rain garden
+    perm_pave,     // permeable pavement
+    infil_trench,  // infiltration trench
+    veg_swale,     // vegetated swale
+};
+
+pub const LidLayer = struct {
+    depth: f64,        // layer depth (ft)
+    void_frac: f64,    // void fraction (porosity)
+    conductivity: f64, // hydraulic conductivity (ft/s)
+};
+
+pub const LidUnit = struct {
+    lid_type: LidType,
+    surface: LidLayer,    // surface layer
+    soil: LidLayer,       // soil layer
+    storage: LidLayer,    // gravel storage layer
+    drain_coeff: f64,     // underdrain coefficient
+    drain_exp: f64,       // underdrain exponent
+
+    /// Green-Ampt style percolation from soil to storage
+    pub fn getSoilPerc(self: LidUnit, soil_moist: f64,
+                       storage_depth: f64) f64 {
+        const deficit = self.soil.void_frac - soil_moist;
+        if (deficit <= 0.0) return 0.0;
+
+        const max_storage = self.storage.depth
+                            * self.storage.void_frac;
+        if (storage_depth >= max_storage) return 0.0;
+
+        return self.soil.conductivity
+            * (1.0 + self.soil.depth * deficit
+               / (soil_moist + 0.001));
+    }
+
+    /// Power-law underdrain discharge: Q = C * h^n
+    pub fn getDrainFlow(self: LidUnit,
+                        storage_depth: f64) f64 {
+        if (self.drain_coeff <= 0.0) return 0.0;
+        if (storage_depth <= 0.0) return 0.0;
+
+        return self.drain_coeff
+               * math.pow(f64, storage_depth, self.drain_exp);
+    }
+
+    /// Overall LID water balance:
+    /// route through surface -> soil -> storage -> drain
+    pub fn getRunoff(self: LidUnit, rainfall: f64,
+                     surf_depth: f64, soil_moist: f64,
+                     storage_depth: f64, dt: f64) f64 {
+        const soil_perc = self.getSoilPerc(
+            soil_moist, storage_depth);
+
+        const surf_inflow = @max(rainfall - soil_perc, 0.0);
+
+        const surf_capacity = self.surface.depth
+                              * self.surface.void_frac;
+        const overflow = surf_depth + surf_inflow * dt
+                         - surf_capacity;
+        return @max(overflow, 0.0);
+    }
+};`,
   },
   "link.c — Conduit Hydraulics": {
     category: "Hydraulics",
@@ -3616,6 +3985,106 @@ func (xs *Xsect) GetCriticalDepth(qTarget float64) float64 {
         }
         return (yLo + yHi) / 2.0
 }`,
+    zig: `// link.zig — Conduit Hydraulics (Circular Cross Section)
+// SWMM5 Engine in Zig — Pipe Geometry & Manning's Equation
+// Computes area, hydraulic radius, normal depth, and
+// critical depth for circular conduits
+
+const std = @import("std");
+const math = std.math;
+
+const GRAVITY: f64 = 32.174; // ft/s²
+const MAX_ITER: usize = 50;
+const TOLERANCE: f64 = 1.0e-6;
+
+const Xsect = struct {
+    y_full: f64, // full depth = diameter (ft)
+    a_full: f64, // full area (ft²)
+    r_full: f64, // full hydraulic radius (ft)
+    w_max: f64,  // maximum top width (ft)
+
+    pub fn getArea(self: Xsect, depth: f64) f64 {
+        const r = self.y_full / 2.0;
+        const y_norm = depth / self.y_full;
+        if (y_norm <= 0.0) return 0.0;
+        if (y_norm >= 1.0) return self.a_full;
+
+        const theta = 2.0 * math.acos(1.0 - 2.0 * y_norm);
+        return r * r * (theta - @sin(theta)) / 2.0;
+    }
+
+    pub fn getHydRadius(self: Xsect, depth: f64) f64 {
+        const r = self.y_full / 2.0;
+        const y_norm = depth / self.y_full;
+        if (y_norm <= 0.0) return 0.0;
+        if (y_norm >= 1.0) return self.r_full;
+
+        const theta = 2.0 * math.acos(1.0 - 2.0 * y_norm);
+        const area = r * r * (theta - @sin(theta)) / 2.0;
+        const perim = r * theta;
+        if (perim <= 0.0) return 0.0;
+
+        return area / perim;
+    }
+
+    pub fn getNormalDepth(self: Xsect, n_manning: f64,
+                          slope: f64, q_target: f64) f64 {
+        if (q_target <= 0.0 or slope <= 0.0) return 0.0;
+
+        var y_lo: f64 = 0.0;
+        var y_hi: f64 = self.y_full;
+
+        var i: usize = 0;
+        while (i < MAX_ITER) : (i += 1) {
+            const y_mid = (y_lo + y_hi) / 2.0;
+            const area = self.getArea(y_mid);
+            const hyd_rad = self.getHydRadius(y_mid);
+            const q_calc = (1.0 / n_manning) * area *
+                math.pow(f64, hyd_rad, 2.0 / 3.0) *
+                @sqrt(slope);
+
+            if (@fabs(q_calc - q_target) < TOLERANCE) break;
+            if (q_calc < q_target) {
+                y_lo = y_mid;
+            } else {
+                y_hi = y_mid;
+            }
+        }
+        return (y_lo + y_hi) / 2.0;
+    }
+
+    pub fn getCriticalDepth(self: Xsect, q_target: f64) f64 {
+        if (q_target <= 0.0) return 0.0;
+
+        const rhs = (q_target * q_target) / GRAVITY;
+        var y_lo: f64 = 0.0;
+        var y_hi: f64 = self.y_full;
+
+        var i: usize = 0;
+        while (i < MAX_ITER) : (i += 1) {
+            const y_mid = (y_lo + y_hi) / 2.0;
+            const r = self.y_full / 2.0;
+            const y_norm = y_mid / self.y_full;
+            if (y_norm <= 0.0) { y_lo = y_mid; continue; }
+            if (y_norm >= 1.0) { y_hi = y_mid; continue; }
+
+            const theta = 2.0 * math.acos(1.0 - 2.0 * y_norm);
+            const area = r * r * (theta - @sin(theta)) / 2.0;
+            const top_w = 2.0 * r * @sin(theta / 2.0);
+
+            if (top_w <= 0.0) { y_lo = y_mid; continue; }
+            const lhs = (area * area * area) / top_w;
+
+            if (@fabs(lhs - rhs) < TOLERANCE) break;
+            if (lhs < rhs) {
+                y_lo = y_mid;
+            } else {
+                y_hi = y_mid;
+            }
+        }
+        return (y_lo + y_hi) / 2.0;
+    }
+};`,
   },
   "node.c — Junction & Storage Nodes": {
     category: "Hydraulics",
@@ -4091,6 +4560,70 @@ func (n *Node) UpdateLevel(sc *StorageCurve,
         n.Depth = n.MaxDepth
     }
 }`,
+    zig: `// node.zig — Junction & Storage Nodes
+// SWMM5 Engine in Zig — Node Water Level Updates
+// Volume balance at junctions and storage nodes
+// with depth-area relationship and overflow check
+
+const std = @import("std");
+
+const StorageCurve = struct {
+    depths: []const f64,
+    areas: []const f64,
+
+    pub fn getVolume(self: StorageCurve, depth: f64) f64 {
+        var vol: f64 = 0.0;
+
+        var i: usize = 1;
+        while (i < self.depths.len) : (i += 1) {
+            if (depth <= self.depths[i]) {
+                const frac = (depth - self.depths[i - 1]) /
+                    (self.depths[i] - self.depths[i - 1]);
+                const a_avg = self.areas[i - 1] +
+                    frac * (self.areas[i] - self.areas[i - 1]);
+                return vol + a_avg * (depth - self.depths[i - 1]);
+            }
+            vol += 0.5 * (self.areas[i - 1] + self.areas[i]) *
+                (self.depths[i] - self.depths[i - 1]);
+        }
+        return vol;
+    }
+};
+
+const Node = struct {
+    invert_el: f64,  // invert elevation (ft)
+    max_depth: f64,  // maximum depth (ft)
+    depth: f64,      // current water depth (ft)
+    volume: f64,     // current stored volume (ft³)
+    overflow: f64,   // overflow rate (cfs)
+
+    pub fn updateLevel(self: *Node, sc: StorageCurve,
+                       q_in: f64, q_out: f64, dt: f64) void {
+        const dv = (q_in - q_out) * dt;
+        self.volume = @max(0.0, self.volume + dv);
+
+        var i: usize = 1;
+        while (i < sc.depths.len) : (i += 1) {
+            const v = sc.getVolume(sc.depths[i]);
+            if (v >= self.volume) {
+                const v_prev = sc.getVolume(sc.depths[i - 1]);
+                const a_avg = 0.5 *
+                    (sc.areas[i - 1] + sc.areas[i]);
+                self.depth = sc.depths[i - 1] +
+                    (self.volume - v_prev) / a_avg;
+                break;
+            }
+        }
+
+        self.overflow = 0.0;
+        if (self.depth > self.max_depth) {
+            const top_area = sc.areas[sc.areas.len - 1];
+            self.overflow = (self.depth - self.max_depth) *
+                top_area / dt;
+            self.depth = self.max_depth;
+        }
+    }
+};`,
   },
   "rain.c — Rainfall Processing": {
     category: "Hydrology",
@@ -4576,6 +5109,62 @@ func (g *RainGage) GetRate(raw, next, tA, tB,
         rateB := g.ConvertToIntensity(next)
         g.CurrentRate = Interpolate(rateA, rateB, tA, tB, t)
         return g.CurrentRate
+}`,
+    zig: `// rain.zig — Rainfall Processing
+// SWMM5 Engine in Zig — Rain Gage Input Handling
+// Converts raw rainfall data to time-stepped intensities
+// for driving all hydrologic computations
+
+const std = @import("std");
+
+const RainType = enum {
+    intensity,
+    volume,
+    cumulative,
+};
+
+const RainGage = struct {
+    rain_type: RainType,
+    interval: f64,        // recording interval (seconds)
+    current_rate: f64,    // current intensity (in/hr)
+    previous_total: f64,  // previous cumulative depth
+    units_factor: f64,    // conversion factor
+
+    pub fn convertToIntensity(self: *RainGage, value: f64) f64 {
+        return switch (self.rain_type) {
+            .intensity => value * self.units_factor,
+
+            .volume => blk: {
+                if (self.interval <= 0.0) break :blk 0.0;
+                break :blk value * self.units_factor *
+                    3600.0 / self.interval;
+            },
+
+            .cumulative => blk: {
+                if (self.interval <= 0.0) break :blk 0.0;
+                const raw = (value - self.previous_total) *
+                    self.units_factor * 3600.0 / self.interval;
+                self.previous_total = value;
+                break :blk @max(raw, 0.0);
+            },
+        };
+    }
+
+    pub fn getRate(self: *RainGage, raw: f64, next: f64,
+                   t_a: f64, t_b: f64, t: f64) f64 {
+        const rate_a = self.convertToIntensity(raw);
+        const rate_b = self.convertToIntensity(next);
+        self.current_rate = interpolate(rate_a, rate_b,
+                                        t_a, t_b, t);
+        return self.current_rate;
+    }
+};
+
+fn interpolate(rate_a: f64, rate_b: f64,
+               t_a: f64, t_b: f64, t: f64) f64 {
+    const span = t_b - t_a;
+    if (span <= 0.0) return rate_a;
+    return rate_a + (rate_b - rate_a) * (t - t_a) / span;
 }`,
   },
   "massbal.c — Mass Balance Checking": {
@@ -5075,6 +5664,74 @@ func (mb *MassBalance) Report() string {
                 mb.RunoffError, mb.RoutingError,
         )
 }`,
+    zig: `// massbal.zig — Mass Balance Checking
+// SWMM5 Engine in Zig — Continuity Error Tracking
+// Tracks all inflows, outflows, and storage to verify
+// conservation of mass throughout the simulation
+
+const std = @import("std");
+
+const MassBalance = struct {
+    total_inflow: f64 = 0.0,
+    total_outflow: f64 = 0.0,
+    initial_storage: f64 = 0.0,
+    final_storage: f64 = 0.0,
+    runoff_error: f64 = 0.0,
+    routing_error: f64 = 0.0,
+
+    pub fn init() MassBalance {
+        return .{};
+    }
+
+    pub fn addInflow(self: *MassBalance, volume: f64) void {
+        self.total_inflow += volume;
+    }
+
+    pub fn addOutflow(self: *MassBalance, volume: f64) void {
+        self.total_outflow += volume;
+    }
+
+    pub fn updateStorage(self: *MassBalance, current: f64) void {
+        self.final_storage = current;
+    }
+
+    pub fn report(self: *MassBalance) void {
+        const delta = self.final_storage -
+            self.initial_storage;
+        self.runoff_error = getError(
+            self.total_inflow, self.total_outflow, delta,
+        );
+        self.routing_error = self.runoff_error;
+
+        const w = std.io.getStdOut().writer();
+        w.print("\\n--- Mass Balance Report ---\\n", .{})
+            catch {};
+        w.print("Total Inflow:    {d:12.4}\\n",
+            .{self.total_inflow}) catch {};
+        w.print("Total Outflow:   {d:12.4}\\n",
+            .{self.total_outflow}) catch {};
+        w.print("Initial Storage: {d:12.4}\\n",
+            .{self.initial_storage}) catch {};
+        w.print("Final Storage:   {d:12.4}\\n",
+            .{self.final_storage}) catch {};
+        w.print("Runoff Error:    {d:12.4} %\\n",
+            .{self.runoff_error}) catch {};
+        w.print("Routing Error:   {d:12.4} %\\n",
+            .{self.routing_error}) catch {};
+    }
+};
+
+fn getError(total_in: f64, total_out: f64,
+            storage_change: f64) f64 {
+    var denom = total_in;
+    if (denom <= 0.0) {
+        denom = total_out + storage_change;
+    }
+    if (denom <= 0.0) return 0.0;
+
+    return 100.0 * (total_in - total_out - storage_change) /
+        denom;
+}`,
   },};
 
 const languages = [
@@ -5085,6 +5742,7 @@ const languages = [
   { id: "julia", label: "Julia", ext: ".jl", color: "#9558B2" },
   { id: "javascript", label: "JavaScript", ext: ".js", color: "#f1e05a" },
   { id: "go", label: "Go", ext: ".go", color: "#00ADD8" },
+  { id: "zig", label: "Zig", ext: ".zig", color: "#F7A41D" },
 ];
 
 const translationNotes = {
@@ -5109,6 +5767,13 @@ const translationNotes = {
   "julia-javascript": "Julia's scientific computing focus vs JavaScript's web platform. Julia's struct becomes JavaScript's class. Julia's multiple dispatch becomes JavaScript's class methods. Julia's 1-based indexing requires adjustments for JavaScript's 0-based arrays. Julia excels at numerical computation; JavaScript excels at interactive visualization \u2014 combining both via web APIs creates powerful engineering tools.",
   "julia-go": "Julia's expressive scientific syntax vs Go's minimalist engineering approach. Julia's mutable struct becomes Go's struct with pointer receivers. Julia's multiple dispatch becomes Go's explicit method definitions. Julia uses 1-based indexing; Go uses 0-based. Julia's ! convention for mutation becomes Go's pointer receiver convention. Both compile to fast native code.",
   "javascript-go": "Both are modern languages with C-family syntax. JavaScript's class becomes Go's struct + methods. JavaScript's Math.sqrt() becomes Go's math.Sqrt(). JavaScript's dynamic typing becomes Go's static type declarations. JavaScript runs in the browser or Node.js; Go produces standalone binaries. Both have strong ecosystems for web services, making them natural choices for SWMM5 web tools.",
+  "c-zig": "Zig replaces C's preprocessor macros and typedefs with comptime and explicit struct definitions. C's pointer dereference (c->width) becomes Zig's dot access on pointer (c.width). malloc/free are replaced by Zig's allocator interface or stack allocation. C's pow() and sqrt() become @sqrt() and std.math.pow(). Zig's explicit error handling via error unions (!T) replaces C's error-code-return convention. No hidden control flow — Zig's philosophy aligns with C's directness while adding safety.",
+  "fortran-zig": "Fortran's derived types (type :: Conduit) become Zig's struct definitions. Fortran's module/contains pattern becomes Zig's namespaced struct with pub fn methods. Fortran's 1-based array indexing contrasts with Zig's 0-based slices. real(8) maps to Zig's f64. Fortran's intent(in/inout) is replaced by Zig's const vs mutable pointer parameters. Fortran's implicit none finds a kindred spirit in Zig's explicit-everything philosophy — no implicit conversions, no hidden allocations.",
+  "go-zig": "Go's garbage-collected runtime contrasts with Zig's manual memory management and comptime allocator model. Go's method receivers (func (c *Conduit) GetFlow()) become Zig's namespaced functions (pub fn getFlow(self: *Conduit)). Go's math.Pow() becomes std.math.pow(). Go's multiple-return error handling (val, err) maps to Zig's error unions (val !ErrorType). Go's exported names (capitalized) become Zig's pub keyword. Both prioritize simplicity and readability over abstraction.",
+  "javascript-zig": "JavaScript's dynamic typing becomes Zig's strict static typing with comptime generics. JavaScript's class and constructor become Zig's struct with an init function. Math.sqrt() and Math.pow() become @sqrt() and std.math.pow(). JavaScript's garbage collection is replaced by Zig's explicit memory control. JavaScript's try/catch becomes Zig's try/catch with error unions. Zig compiles to WebAssembly just like JavaScript runs natively in the browser, making them complementary for web-based SWMM tools.",
+  "julia-zig": "Julia's high-level multiple dispatch (function friction_slope(c::Conduit)) becomes Zig's namespaced struct methods (pub fn frictionSlope(self: *const Conduit)). Julia's mutable struct maps directly to Zig's struct (all mutable by default). Julia's 1-based indexing contrasts with Zig's 0-based. Julia's JIT compilation vs Zig's ahead-of-time compilation represents different performance philosophies. Julia's Unicode operators (≤) become standard comparisons (<=). Both produce fast code, but Zig gives deterministic performance without a runtime.",
+  "python-zig": "Python's @dataclass becomes Zig's struct with explicit field types (f64 instead of float hints). Python's self.width becomes self.width via pointer access. Python's dynamic typing is replaced by Zig's compile-time type checking. math.sqrt() becomes @sqrt(), and ** exponentiation becomes std.math.pow(). Python's list comprehensions become explicit loops in Zig. The development speed trade-off is stark — Python's rapid prototyping vs Zig's zero-overhead performance with compile-time safety guarantees.",
+  "rust-zig": "Two modern systems languages with different safety strategies. Rust's ownership/borrowing model is replaced by Zig's simpler pointer semantics with optional safety checks. Rust's impl blocks become Zig's namespaced struct functions. Rust's .powf() and .sqrt() become std.math.pow() and @sqrt(). Rust's match becomes Zig's switch. Rust's Result<T,E> maps to Zig's error unions (!T). Rust enforces safety through the type system; Zig trusts the programmer but provides runtime safety checks in debug mode.",
 };
 
 export { modules, languages, translationNotes };

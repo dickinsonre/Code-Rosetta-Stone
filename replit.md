@@ -1,7 +1,7 @@
 # SWMM5 Rosetta Stone
 
 ## Overview
-An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 7 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, and Go.
+An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 8 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, and Zig.
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
@@ -20,7 +20,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Landing/About section with project overview and EPA SWMM5 link
 - Search/Filter to find modules by concept, equation, tag, or description
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
-- Per-language-pair translation notes (21 pairs covering all 7 languages)
+- Per-language-pair translation notes (28 pairs covering all 8 languages)
 
 ## Project Architecture
 - **Framework**: React + Vite
