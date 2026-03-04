@@ -282,6 +282,16 @@ function ModuleInfoPanel({ mod, t, show, onToggle }) {
 
 // ─── Themes ──────────────────────────────────────────────────────────
 
+const themeOrder = ["dark", "light", "uf", "auburn", "oregonstate", "epa"];
+const themeLabels = {
+  dark: "Dark", light: "Light", uf: "UF Gators",
+  auburn: "Auburn", oregonstate: "Oregon State", epa: "EPA",
+};
+const themeIcons = {
+  dark: "\u263E", light: "\u2600", uf: "\uD83D\uDC0A",
+  auburn: "\uD83D\uDC2F", oregonstate: "\uD83E\uDDAB", epa: "\uD83C\uDF0E",
+};
+
 const themes = {
   dark: {
     bg: "#0d0f17",
@@ -338,6 +348,118 @@ const themes = {
     st: "#50a14f",
     nu: "#c18401",
     fn: "#4078c0",
+  },
+  uf: {
+    bg: "#001438",
+    text: "#d4dce8",
+    textBright: "#f0f4fa",
+    textMuted: "#7a8da8",
+    textDim: "#5a6f8a",
+    textFaint: "#2e4060",
+    panelBg: "#001a48",
+    panelHeader: "#002060",
+    border: "#1a3560",
+    borderLight: "#102850",
+    borderSubtle: "#001a48",
+    activeBg: "#102850",
+    activeBorder: "#2a4570",
+    hoverBg: "#0a2248",
+    modActiveBg: "#1a2d55",
+    notesBg: "#001640",
+    accent: "#FA4616",
+    accentAlt: "#0021A5",
+    scrollThumb: "#1a3560",
+    scrollThumbHover: "#2a4570",
+    lineNum: "#2e4060",
+    cm: "#5a6f8a",
+    kw: "#FA4616",
+    st: "#6db86b",
+    nu: "#e8a735",
+    fn: "#4d8fef",
+  },
+  auburn: {
+    bg: "#0C1A2E",
+    text: "#d0d8e4",
+    textBright: "#eef2f8",
+    textMuted: "#7888a0",
+    textDim: "#586878",
+    textFaint: "#2c3c52",
+    panelBg: "#0f1f35",
+    panelHeader: "#152840",
+    border: "#1e3350",
+    borderLight: "#142a42",
+    borderSubtle: "#0f1f35",
+    activeBg: "#142a42",
+    activeBorder: "#2a4060",
+    hoverBg: "#112438",
+    modActiveBg: "#1a2e48",
+    notesBg: "#0d1c30",
+    accent: "#DD550C",
+    accentAlt: "#0C2340",
+    scrollThumb: "#1e3350",
+    scrollThumbHover: "#2a4060",
+    lineNum: "#2c3c52",
+    cm: "#586878",
+    kw: "#DD550C",
+    st: "#6db86b",
+    nu: "#e8a735",
+    fn: "#5a9cd6",
+  },
+  oregonstate: {
+    bg: "#0a0a0a",
+    text: "#d0d0d0",
+    textBright: "#f0f0f0",
+    textMuted: "#808080",
+    textDim: "#606060",
+    textFaint: "#383838",
+    panelBg: "#111111",
+    panelHeader: "#1a1a1a",
+    border: "#2a2a2a",
+    borderLight: "#1e1e1e",
+    borderSubtle: "#151515",
+    activeBg: "#1e1e1e",
+    activeBorder: "#3a3a3a",
+    hoverBg: "#181818",
+    modActiveBg: "#1c1810",
+    notesBg: "#0f0f0f",
+    accent: "#D73F09",
+    accentAlt: "#8B4513",
+    scrollThumb: "#2a2a2a",
+    scrollThumbHover: "#3a3a3a",
+    lineNum: "#383838",
+    cm: "#606060",
+    kw: "#D73F09",
+    st: "#7cb342",
+    nu: "#e09030",
+    fn: "#d4853a",
+  },
+  epa: {
+    bg: "#f4f8f5",
+    text: "#1a2e22",
+    textBright: "#0a1810",
+    textMuted: "#4a6858",
+    textDim: "#6a8878",
+    textFaint: "#b0c8b8",
+    panelBg: "#ffffff",
+    panelHeader: "#e8f0ea",
+    border: "#c0d8c8",
+    borderLight: "#d8e8dc",
+    borderSubtle: "#e8f0ec",
+    activeBg: "#d8e8dc",
+    activeBorder: "#90b0a0",
+    hoverBg: "#e0ece4",
+    modActiveBg: "#d0e4d8",
+    notesBg: "#eaf4ee",
+    accent: "#0071BC",
+    accentAlt: "#2E8540",
+    scrollThumb: "#b0c8b8",
+    scrollThumbHover: "#90b0a0",
+    lineNum: "#a0b8a8",
+    cm: "#6a8878",
+    kw: "#2E8540",
+    st: "#0071BC",
+    nu: "#c45500",
+    fn: "#0071BC",
   },
 };
 
@@ -574,11 +696,15 @@ export default function SWMM5CodeViewer() {
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
-            onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            title={`Switch to ${theme === "dark" ? "light" : "dark"} mode`}
-            style={{ width: 30, height: 30, fontSize: 16 }}
+            onClick={() => {
+              const idx = themeOrder.indexOf(theme);
+              setTheme(themeOrder[(idx + 1) % themeOrder.length]);
+            }}
+            title={`Theme: ${themeLabels[theme]} — click to switch`}
+            style={{ width: "auto", height: 30, fontSize: 13, padding: "0 10px", gap: 4, display: "inline-flex", alignItems: "center" }}
           >
-            {theme === "dark" ? "\u2600" : "\u263E"}
+            <span style={{ fontSize: 16 }}>{themeIcons[theme]}</span>
+            <span style={{ fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace" }}>{themeLabels[theme]}</span>
           </button>
         </div>
       </div>

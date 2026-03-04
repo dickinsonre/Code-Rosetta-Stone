@@ -18,7 +18,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
   - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
-- Dark/light theme toggle
+- 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
 - Synchronized scrolling between code panels
 - Copy-to-clipboard per code panel (with execCommand fallback)
 - Responsive mobile layout (panels stack vertically below 900px)
