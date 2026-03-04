@@ -841,6 +841,336 @@ export fn getLinkFlow(idx: u32) f64 {
 }`,
     codeLang: "zig",
   },
+  {
+    id: "cpp-xsect",
+    language: "C++",
+    languageColor: "#f34b7d",
+    icon: "\u25CE",
+    name: "Cross-Section Calculator",
+    tagline: "Interactive hydraulic geometry for any pipe shape.",
+    difficulty: "Medium",
+    impact: "High",
+    description: "A real-time cross-section geometry calculator for circular, rectangular, trapezoidal, and triangular channel shapes. Drag the water depth slider to see area, hydraulic radius, wetted perimeter, and top width update instantly with a visual cross-section diagram. Uses the classic \u03B8 = 2\u00B7acos(1-2y/D) formula for circular pipes.",
+    whyThisLanguage: "C++ excels at real-time interactive computation with strong typing. The class hierarchy naturally models different cross-section shapes with virtual methods, and template metaprogramming can optimize the geometry calculations at compile time.",
+    features: [
+      "4 cross-section shapes: circular, rectangular, trapezoidal, triangular",
+      "Real-time geometry visualization on canvas",
+      "Adjustable dimensions and water depth",
+      "Manning's section factor calculation",
+      "Hydraulic radius, area, wetted perimeter, top width",
+      "Visual water level indicator with fill",
+    ],
+    architecture: `CrossSectionCalc \u2014 Interactive pipe geometry calculator
+\u251C\u2500\u2500 Shape selector (circular, rectangular, trapezoidal, triangular)
+\u251C\u2500\u2500 Dimension sliders (diameter/width/height/side slope)
+\u251C\u2500\u2500 Water depth slider with real-time update
+\u251C\u2500\u2500 Canvas visualization of cross-section with water fill
+\u2514\u2500\u2500 Property cards: Area, Rh, P, T, Section Factor`,
+    codeSample: `class CircularXsect {
+public:
+    double diameter;
+    
+    CircularXsect(double d) : diameter(d) {}
+    
+    double getArea(double depth) const {
+        if (depth <= 0) return 0;
+        double y = std::min(depth, diameter);
+        double theta = 2.0 * std::acos(1.0 - 2.0*y/diameter);
+        return (diameter*diameter/8.0) * (theta - std::sin(theta));
+    }
+    
+    double getHydRadius(double depth) const {
+        double area = getArea(depth);
+        double perim = getWettedPerim(depth);
+        return perim > 0 ? area / perim : 0;
+    }
+    
+    double getWettedPerim(double depth) const {
+        if (depth <= 0) return 0;
+        double y = std::min(depth, diameter);
+        double theta = 2.0 * std::acos(1.0 - 2.0*y/diameter);
+        return diameter * theta / 2.0;
+    }
+    
+    double getSectionFactor(double depth) const {
+        double a = getArea(depth);
+        double r = getHydRadius(depth);
+        return a * std::pow(r, 2.0/3.0);
+    }
+};`,
+    codeLang: "c",
+  },
+  {
+    id: "typescript-dashboard",
+    language: "TypeScript",
+    languageColor: "#3178c6",
+    icon: "\uD83D\uDCCA",
+    name: "SWMM Model Dashboard",
+    tagline: "Type-safe model inspector with tabbed data views.",
+    difficulty: "Medium",
+    impact: "High",
+    description: "A comprehensive model dashboard that displays SWMM network data in organized tabs \u2014 model summary, node table, link table, and simulation results. Run a quick simulation and see node depth time series, flooding alerts, and max flow/depth statistics. Click any node in the table to jump to its result chart.",
+    whyThisLanguage: "TypeScript's strong type system catches SWMM data structure errors at compile time. Interfaces for Node, Link, and Subcatchment enforce correct data shapes, and discriminated unions model element types safely. The IDE integration provides autocomplete for every SWMM property.",
+    features: [
+      "4-tab interface: Summary, Nodes, Links, Results",
+      "Model statistics dashboard with element counts",
+      "Interactive node/link data tables",
+      "Quick simulation with animated progress",
+      "Node depth time-series chart on canvas",
+      "Flooding detection and alert display",
+    ],
+    architecture: `ModelDashboard \u2014 Type-safe SWMM model inspector
+\u251C\u2500\u2500 Summary tab: element counts, catchment stats, pipe info
+\u251C\u2500\u2500 Nodes tab: sortable table with click-to-chart
+\u251C\u2500\u2500 Links tab: conduit/pump properties with max flows
+\u251C\u2500\u2500 Results tab: time-series canvas + node selector
+\u2514\u2500\u2500 Quick Sim: animated 120-step simulation engine`,
+    codeSample: `interface SwmmNode {
+  id: string;
+  type: "junction" | "storage" | "outfall";
+  invert: number;
+  maxDepth: number;
+  depth: number;
+}
+
+interface SwmmLink {
+  id: string;
+  from: string;
+  to: string;
+  type: "conduit" | "pump" | "orifice";
+  length: number;
+  diameter: number;
+  roughness: number;
+}
+
+interface SimResult {
+  nodeDepths: Record<string, DepthRecord[]>;
+  linkFlows: Record<string, FlowRecord[]>;
+  flooding: FloodEvent[];
+  maxDepths: Record<string, number>;
+  maxFlows: Record<string, number>;
+}
+
+function findNodeQual(
+  node: SwmmNode,
+  inflows: { flow: number; conc: number }[],
+  volume: number,
+  oldConc: number,
+  dt: number
+): number {
+  const totalQ = inflows.reduce((s, i) => s + i.flow, 0);
+  const massIn = inflows.reduce((s, i) => s + i.flow * i.conc, 0);
+  return (massIn + volume * oldConc / dt) / (totalQ + volume / dt);
+}`,
+    codeLang: "typescript",
+  },
+  {
+    id: "matlab-hydrograph",
+    language: "MATLAB",
+    languageColor: "#e16737",
+    icon: "\uD83D\uDCC8",
+    name: "SCS Hydrograph Plotter",
+    tagline: "Design storm generation with SCS unit hydrograph response.",
+    difficulty: "Medium",
+    impact: "High",
+    description: "Generate design storm hyetographs using 6 different storm distributions (SCS Types I, IA, II, III, Uniform, and Chicago), then compute the runoff response using the SCS Curve Number method and unit hydrograph convolution. See both the rainfall hyetograph and the resulting runoff hydrograph plotted together with peak flow annotation.",
+    whyThisLanguage: "MATLAB is the standard for hydrologic engineering analysis. Its matrix operations make convolution trivial, built-in plotting produces publication-quality figures, and every civil engineering student learns MATLAB. The vectorized operations map naturally to time-series rainfall-runoff computations.",
+    features: [
+      "6 storm distributions: SCS I/IA/II/III, Uniform, Chicago",
+      "Adjustable total depth, duration, and time step",
+      "SCS Curve Number runoff computation",
+      "Unit hydrograph convolution for flow response",
+      "Dual canvas: rainfall hyetograph + runoff hydrograph",
+      "Peak flow annotation and runoff statistics",
+    ],
+    architecture: `HydrographPlotter \u2014 Design storm + SCS runoff calculator
+\u251C\u2500\u2500 Storm type selector (6 distributions)
+\u251C\u2500\u2500 Parameter controls (depth, duration, CN, area, Tc)
+\u251C\u2500\u2500 Rainfall hyetograph canvas (bars + cumulative line)
+\u251C\u2500\u2500 Runoff hydrograph canvas (area fill + peak marker)
+\u2514\u2500\u2500 Summary cards: peak flow, total rainfall, runoff ratio`,
+    codeSample: `% SCS Curve Number Runoff Computation
+function [Q, Pe] = scs_runoff(P, CN, area_acres, Tc_min)
+    S = (1000/CN) - 10;           % potential max retention (in)
+    Ia = 0.2 * S;                  % initial abstraction (in)
+    
+    % Cumulative excess precipitation
+    Pe_cum = zeros(size(P));
+    P_cum = cumsum(P);
+    for i = 1:length(P)
+        if P_cum(i) > Ia
+            Pe_cum(i) = (P_cum(i) - Ia)^2 / (P_cum(i) - Ia + S);
+        end
+    end
+    Pe = diff([0 Pe_cum]);         % incremental excess
+    
+    % SCS unit hydrograph
+    tp = 0.6 * Tc_min;            % time to peak (min)
+    qp = 484 * area_acres / tp;   % peak unit discharge
+    tb = 2.67 * tp;               % base time
+    t = 0:5:tb;
+    uh = qp * (t/tp).^3 .* exp(3*(1 - t/tp));
+    
+    % Convolution
+    Q = conv(Pe, uh) * 0.01;
+    Q = Q(1:length(P));
+end`,
+    codeLang: "python",
+  },
+  {
+    id: "csharp-designstorm",
+    language: "C#",
+    languageColor: "#178600",
+    icon: "\u26C8",
+    name: "Design Storm Generator",
+    tagline: "IDF curves and alternating block method for any US city.",
+    difficulty: "Medium",
+    impact: "Very High",
+    description: "Generate synthetic design storms using the alternating block method with IDF (Intensity-Duration-Frequency) curve parameters for 8 US cities. Select a city, return period, and duration to produce a design storm hyetograph. Includes interactive IDF curve display showing all return periods.",
+    whyThisLanguage: "C# offers robust engineering software patterns with strong typing, LINQ for data processing, and excellent IDE support. The class-based architecture with interfaces models the IDF/storm generation pipeline cleanly, and async patterns handle long simulations without blocking the UI.",
+    features: [
+      "8 US cities with fitted IDF curve parameters",
+      "6 return periods (2, 5, 10, 25, 50, 100-year)",
+      "Alternating block method storm generation",
+      "Interactive IDF curve display",
+      "Adjustable duration and time step",
+      "Storm statistics: total depth, peak intensity",
+    ],
+    architecture: `DesignStormGen \u2014 IDF-based synthetic storm generator
+\u251C\u2500\u2500 City selector with IDF parameters
+\u251C\u2500\u2500 Return period buttons (2yr \u2013 100yr)
+\u251C\u2500\u2500 Duration/timestep sliders
+\u251C\u2500\u2500 IDF curves canvas (all return periods)
+\u251C\u2500\u2500 Alternating block hyetograph canvas
+\u2514\u2500\u2500 Storm statistics cards`,
+    codeSample: `public class IdfCurve
+{
+    public double A { get; set; }
+    public double B { get; set; }
+    public double N { get; set; }
+    
+    public double GetIntensity(double duration, int returnPeriod)
+    {
+        double rpFactor = Math.Log10(returnPeriod);
+        return (A * (0.5 + rpFactor * 0.5)) / Math.Pow(duration + B, N);
+    }
+}
+
+public class AlternatingBlockStorm
+{
+    public List<double> Generate(IdfCurve idf, int returnPeriod,
+                                  double totalDuration, double dt)
+    {
+        int steps = (int)(totalDuration / dt);
+        var depths = new List<double>();
+        
+        for (int i = 1; i <= steps; i++)
+        {
+            double dur = i * dt;
+            double avgI = idf.GetIntensity(dur, returnPeriod);
+            depths.Add(avgI * dur / 60.0);
+        }
+        
+        // Compute incremental depths
+        var increments = new List<double> { depths[0] };
+        for (int i = 1; i < depths.Count; i++)
+            increments.Add(depths[i] - depths[i - 1]);
+        
+        // Sort descending, place alternating from center
+        increments.Sort((a, b) => b.CompareTo(a));
+        var result = new double[steps];
+        int center = steps / 2;
+        for (int i = 0; i < increments.Count; i++)
+        {
+            int offset = (i + 1) / 2;
+            int idx = i % 2 == 0 ? center + offset : center - offset;
+            if (idx >= 0 && idx < steps)
+                result[idx] = increments[i] / (dt / 60.0);
+        }
+        return result.ToList();
+    }
+}`,
+    codeLang: "c",
+  },
+  {
+    id: "java-eventlogger",
+    language: "Java",
+    languageColor: "#b07219",
+    icon: "\uD83D\uDCDD",
+    name: "Simulation Event Logger",
+    tagline: "Real-time event stream with filtering and search.",
+    difficulty: "Medium",
+    impact: "High",
+    description: "A real-time event logging system that captures simulation events as they happen \u2014 flooding, surcharging, pump operations, gate control actions, backflow, and overflow. Events stream in live during simulation with color-coded severity, filterable by type, and searchable by element or description. Includes summary statistics after completion.",
+    whyThisLanguage: "Java's enterprise patterns (Observer, Strategy, logging frameworks like SLF4J/Log4j) make it ideal for structured event processing. The type-safe enum system models event categories, and Java's concurrent collections handle real-time event streaming safely across threads.",
+    features: [
+      "8 event types: Flooding, Surcharge, Dry, Pump On/Off, Overflow, Backflow, Control",
+      "Real-time event streaming during simulation",
+      "Filter by event type with count badges",
+      "Free-text search across element IDs and descriptions",
+      "Color-coded severity with icons",
+      "Post-simulation summary statistics",
+    ],
+    architecture: `EventLogger \u2014 Structured simulation event capture
+\u251C\u2500\u2500 Event type system (8 categories with icons/colors)
+\u251C\u2500\u2500 Simulation engine generating contextual events
+\u251C\u2500\u2500 Live streaming display (batched updates)
+\u251C\u2500\u2500 Type filter buttons with counts
+\u251C\u2500\u2500 Search bar for element/description matching
+\u2514\u2500\u2500 Summary grid: event counts by type`,
+    codeSample: `public enum EventType {
+    FLOODING("Flooding", "\u26A0"),
+    SURCHARGE("Surcharge", "\u26A1"),
+    PUMP_ON("Pump On", "\u25B6"),
+    PUMP_OFF("Pump Off", "\u23F8"),
+    OVERFLOW("Overflow", "\u2B06"),
+    BACKFLOW("Backflow", "\u21C4"),
+    CONTROL("Control", "\u2699");
+    
+    private final String label;
+    private final String icon;
+    EventType(String label, String icon) {
+        this.label = label;
+        this.icon = icon;
+    }
+}
+
+public class SimEvent {
+    private final long timeSeconds;
+    private final EventType type;
+    private final String elementId;
+    private final double value;
+    private final String detail;
+    
+    public SimEvent(long time, EventType type,
+                    String element, double value, String detail) {
+        this.timeSeconds = time;
+        this.type = type;
+        this.elementId = element;
+        this.value = value;
+        this.detail = detail;
+    }
+}
+
+public class EventLogger {
+    private final List<SimEvent> events = new CopyOnWriteArrayList<>();
+    private final Map<EventType, AtomicInteger> counts = 
+        new ConcurrentHashMap<>();
+    
+    public void log(SimEvent event) {
+        events.add(event);
+        counts.computeIfAbsent(event.getType(), 
+            k -> new AtomicInteger()).incrementAndGet();
+    }
+    
+    public List<SimEvent> filter(EventType type) {
+        return events.stream()
+            .filter(e -> e.getType() == type)
+            .collect(Collectors.toList());
+    }
+}`,
+    codeLang: "java",
+  },
 ];
 
 export const summaryMatrix = [
@@ -852,4 +1182,9 @@ export const summaryMatrix = [
   { language: "JavaScript", app: "Live Network Visualizer", playsTo: "Browser visualization, accessibility", difficulty: "Medium", impact: "Very High" },
   { language: "Go", app: "Model API Server", playsTo: "Networked services, concurrency", difficulty: "Medium", impact: "High" },
   { language: "Zig", app: "WASM Engine", playsTo: "WebAssembly, zero-dependency browser", difficulty: "High", impact: "Very High" },
+  { language: "C++", app: "Cross-Section Calculator", playsTo: "OOP geometry, real-time computation", difficulty: "Medium", impact: "High" },
+  { language: "TypeScript", app: "Model Dashboard", playsTo: "Type-safe data views, IDE support", difficulty: "Medium", impact: "High" },
+  { language: "MATLAB", app: "SCS Hydrograph Plotter", playsTo: "Engineering analysis, convolution", difficulty: "Medium", impact: "High" },
+  { language: "C#", app: "Design Storm Generator", playsTo: "IDF curves, engineering software", difficulty: "Medium", impact: "Very High" },
+  { language: "Java", app: "Simulation Event Logger", playsTo: "Enterprise patterns, event streaming", difficulty: "Medium", impact: "High" },
 ];

@@ -8,6 +8,11 @@ import UncertaintyLab from "./apps/UncertaintyLab.jsx";
 import NetworkVisualizer from "./apps/NetworkVisualizer.jsx";
 import ApiServer from "./apps/ApiServer.jsx";
 import WasmEngine from "./apps/WasmEngine.jsx";
+import CrossSectionCalc from "./apps/CrossSectionCalc.jsx";
+import ModelDashboard from "./apps/ModelDashboard.jsx";
+import HydrographPlotter from "./apps/HydrographPlotter.jsx";
+import DesignStormGen from "./apps/DesignStormGen.jsx";
+import EventLogger from "./apps/EventLogger.jsx";
 
 const demoComponents = {
   "c-micro-engine": MicroEngine,
@@ -18,6 +23,11 @@ const demoComponents = {
   "js-visualizer": NetworkVisualizer,
   "go-api-server": ApiServer,
   "zig-wasm": WasmEngine,
+  "cpp-xsect": CrossSectionCalc,
+  "typescript-dashboard": ModelDashboard,
+  "matlab-hydrograph": HydrographPlotter,
+  "csharp-designstorm": DesignStormGen,
+  "java-eventlogger": EventLogger,
 };
 
 const highlightSimple = (code, lang) => {
@@ -228,14 +238,14 @@ export default function AppShowcase({ theme }) {
             Language-Native SWMM Apps
           </h1>
           <p style={{ fontSize: 16, color: t.textMuted, margin: "0 0 16px", maxWidth: 700, marginLeft: "auto", marginRight: "auto", lineHeight: 1.6 }}>
-            Each programming language has unique strengths. These 8 app concepts play to what each language does better than any other &mdash; from C's bare-metal portability to Julia's probabilistic computing.
+            Each programming language has unique strengths. These {appIdeas.length} app concepts play to what each language does better than any other &mdash; from C's bare-metal portability to Julia's probabilistic computing.
           </p>
           <div style={{ display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap" }}>
             <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, background: t.tagBg, color: t.textMuted }}>
-              8 Languages
+              {appIdeas.length} Languages
             </span>
             <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, background: t.tagBg, color: t.textMuted }}>
-              8 App Concepts
+              {appIdeas.length} App Concepts
             </span>
             <span style={{ padding: "4px 12px", borderRadius: 20, fontSize: 12, background: t.tagBg, color: t.textMuted }}>
               Full Code Samples

@@ -166,6 +166,19 @@ export default function MicroEngine({ theme }) {
           padding: "8px 20px", borderRadius: 6, border: `1px solid ${t.border}`, cursor: "pointer",
           background: t.panelHeader, color: t.text, fontSize: 13,
         }}>Reset</button>
+        <button onClick={() => {
+          const stormed = nodesRef.current.map(n => n.id !== "Out" ? { ...n, inflow: n.inflow + 10 } : n);
+          nodesRef.current = stormed;
+          setNodes(stormed);
+          setTimeout(() => {
+            const restored = nodesRef.current.map((n, i) => ({ ...n, inflow: DEMO_NETWORK.nodes[i].inflow }));
+            nodesRef.current = restored;
+            setNodes(restored);
+          }, 5000);
+        }} style={{
+          padding: "8px 16px", borderRadius: 6, border: `1px solid ${t.border}`, cursor: "pointer",
+          background: "#61afef22", color: "#61afef", fontSize: 13, fontWeight: 600,
+        }}>Storm Pulse</button>
         <span style={{ fontSize: 12, color: t.textMuted, fontFamily: "monospace" }}>
           Step: {step} | dt=1.0s
         </span>
@@ -175,14 +188,29 @@ export default function MicroEngine({ theme }) {
         width: "100%", maxWidth: 660, display: "block",
       }} />
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 8, marginTop: 12 }}>
-        {nodes.map(n => (
+        {nodes.map((n, idx) => (
           <div key={n.id} style={{
             padding: "8px 10px", borderRadius: 6, background: t.panelHeader,
-            border: `1px solid ${t.border}`, fontSize: 11, fontFamily: "monospace",
+            border: `1px solid ${n.depth > n.maxDepth * 0.9 ? "#e45649" : t.border}`, fontSize: 11, fontFamily: "monospace",
           }}>
             <div style={{ fontWeight: 700, color: t.text }}>{n.id}</div>
-            <div style={{ color: t.textMuted }}>Depth: {n.depth.toFixed(3)} ft</div>
-            <div style={{ color: t.textMuted }}>Inflow: {n.inflow} cfs</div>
+            <div style={{ color: n.depth > n.maxDepth * 0.8 ? "#e45649" : t.textMuted }}>Depth: {n.depth.toFixed(3)} ft</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+              <span style={{ color: t.textMuted }}>Q:</span>
+              <input type="number" step={1} min={0} max={50} value={n.inflow}
+                onChange={e => {
+                  const val = Math.max(0, +e.target.value);
+                  const updated = nodes.map((nd, i) => i === idx ? { ...nd, inflow: val } : nd);
+                  nodesRef.current = updated;
+                  setNodes(updated);
+                }}
+                style={{
+                  width: 45, padding: "2px 4px", fontSize: 11, borderRadius: 3,
+                  border: `1px solid ${t.border}`, background: t.panelBg, color: t.text,
+                  fontFamily: "monospace",
+                }} />
+              <span style={{ color: t.textMuted, fontSize: 9 }}>cfs</span>
+            </div>
           </div>
         ))}
       </div>

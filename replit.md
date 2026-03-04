@@ -5,7 +5,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Six top-level tabs: "Rosetta Stone" (code comparison), "MicroGPT" (embedded SWMM5 MicroGPT via iframe), "SWMManywhere" (embedded SWMManywhere urban drainage synthesizer via iframe), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe), and "SWMM Apps" (interactive showcase of 8 language-native SWMM application concepts)
+- Six top-level tabs: "Rosetta Stone" (code comparison), "MicroGPT" (embedded SWMM5 MicroGPT via iframe), "SWMManywhere" (embedded SWMManywhere urban drainage synthesizer via iframe), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe), and "SWMM Apps" (interactive showcase of 13 language-native SWMM application concepts)
 - Sixteen SWMM5 modules organized by engineering priority:
   - Hydraulics: routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch), kinwave.c (Kinematic Wave Routing), xsect.c (Cross-Section Geometry), link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes)
   - Hydrology: subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure), gwater.c (Groundwater Flow), climate.c (Climate/Evaporation Processing)
@@ -33,8 +33,8 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - **Structure**: 
   - `src/modules.js` — All module data (code samples for 23 languages × 16 modules, metadata, languages array, 253 translation notes)
   - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app
-  - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 8 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
-  - `src/appIdeas.js` — Data for 8 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig)
+  - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 13 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
+  - `src/appIdeas.js` — Data for 13 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, TypeScript, MATLAB, C#, Java)
   - `src/apps/MicroEngine.jsx` — C Micro-Engine: interactive SWMM simulation with canvas network visualization
   - `src/apps/SwmmLint.jsx` — Rust Linter: .inp file validator with 10+ rules, split-panel editor/results
   - `src/apps/ScenarioOrchestrator.jsx` — Python Orchestrator: parameter sweep UI with sensitivity charts
@@ -43,6 +43,11 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/NetworkVisualizer.jsx` — JavaScript Visualizer: animated network with flow/depth colors, timeline scrubber
   - `src/apps/ApiServer.jsx` — Go API Server: interactive REST endpoint explorer with simulated responses
   - `src/apps/WasmEngine.jsx` — Zig WASM Engine: browser-based SWMM solver with performance metrics
+  - `src/apps/CrossSectionCalc.jsx` — C++ Cross-Section Calculator: interactive geometry for 4 pipe shapes with real-time property display
+  - `src/apps/ModelDashboard.jsx` — TypeScript Dashboard: tabbed model inspector with node/link tables and simulation results
+  - `src/apps/HydrographPlotter.jsx` — MATLAB Hydrograph Plotter: SCS design storm + unit hydrograph runoff computation
+  - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
+  - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
 - **Port**: 5000 (Vite dev server)
