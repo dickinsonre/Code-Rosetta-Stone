@@ -811,6 +811,13 @@ export default function SWMM5CodeViewer() {
           Rosetta Stone
         </button>
         <button
+          className={`app-tab ${activeTab === "swmmapps" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmmapps")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDEE0\uFE0F"}</span>
+          SWMM Apps
+        </button>
+        <button
           className={`app-tab ${activeTab === "microgpt" ? "active" : ""}`}
           onClick={() => setActiveTab("microgpt")}
         >
@@ -837,13 +844,6 @@ export default function SWMM5CodeViewer() {
         >
           <span style={{ fontSize: 15 }}>{"\uD83D\uDCA7"}</span>
           HydroCouple
-        </button>
-        <button
-          className={`app-tab ${activeTab === "swmmapps" ? "active" : ""}`}
-          onClick={() => setActiveTab("swmmapps")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83D\uDEE0\uFE0F"}</span>
-          SWMM Apps
         </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
