@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { modules, languages, translationNotes } from "./modules.js";
 import AppShowcase from "./AppShowcase.jsx";
+import SwmmEngineRunner from "./apps/SwmmEngineRunner.jsx";
 
 const playgroundUrls = {
   c: "https://godbolt.org/",
@@ -896,6 +897,13 @@ export default function SWMM5CodeViewer() {
           MicroGPTs
         </button>
         <button
+          className={`app-tab ${activeTab === "engine" ? "active" : ""}`}
+          onClick={() => setActiveTab("engine")}
+        >
+          <span style={{ fontSize: 15 }}>{"\u2699\uFE0F"}</span>
+          SWMM5 Engines
+        </button>
+        <button
           className={`app-tab ${activeTab === "pyswmm" ? "active" : ""}`}
           onClick={() => setActiveTab("pyswmm")}
         >
@@ -973,6 +981,9 @@ export default function SWMM5CodeViewer() {
           </div>
         </div>
       )}
+
+      {/* SWMM5 Engines Tab */}
+      {activeTab === "engine" && <SwmmEngineRunner theme={t} />}
 
       {/* PySWMM Tab */}
       {activeTab === "pyswmm" && (

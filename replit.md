@@ -5,7 +5,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Six top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
+- Seven top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "SWMM5 Engines" (upload .inp files and run EPA SWMM5 simulations, view .rpt reports), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
 - Fifty SWMM5 modules organized by engineering category:
   - Hydraulics: routing.c, dynwave.c, flowrout.c, kinwave.c, xsect.c, link.c, node.c, dwflow.c, culvert.c, forcmain.c, roadway.c, exfil.c, shape.c, transect.c
   - Hydrology: subcatch.c, infil.c, lid.c, gwater.c, climate.c, rdii.c, snow.c, runoff.c, gage.c, landuse.c, lidproc.c
@@ -58,10 +58,14 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
   - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
   - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
+  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: upload .inp files, run EPA SWMM5 simulations, view/download .rpt reports
+  - `server.js` — Express backend API for running SWMM5 simulations via Python swmm-toolkit
+  - `run_swmm.py` — Python script that executes SWMM5 simulations using swmm-toolkit solver
+  - `public/sample.inp` — Sample 3-node SWMM5 model for testing
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
-- **Port**: 5000 (Vite dev server)
-- **Deployment**: Static site (vite build -> dist/)
+- **Port**: 5000 (Vite dev server), 3001 (Express backend API)
+- **Deployment**: Vite frontend + Express backend (both started via npm run dev)
 
 ## Key Technical Decisions
 - Custom syntax highlighter using token placeholder approach (`%%TOK%%`) to prevent comment/string/keyword regex patterns from interfering with each other
@@ -74,4 +78,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Translation notes use sorted language-pair keys (e.g., "c-rust", "python-julia") looked up via [left, right].sort().join("-")
 - MicroGPTs served as standalone HTML files from public/ directory via Vite, embedded as iframes with sub-tab navigation
 - MODULE_GRAPH includes 6 categories: Hydraulics, Hydrology, Quality, Operations, Data, Numerical
-- No external dependencies beyond React and Vite
+- SWMM5 Engines tab uses Express backend (port 3001) proxied through Vite; Python swmm-toolkit runs EPA SWMM5 engine
+- Backend dependencies: express, multer (file upload handling)
+- Python dependencies: swmm-toolkit (EPA SWMM5 engine bindings)
+- No other external dependencies beyond React and Vite
