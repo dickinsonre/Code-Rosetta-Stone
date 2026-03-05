@@ -1,0 +1,610 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IDF &amp; Muskingum MicroGPT — Rainfall Intensity + Channel Routing</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#080d13;--card:rgba(16,24,34,0.7);--bdr:rgba(40,54,68,0.5);
+    --t1:#cdd7e2;--t2:#7e8fa0;--t3:#4e5f70;--t4:#354555;
+    --idf:#f472b6;--musk:#a78bfa;--teal:#14b8a6;--sky:#38bdf8;--amber:#fbbf24;--emerald:#34d399;--rose:#fb7185;
+  }
+  body{background:var(--bg);color:var(--t1);font-family:'JetBrains Mono','Fira Code',monospace;min-height:100vh;line-height:1.5}
+
+  .hdr{padding:22px 24px 14px;border-bottom:1px solid var(--bdr)}
+  .hdr h1{font:800 22px/1.2 'Outfit',sans-serif;letter-spacing:-0.5px}
+  .hdr h1 .c1{color:var(--idf)}.hdr h1 .c2{color:var(--musk)}
+  .hdr .sub{font-size:10px;color:var(--t3);letter-spacing:.7px;margin-top:4px;text-transform:uppercase}
+
+  .msel{display:grid;grid-template-columns:1fr 1fr;gap:12px;padding:18px 24px}
+  .mc{padding:16px;border-radius:14px;cursor:pointer;border:2px solid transparent;transition:.25s;position:relative}
+  .mc.sel-idf{border-color:var(--idf);background:rgba(244,114,182,0.07)}
+  .mc.sel-musk{border-color:var(--musk);background:rgba(167,139,250,0.07)}
+  .mc-idf{background:rgba(244,114,182,0.03)}.mc-musk{background:rgba(167,139,250,0.03)}
+  .mc:hover{transform:translateY(-1px)}
+  .mc-tag{font:700 9px/1 inherit;padding:3px 8px;border-radius:4px;display:inline-block;margin-bottom:8px;letter-spacing:.5px}
+  .mc-name{font:700 15px/1.2 'Outfit',sans-serif;color:#fff;margin-bottom:6px}
+  .mc-eq{font-size:10px;color:var(--t3);line-height:1.5}
+  .mc-io{margin-top:8px;font-size:9px;padding:6px 10px;border-radius:6px;line-height:1.6}
+
+  .content{padding:0 24px 24px}
+  .panel{display:none}.panel.active{display:block}
+
+  .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:18px;margin-bottom:14px}
+  .card-t{font:700 13px/1.3 'Outfit',sans-serif;margin-bottom:10px}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+
+  .sl-grp{margin-bottom:6px}.sl-grp input[type=range]{width:100%}
+  .sl-v{font-size:13px;font-weight:600}
+  .sl-tip{font-size:9px;color:var(--t4);margin-top:2px}
+
+  .stat{background:rgba(8,13,19,0.6);border-radius:10px;padding:12px;border:1px solid rgba(40,54,68,0.3)}
+  .stat .sl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .stat .sv{font-size:20px;font-weight:700}
+  .stat .su{font-size:9px;color:var(--t4);margin-top:2px}
+
+  .btn{padding:10px 20px;border-radius:10px;border:none;font:600 12px inherit;cursor:pointer;transition:.2s;letter-spacing:.3px}
+  .btn:disabled{background:#1a2430;color:#354555;cursor:not-allowed;box-shadow:none}
+  .btn-row{display:flex;gap:10px;margin-bottom:14px}
+
+  .cw{position:relative;height:220px}.cwt{position:relative;height:300px}
+  .sts{font:11px/1.4 inherit;color:var(--t3);background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;margin-bottom:14px}
+
+  .pbtn{padding:5px 10px;font:10px inherit;border-radius:6px;cursor:pointer;background:rgba(40,54,68,0.4);color:var(--t2);border:1px solid rgba(50,65,78,0.3);transition:.2s}
+  .pbtn:hover{color:#fff}
+
+  .sec-div{display:flex;align-items:center;gap:10px;margin:18px 0 12px}
+  .sec-div .line{flex:1;height:1px;background:var(--bdr)}
+  .sec-div .tag{font:600 10px inherit;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;border-radius:5px}
+
+  .disc{border-radius:12px;padding:16px;margin-bottom:14px}
+  .disc-t{font:700 13px 'Outfit',sans-serif;margin-bottom:6px}
+
+  .footer{padding:12px 24px;text-align:center;border-top:1px solid var(--bdr);margin-top:16px;font-size:10px;color:var(--t4)}
+
+  /* IDF family curves grid */
+  .idf-family{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:8px}
+  .idf-rp{text-align:center;padding:6px;border-radius:8px;background:rgba(244,114,182,0.05);border:1px solid rgba(244,114,182,0.1)}
+  .idf-rp .rpv{font-size:16px;font-weight:700;color:var(--idf)}
+  .idf-rp .rpl{font-size:8px;color:var(--t4)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1><span class="c1">IDF Curve</span> &amp; <span class="c2">Muskingum</span> MicroGPT</h1>
+  <div class="sub">Neural networks discover rainfall intensity patterns &amp; channel routing physics</div>
+</div>
+
+<!-- MODEL SELECTOR -->
+<div class="msel">
+  <div class="mc mc-idf sel-idf" onclick="selM('idf')" id="mcIDF">
+    <div class="mc-tag" style="background:rgba(244,114,182,0.15);color:var(--idf)">IDF CURVES</div>
+    <div class="mc-name">Rainfall Intensity</div>
+    <div class="mc-eq">i = a·T<sup>m</sup> / (t + b)<sup>c</sup><br>Power-law IDF relationships</div>
+    <div class="mc-io" style="background:rgba(244,114,182,0.04);border:1px solid rgba(244,114,182,0.1)">
+      <span style="color:var(--idf)">3 inputs:</span> duration, return period, region →
+      <span style="color:var(--emerald)">1 output:</span> intensity (in/hr)
+    </div>
+  </div>
+  <div class="mc mc-musk" onclick="selM('musk')" id="mcMUSK">
+    <div class="mc-tag" style="background:rgba(167,139,250,0.15);color:var(--musk)">MUSKINGUM ROUTING</div>
+    <div class="mc-name">Channel Flow Routing</div>
+    <div class="mc-eq">O = C₀I₂ + C₁I₁ + C₂O₁<br>Attenuation + Translation</div>
+    <div class="mc-io" style="background:rgba(167,139,250,0.04);border:1px solid rgba(167,139,250,0.1)">
+      <span style="color:var(--musk)">6 inputs:</span> Q<sub>p</sub>, T<sub>p</sub>, K, X, D<sub>r</sub>, t →
+      <span style="color:var(--emerald)">1 output:</span> outflow (CFS)
+    </div>
+  </div>
+</div>
+
+<div class="content">
+<!-- ================================================================ -->
+<!-- IDF PANEL -->
+<!-- ================================================================ -->
+<div class="panel active" id="pIDF">
+  <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(244,114,182,0.1);color:var(--idf)">Configure &amp; Train</div><div class="line"></div></div>
+
+  <div class="card" style="border-color:rgba(244,114,182,0.2)">
+    <div class="card-t" style="color:var(--idf)">IDF Curves — Discover the Power Law</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:12px">
+      Every storm drain design starts with an IDF curve: intensity vs duration for different return periods.
+      The underlying function is <b style="color:var(--idf)">i = a·T<sup>m</sup>/(t+b)<sup>c</sup></b> where T = return period, t = duration, and a,b,c,m are regional constants.
+      The network learns these power-law relationships from data alone — no formula given.
+    </p>
+
+    <div class="g4" style="margin-bottom:12px">
+      <div class="sl-grp"><div class="lbl">Samples</div>
+        <input type="range" id="iN" min="500" max="6000" step="500" value="2500" style="accent-color:var(--idf)">
+        <span class="sl-v" style="color:var(--idf)" id="iNv">2500</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Hidden Neurons</div>
+        <input type="range" id="iH" min="12" max="48" step="4" value="24" style="accent-color:var(--idf)">
+        <span class="sl-v" style="color:var(--idf)" id="iHv">24</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Learning Rate</div>
+        <input type="range" id="iLR" min="0.001" max="0.01" step="0.001" value="0.005" style="accent-color:var(--idf)">
+        <span class="sl-v" style="color:var(--idf)" id="iLRv">0.005</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Epochs</div>
+        <input type="range" id="iE" min="100" max="800" step="50" value="300" style="accent-color:var(--idf)">
+        <span class="sl-v" style="color:var(--idf)" id="iEv">300</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="iGen" style="background:linear-gradient(135deg,#db2777,#f472b6);color:#fff">Generate IDF Data</button>
+      <button class="btn" id="iTr" style="background:rgba(244,114,182,0.15);color:var(--idf);border:1px solid rgba(244,114,182,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="iSt" style="display:none"></div>
+    <div class="cw" id="iLC" style="display:none"><canvas id="iLoss"></canvas></div>
+  </div>
+
+  <div id="iTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(244,114,182,0.1);color:var(--idf)">Test — IDF Curves</div><div class="line"></div></div>
+
+    <div class="card" style="border-color:rgba(244,114,182,0.15)">
+      <div class="g3" style="margin-bottom:12px">
+        <div class="sl-grp"><div class="lbl">Region Parameter (a)</div>
+          <input type="range" id="iA" min="20" max="200" step="5" value="96" style="accent-color:var(--idf)">
+          <div class="sl-v" style="color:var(--idf)" id="iAv">96</div>
+          <div class="sl-tip">Higher a = more intense storms</div></div>
+        <div class="sl-grp"><div class="lbl">Region Parameter (b)</div>
+          <input type="range" id="iB" min="5" max="30" step="1" value="15" style="accent-color:var(--idf)">
+          <div class="sl-v" style="color:var(--idf)" id="iBv">15</div>
+          <div class="sl-tip">Shifts the curve — larger b = less steep decline</div></div>
+        <div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+            <button class="pbtn" onclick="iPreset(96,15,'Miami-Dade')">Miami-Dade</button>
+            <button class="pbtn" onclick="iPreset(75,12,'Houston')">Houston</button>
+            <button class="pbtn" onclick="iPreset(55,10,'Chicago')">Chicago</button>
+            <button class="pbtn" onclick="iPreset(45,18,'Seattle')">Seattle</button>
+            <button class="pbtn" onclick="iPreset(120,14,'New Orleans')">New Orleans</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Return period selector -->
+      <div class="lbl">Return Periods Shown</div>
+      <div class="idf-family" id="rpGrid"></div>
+
+      <div style="margin-top:14px">
+        <div class="lbl">IDF Family Curves — AI (dashed) vs Exact (solid)</div>
+        <div class="cwt"><canvas id="iChart"></canvas></div>
+        <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:4px">Each curve = one return period. Intensity falls with duration (power law), rises with return period. The network discovers both relationships.</div>
+      </div>
+    </div>
+
+    <!-- Single-point comparison -->
+    <div class="card" style="border-color:rgba(244,114,182,0.1)">
+      <div class="card-t" style="color:var(--idf)">Single Point Check</div>
+      <div class="g3" style="margin-bottom:10px">
+        <div class="sl-grp"><div class="lbl">Duration (min)</div>
+          <input type="range" id="iDur" min="5" max="1440" step="5" value="60" style="accent-color:var(--amber)">
+          <div class="sl-v" style="color:var(--amber);font-size:18px" id="iDurv">60 min (1.0 hr)</div></div>
+        <div class="sl-grp"><div class="lbl">Return Period (yr)</div>
+          <input type="range" id="iRP" min="2" max="100" step="1" value="10" style="accent-color:var(--amber)">
+          <div class="sl-v" style="color:var(--amber);font-size:18px" id="iRPv">10 yr</div></div>
+        <div id="iPtStats"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!-- MUSKINGUM PANEL -->
+<!-- ================================================================ -->
+<div class="panel" id="pMUSK">
+  <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(167,139,250,0.1);color:var(--musk)">Configure &amp; Train</div><div class="line"></div></div>
+
+  <div class="card" style="border-color:rgba(167,139,250,0.2)">
+    <div class="card-t" style="color:var(--musk)">Muskingum Routing — Attenuation &amp; Translation</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:12px">
+      The Muskingum method routes an inflow hydrograph through a channel reach, producing an outflow that is
+      <b style="color:var(--musk)">attenuated</b> (lower peak) and <b style="color:var(--musk)">translated</b> (delayed).
+      K controls the travel time, X controls the wedge storage (0 = maximum attenuation, 0.5 = pure translation).
+      The network learns the routing coefficients C₀, C₁, C₂ from scalar parameters.
+    </p>
+
+    <div class="g4" style="margin-bottom:12px">
+      <div class="sl-grp"><div class="lbl">Samples</div>
+        <input type="range" id="mN" min="1000" max="10000" step="500" value="5000" style="accent-color:var(--musk)">
+        <span class="sl-v" style="color:var(--musk)" id="mNv">5000</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Hidden Neurons</div>
+        <input type="range" id="mH" min="24" max="80" step="4" value="48" style="accent-color:var(--musk)">
+        <span class="sl-v" style="color:var(--musk)" id="mHv">48</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Learning Rate</div>
+        <input type="range" id="mLR" min="0.001" max="0.01" step="0.001" value="0.004" style="accent-color:var(--musk)">
+        <span class="sl-v" style="color:var(--musk)" id="mLRv">0.004</span>
+      </div>
+      <div class="sl-grp"><div class="lbl">Epochs</div>
+        <input type="range" id="mE" min="100" max="1500" step="50" value="500" style="accent-color:var(--musk)">
+        <span class="sl-v" style="color:var(--musk)" id="mEv">500</span>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="mGen" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff">Generate Routing Data</button>
+      <button class="btn" id="mTr" style="background:rgba(167,139,250,0.15);color:var(--musk);border:1px solid rgba(167,139,250,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="mSt" style="display:none"></div>
+    <div class="cw" id="mLC" style="display:none"><canvas id="mLoss"></canvas></div>
+  </div>
+
+  <div id="mTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(167,139,250,0.1);color:var(--musk)">Test — Routed Hydrograph</div><div class="line"></div></div>
+
+    <div class="card" style="border-color:rgba(167,139,250,0.15)">
+      <div class="g3" style="margin-bottom:10px">
+        <div>
+          <div class="sl-grp"><div class="lbl">K — Travel Time (hr)</div>
+            <input type="range" id="mK" min="0.5" max="6" step="0.25" value="2" style="accent-color:var(--musk)">
+            <div class="sl-v" style="color:var(--musk)" id="mKv">2.0</div>
+            <div class="sl-tip">Channel reach travel time</div></div>
+          <div class="sl-grp"><div class="lbl">X — Weighting (0–0.5)</div>
+            <input type="range" id="mX" min="0" max="0.45" step="0.05" value="0.2" style="accent-color:var(--musk)">
+            <div class="sl-v" style="color:var(--musk)" id="mXv">0.20</div>
+            <div class="sl-tip">0 = max attenuation, 0.5 = pure translation</div></div>
+        </div>
+        <div>
+          <div class="sl-grp"><div class="lbl">Q<sub>peak</sub> — Inflow Peak (CFS)</div>
+            <input type="range" id="mQp" min="100" max="5000" step="100" value="1000" style="accent-color:var(--amber)">
+            <div class="sl-v" style="color:var(--amber)" id="mQpv">1000</div></div>
+          <div class="sl-grp"><div class="lbl">T<sub>peak</sub> — Time to Peak (hr)</div>
+            <input type="range" id="mTp" min="1" max="8" step="0.5" value="3" style="accent-color:var(--amber)">
+            <div class="sl-v" style="color:var(--amber)" id="mTpv">3.0</div></div>
+        </div>
+        <div>
+          <div class="sl-grp"><div class="lbl">Duration Ratio</div>
+            <input type="range" id="mDr" min="1.5" max="5" step="0.25" value="3" style="accent-color:var(--amber)">
+            <div class="sl-v" style="color:var(--amber)" id="mDrv">3.0</div>
+            <div class="sl-tip">Total duration / time to peak</div></div>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:10px">
+            <button class="pbtn" onclick="mPreset(1,0.1,500,2,3)">Small Creek</button>
+            <button class="pbtn" onclick="mPreset(3,0.2,2000,4,3)">Medium River</button>
+            <button class="pbtn" onclick="mPreset(5,0.3,4000,5,2.5)">Large Channel</button>
+            <button class="pbtn" onclick="mPreset(2,0,1500,3,3)">Reservoir (X=0)</button>
+            <button class="pbtn" onclick="mPreset(1,0.45,1000,2,3)">Translation (X≈0.5)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="g4" style="margin-bottom:12px" id="mStats"></div>
+
+      <div class="lbl">Inflow &amp; Outflow Hydrographs — AI (dashed) vs Exact Muskingum (solid)</div>
+      <div class="cwt"><canvas id="mChart"></canvas></div>
+      <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:4px">
+        K shifts the peak right (translation), X < 0.5 reduces the peak (attenuation). C₀ + C₁ + C₂ = 1 always (mass conservation).
+      </div>
+    </div>
+
+    <!-- Discovery -->
+    <div class="disc" style="background:rgba(167,139,250,0.04);border:1px solid rgba(167,139,250,0.2)">
+      <div class="disc-t" style="color:var(--musk)">What Did the Network Learn?</div>
+      <div style="font-size:11px;color:var(--t2);line-height:1.7" id="mDiscText">Train to see analysis.</div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div class="footer">IDF &amp; Muskingum MicroGPT &middot; A SWMM5.org Vibe Coding App &middot; Rainfall Intensity + Channel Routing from Data</div>
+
+<!-- ================================================================ -->
+<script>
+const $=id=>document.getElementById(id);
+const show=e=>{(typeof e==='string'?$(e):e).style.display=''};
+const hide=e=>{(typeof e==='string'?$(e):e).style.display='none'};
+const shuf=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]]}return b};
+
+function selM(m){
+  ['idf','musk'].forEach(k=>{
+    const sel=k===m;
+    $('mc'+k.toUpperCase()).className='mc mc-'+k+(sel?' sel-'+k:'');
+    $('p'+k.toUpperCase()).classList.toggle('active',sel)})
+}
+
+// ============================================================
+// SHARED NET
+// ============================================================
+class Net{
+  constructor(sz){this.L=[];this.lr=.005;
+    for(let i=0;i<sz.length-1;i++){const r=sz[i+1],c=sz[i],s=Math.sqrt(2/c);
+      this.L.push({W:Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*s)),b:Array(r).fill(0)})}}
+  fwd(x){const a=[x.slice()];let c=x.slice();
+    for(let l=0;l<this.L.length;l++){const{W,b}=this.L[l];const n=[];
+      for(let i=0;i<W.length;i++){let s=b[i];for(let j=0;j<W[i].length;j++)s+=W[i][j]*c[j];
+        n.push(l<this.L.length-1?Math.max(0,s):s)}a.push(n);c=n}return{o:c,a}}
+  train1(x,t){const{o,a}=this.fwd(x);const L=.5*(o[0]-t[0])**2;
+    let d=[o[0]-t[0]];for(let l=this.L.length-1;l>=0;l--){const{W,b}=this.L[l];const p=a[l];
+      for(let i=0;i<W.length;i++){for(let j=0;j<W[i].length;j++)W[i][j]-=this.lr*d[i]*p[j];b[i]-=this.lr*d[i]}
+      if(l>0){const nd=[];for(let j=0;j<W[0].length;j++){let s=0;for(let i=0;i<W.length;i++)s+=W[i][j]*d[i];
+        nd.push(s*(a[l][j]>0?1:0))}d=nd}}return L}
+  pred(x){return this.fwd(x).o}
+}
+
+function mkChart(cvs,color){
+  return new Chart(cvs.getContext('2d'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:color,borderWidth:2,pointRadius:0,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#354555',font:{size:8}},grid:{color:'rgba(40,54,68,0.3)'}},y:{ticks:{color:'#354555',font:{size:8},callback:v=>v.toExponential(1)},grid:{color:'rgba(40,54,68,0.3)'}}} ,plugins:{legend:{display:false}},animation:{duration:0}}})
+}
+
+async function trainLoop(net,data,maxQ,ep,lr,stEl,lChart){
+  const losses=[];let best=Infinity,stale=0;const PAT=60;
+  for(let e=0;e<ep;e++){
+    net.lr=lr*0.5*(1+Math.cos(Math.PI*e/ep));
+    const sh=shuf(data);let el=0;
+    for(const s of sh)el+=net.train1(s.x,s.y.map(v=>v/maxQ));
+    const avg=el/data.length;losses.push(avg);
+    if(avg<best){best=avg;stale=0}else stale++;
+    if(stale>=PAT){stEl.textContent=`Early stop @ ${e+1}. Loss: ${avg.toExponential(3)}`;break}
+    if(e%5===0||e===ep-1){
+      stEl.textContent=`Epoch ${e+1}/${ep} — Loss: ${avg.toExponential(3)} — LR: ${net.lr.toFixed(5)}${stale>20?' ⚠':''}`;
+      lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();
+      await new Promise(r=>setTimeout(r,0))}}
+}
+
+// ============================================================
+// IDF CURVE PHYSICS
+// ============================================================
+// i = a * T^m / (t + b)^c
+// where: a = regional intensity coeff, b = time shift (min), c ≈ 0.75-0.85
+//        T = return period (yr), m ≈ 0.2-0.4, t = duration (min)
+function idfIntensity(a, b, c, m, T, t) {
+  return a * Math.pow(T, m) / Math.pow(t + b, c);
+}
+
+// Normalization ranges
+const IR = { a:[20,200], b:[5,30], T:[2,100], t:[5,1440] };
+// Fixed c ≈ 0.80, m ≈ 0.25 for generation, but randomize slightly
+function iNorm(a, b, T, t) {
+  return [(a-IR.a[0])/(IR.a[1]-IR.a[0]), (b-IR.b[0])/(IR.b[1]-IR.b[0]),
+          (Math.log(T)-Math.log(2))/(Math.log(100)-Math.log(2)),
+          (Math.log(t)-Math.log(5))/(Math.log(1440)-Math.log(5))];
+}
+
+let iNet=null,iData=null,iMaxQ=1,iLChart=null,iC=null;
+['N','H','LR','E'].forEach(k=>{$('i'+k).addEventListener('input',()=>{
+  $('i'+k+'v').textContent=k==='LR'?parseFloat($('i'+k).value).toFixed(3):$('i'+k).value})});
+
+$('iGen').addEventListener('click',()=>{
+  const cnt=+$('iN').value;iData=[];
+  for(let i=0;i<cnt;i++){
+    const a=IR.a[0]+Math.random()*(IR.a[1]-IR.a[0]);
+    const b=IR.b[0]+Math.random()*(IR.b[1]-IR.b[0]);
+    const c=0.70+Math.random()*0.20; // 0.70–0.90
+    const m=0.20+Math.random()*0.20; // 0.20–0.40
+    const T=2+Math.random()*98; // 2–100 yr
+    // Bias some short durations (more interesting)
+    let t;
+    if(Math.random()<0.4) t=5+Math.random()*55; // 40% in 5–60 min
+    else t=5+Math.random()*1435;
+    const intensity=idfIntensity(a,b,c,m,T,t);
+    iData.push({x:iNorm(a,b,T,t),y:[intensity],a,b,c,m,T,t,i:intensity})}
+  iMaxQ=Math.max(...iData.map(d=>d.y[0]),0.01);
+  $('iSt').textContent=`Generated ${cnt} IDF samples. Max intensity = ${iMaxQ.toFixed(2)} in/hr. Ready.`;show('iSt');
+  $('iTr').disabled=false;hide('iTest')});
+
+$('iTr').addEventListener('click',async()=>{
+  if(!iData)return;
+  const h=+$('iH').value,lr=+$('iLR').value,ep=+$('iE').value;
+  iNet=new Net([4,h,h,1]);show('iLC');
+  if(iLChart)iLChart.destroy();iLChart=mkChart($('iLoss'),'#f472b6');
+  await trainLoop(iNet,iData,iMaxQ,ep,lr,$('iSt'),iLChart);
+  show('iTest');buildRPgrid();updIDF()});
+
+// Return period grid
+const rpVals=[2,5,10,25,50,100];
+function buildRPgrid(){
+  const g=$('rpGrid');g.innerHTML='';
+  rpVals.forEach(rp=>{
+    const d=document.createElement('div');d.className='idf-rp';
+    d.innerHTML=`<div class="rpv">${rp}</div><div class="rpl">${rp}-yr storm</div>`;
+    g.appendChild(d)})
+}
+
+function iPreset(a,b,name){$('iA').value=a;$('iAv').textContent=a;$('iB').value=b;$('iBv').textContent=b;if(iNet)updIDF()}
+['A','B'].forEach(k=>{$('i'+k).addEventListener('input',()=>{$('i'+k+'v').textContent=$('i'+k).value;if(iNet)updIDF()})});
+['Dur','RP'].forEach(k=>{$('i'+k).addEventListener('input',()=>{
+  const v=+$('i'+k).value;
+  if(k==='Dur')$('iDurv').textContent=v+' min'+(v>=60?' ('+(v/60).toFixed(1)+' hr)':'');
+  else $('iRPv').textContent=v+' yr';
+  if(iNet)updIDFpt()})});
+
+function updIDF(){
+  const a=+$('iA').value,b=+$('iB').value;
+  // Use median c and m from training
+  const c=0.80,m=0.30;
+  // Build family of curves
+  const colors=['#fb7185','#f472b6','#e879f9','#c084fc','#a78bfa','#818cf8'];
+  const aiColors=['#fda4af','#f9a8d4','#f0abfc','#d8b4fe','#c4b5fd','#a5b4fc'];
+  const durations=[];
+  for(let t=5;t<=360;t+=5)durations.push(t);
+  const datasets=[];
+  rpVals.forEach((rp,ri)=>{
+    const exact=[],ai=[];
+    durations.forEach(t=>{
+      exact.push(idfIntensity(a,b,c,m,rp,t));
+      const p=iNet.pred(iNorm(a,b,rp,t))[0]*iMaxQ;
+      ai.push(Math.max(0,p))});
+    datasets.push({label:`${rp}-yr exact`,data:exact,borderColor:colors[ri],borderWidth:2,pointRadius:0,tension:.4});
+    datasets.push({label:`${rp}-yr AI`,data:ai,borderColor:aiColors[ri],borderWidth:1.5,pointRadius:0,tension:.4,borderDash:[4,3]})
+  });
+  if(iC)iC.destroy();
+  iC=new Chart($('iChart').getContext('2d'),{type:'line',data:{labels:durations.map(t=>t),datasets},
+    options:{responsive:true,maintainAspectRatio:false,scales:{
+      x:{title:{display:true,text:'Duration (min)',color:'#4e5f70',font:{size:10}},ticks:{color:'#354555',font:{size:8},maxTicksLimit:15},grid:{color:'rgba(40,54,68,0.3)'}},
+      y:{title:{display:true,text:'Intensity (in/hr)',color:'#4e5f70',font:{size:10}},ticks:{color:'#354555',font:{size:9}},grid:{color:'rgba(40,54,68,0.3)'},min:0}},
+      plugins:{legend:{labels:{color:'#7e8fa0',font:{size:8},usePointStyle:true}}},animation:{duration:200}}});
+  updIDFpt();
+}
+
+function updIDFpt(){
+  if(!iNet)return;
+  const a=+$('iA').value,b=+$('iB').value,c=0.80,m=0.30;
+  const t=+$('iDur').value,T=+$('iRP').value;
+  const exact=idfIntensity(a,b,c,m,T,t);
+  const pred=Math.max(0,iNet.pred(iNorm(a,b,T,t))[0]*iMaxQ);
+  const err=exact>0.01?Math.abs(pred-exact)/exact*100:0;
+  $('iPtStats').innerHTML=`
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="font-size:10px;color:var(--t4)">Exact: <span style="color:var(--emerald);font-weight:700;font-size:14px">${exact.toFixed(3)}</span> in/hr</div>
+      <div style="font-size:10px;color:var(--t4)">AI: <span style="color:var(--sky);font-weight:700;font-size:14px">${pred.toFixed(3)}</span> in/hr</div>
+      <div style="font-size:10px;color:${err<5?'var(--emerald)':err<15?'var(--amber)':'var(--rose)'};font-weight:600">Error: ${err.toFixed(1)}%</div>
+    </div>`;
+}
+
+// ============================================================
+// MUSKINGUM ROUTING PHYSICS
+// ============================================================
+// Triangular inflow: rises linearly to Qp at Tp, then falls linearly to 0 at Tp*Dr
+function inflowAt(Qp, Tp, Dr, t) {
+  const Td = Tp * Dr; // total duration
+  if (t < 0 || t > Td) return 0;
+  if (t <= Tp) return Qp * t / Tp;
+  return Qp * (Td - t) / (Td - Tp);
+}
+
+function muskRoute(Qp, Tp, K, X, Dr) {
+  const Td = Tp * Dr;
+  const dt = 0.1; // hr
+  const totalT = Td + K * 4; // run past end
+  const steps = Math.ceil(totalT / dt);
+
+  // Muskingum coefficients
+  const den = K - K * X + 0.5 * dt;
+  const C0 = (-K * X + 0.5 * dt) / den;
+  const C1 = (K * X + 0.5 * dt) / den;
+  const C2 = (K - K * X - 0.5 * dt) / den;
+
+  const result = [];
+  let O1 = 0, I1 = 0;
+  for (let i = 0; i <= steps; i++) {
+    const t = i * dt;
+    const I2 = inflowAt(Qp, Tp, Dr, t);
+    let O2;
+    if (i === 0) { O2 = 0; }
+    else { O2 = C0 * I2 + C1 * I1 + C2 * O1; if (O2 < 0) O2 = 0; }
+    result.push({ t, inflow: I2, outflow: O2 });
+    I1 = I2; O1 = O2;
+  }
+  return { result, C0, C1, C2 };
+}
+
+// Norm ranges
+const MR = { Qp:[50,5000], Tp:[0.5,8], K:[0.5,6], X:[0,0.45], Dr:[1.5,5] };
+function mNorm(Qp,Tp,K,X,Dr,t) {
+  return [(Qp-MR.Qp[0])/(MR.Qp[1]-MR.Qp[0]),
+          (Tp-MR.Tp[0])/(MR.Tp[1]-MR.Tp[0]),
+          (K-MR.K[0])/(MR.K[1]-MR.K[0]),
+          (X-MR.X[0])/(MR.X[1]-MR.X[0]),
+          (Dr-MR.Dr[0])/(MR.Dr[1]-MR.Dr[0]),
+          t/40]; // max time ~40 hr
+}
+
+let mNet=null,mData=null,mMaxQ=1,mLChart=null,mC=null;
+['N','H','LR','E'].forEach(k=>{$('m'+k).addEventListener('input',()=>{
+  $('m'+k+'v').textContent=k==='LR'?parseFloat($('m'+k).value).toFixed(3):$('m'+k).value})});
+
+$('mGen').addEventListener('click',()=>{
+  const cnt=+$('mN').value;mData=[];
+  for(let i=0;i<cnt;){
+    const Qp=MR.Qp[0]+Math.random()*(MR.Qp[1]-MR.Qp[0]);
+    const Tp=MR.Tp[0]+Math.random()*(MR.Tp[1]-MR.Tp[0]);
+    const K=MR.K[0]+Math.random()*(MR.K[1]-MR.K[0]);
+    const X=MR.X[0]+Math.random()*(MR.X[1]-MR.X[0]);
+    const Dr=MR.Dr[0]+Math.random()*(MR.Dr[1]-MR.Dr[0]);
+    const r=muskRoute(Qp,Tp,K,X,Dr);
+    // Sample 5 random time points from the outflow curve
+    for(let s=0;s<5&&i<cnt;s++,i++){
+      const idx=Math.floor(Math.random()*r.result.length);
+      const pt=r.result[idx];
+      mData.push({x:mNorm(Qp,Tp,K,X,Dr,pt.t),y:[pt.outflow],Qp,Tp,K,X,Dr,t:pt.t,o:pt.outflow})
+    }
+  }
+  mMaxQ=Math.max(...mData.map(d=>d.y[0]),0.01);
+  $('mSt').textContent=`Generated ${mData.length} routing samples. Max outflow = ${mMaxQ.toFixed(0)} CFS. Ready.`;show('mSt');
+  $('mTr').disabled=false;hide('mTest')});
+
+$('mTr').addEventListener('click',async()=>{
+  if(!mData)return;
+  const h=+$('mH').value,lr=+$('mLR').value,ep=+$('mE').value;
+  mNet=new Net([6,h,h,1]);show('mLC');
+  if(mLChart)mLChart.destroy();mLChart=mkChart($('mLoss'),'#a78bfa');
+  await trainLoop(mNet,mData,mMaxQ,ep,lr,$('mSt'),mLChart);
+  show('mTest');updMusk()});
+
+function mPreset(K,X,Qp,Tp,Dr){
+  $('mK').value=K;$('mKv').textContent=K.toFixed(1);
+  $('mX').value=X;$('mXv').textContent=X.toFixed(2);
+  $('mQp').value=Qp;$('mQpv').textContent=Qp;
+  $('mTp').value=Tp;$('mTpv').textContent=Tp.toFixed(1);
+  $('mDr').value=Dr;$('mDrv').textContent=Dr.toFixed(2);
+  if(mNet)updMusk()}
+['K','X','Qp','Tp','Dr'].forEach(k=>{$('m'+k).addEventListener('input',()=>{
+  const v=parseFloat($('m'+k).value);
+  $('m'+k+'v').textContent=(k==='X')?v.toFixed(2):(k==='Dr')?v.toFixed(2):(k==='K'||k==='Tp')?v.toFixed(1):v.toFixed(0);
+  if(mNet)updMusk()})});
+
+function updMusk(){
+  const K=+$('mK').value,X=+$('mX').value,Qp=+$('mQp').value,Tp=+$('mTp').value,Dr=+$('mDr').value;
+  const r=muskRoute(Qp,Tp,K,X,Dr);
+  const labels=[],exI=[],exO=[],aiO=[];
+  const step=Math.max(1,Math.floor(r.result.length/120));
+  let peakIn=0,peakOut=0,peakAI=0,tPeakIn=0,tPeakOut=0;
+  for(let i=0;i<r.result.length;i+=step){
+    const pt=r.result[i];
+    labels.push(pt.t.toFixed(1));
+    exI.push(pt.inflow);exO.push(pt.outflow);
+    const p=mNet.pred(mNorm(Qp,Tp,K,X,Dr,pt.t))[0]*mMaxQ;
+    aiO.push(Math.max(0,p));
+    if(pt.inflow>peakIn){peakIn=pt.inflow;tPeakIn=pt.t}
+    if(pt.outflow>peakOut){peakOut=pt.outflow;tPeakOut=pt.t}
+    if(p>peakAI)peakAI=p
+  }
+  const atten=peakIn>0?(1-peakOut/peakIn)*100:0;
+  const lag=tPeakOut-tPeakIn;
+
+  $('mStats').innerHTML=`
+    <div class="stat"><div class="sl">Peak Attenuation</div><div class="sv" style="color:var(--musk)">${atten.toFixed(1)}%</div><div class="su">${peakIn.toFixed(0)} → ${peakOut.toFixed(0)} CFS</div></div>
+    <div class="stat"><div class="sl">Peak Translation</div><div class="sv" style="color:var(--amber)">${lag.toFixed(1)} hr</div><div class="su">delay from inflow peak</div></div>
+    <div class="stat"><div class="sl">C₀, C₁, C₂</div><div class="sv" style="color:var(--sky);font-size:14px">${r.C0.toFixed(3)}, ${r.C1.toFixed(3)}, ${r.C2.toFixed(3)}</div><div class="su">sum = ${(r.C0+r.C1+r.C2).toFixed(4)}</div></div>
+    <div class="stat"><div class="sl">AI Peak</div><div class="sv" style="color:var(--emerald)">${peakAI.toFixed(0)}</div><div class="su">CFS (exact: ${peakOut.toFixed(0)})</div></div>`;
+
+  if(mC)mC.destroy();
+  mC=new Chart($('mChart').getContext('2d'),{type:'line',data:{labels,datasets:[
+    {label:'Inflow',data:exI,borderColor:'rgba(251,191,36,0.5)',borderWidth:2,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(251,191,36,0.04)'},
+    {label:'Exact Outflow',data:exO,borderColor:'#a78bfa',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(167,139,250,0.05)'},
+    {label:'AI Outflow',data:aiO,borderColor:'#34d399',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{
+    x:{title:{display:true,text:'Time (hr)',color:'#4e5f70',font:{size:10}},ticks:{color:'#354555',font:{size:8},maxTicksLimit:15},grid:{color:'rgba(40,54,68,0.3)'}},
+    y:{title:{display:true,text:'Flow (CFS)',color:'#4e5f70',font:{size:10}},ticks:{color:'#354555',font:{size:9}},grid:{color:'rgba(40,54,68,0.3)'},min:0}},
+    plugins:{legend:{labels:{color:'#7e8fa0',font:{size:9}}}},animation:{duration:200}}});
+
+  // Discovery text
+  const peakErr=peakOut>0?Math.abs(peakAI-peakOut)/peakOut*100:0;
+  let html=`<div class="g3">`;
+  html+=`<div style="background:rgba(8,13,19,0.5);border-radius:8px;padding:10px;border:1px solid rgba(40,54,68,0.3)">
+    <div style="color:var(--musk);font-weight:600;font-size:11px;margin-bottom:4px">Attenuation = f(X)</div>
+    <div style="font-size:10px;color:var(--t2)">X=${X.toFixed(2)} gives ${atten.toFixed(1)}% peak reduction. X=0 → max attenuation (reservoir). X=0.5 → pure translation (no reduction). The network learned this relationship.</div></div>`;
+  html+=`<div style="background:rgba(8,13,19,0.5);border-radius:8px;padding:10px;border:1px solid rgba(40,54,68,0.3)">
+    <div style="color:var(--amber);font-weight:600;font-size:11px;margin-bottom:4px">Translation = f(K)</div>
+    <div style="font-size:10px;color:var(--t2)">K=${K.toFixed(1)} hr shifts the peak ${lag.toFixed(1)} hr downstream. Longer reach = more delay. The peak lag is always ≤ K.</div></div>`;
+  html+=`<div style="background:rgba(8,13,19,0.5);border-radius:8px;padding:10px;border:1px solid rgba(40,54,68,0.3)">
+    <div style="color:var(--emerald);font-weight:600;font-size:11px;margin-bottom:4px">Mass Conservation</div>
+    <div style="font-size:10px;color:var(--t2)">C₀+C₁+C₂ = ${(r.C0+r.C1+r.C2).toFixed(4)} (should be 1.000). Inflow volume = outflow volume — the channel stores water temporarily but doesn't consume it.</div></div>`;
+  html+=`</div>`;
+  if(peakErr<5) html+=`<p style="margin-top:10px;font-size:11px;color:var(--emerald)">✓ AI peak within ${peakErr.toFixed(1)}% of exact — the network learned both attenuation and translation!</p>`;
+  else if(peakErr<15) html+=`<p style="margin-top:10px;font-size:11px;color:var(--amber)">⚠ AI peak within ${peakErr.toFixed(1)}% — try more samples or epochs for better peak accuracy.</p>`;
+  else html+=`<p style="margin-top:10px;font-size:11px;color:var(--rose)">✗ AI peak off by ${peakErr.toFixed(1)}% — needs more training. The routing convolution is hard for an MLP.</p>`;
+  $('mDiscText').innerHTML=html;
+}
+</script>
+</body>
+</html>

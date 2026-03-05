@@ -532,6 +532,12 @@ const MODULE_GRAPH = {
     { id: "controls.c", label: "controls.c", category: "Operations", x: 450, y: 280 },
     { id: "qualrout.c", label: "qualrout.c", category: "Quality", x: 80, y: 370 },
     { id: "massbal.c", label: "massbal.c", category: "Data", x: 80, y: 290 },
+    { id: "rdii.c", label: "rdii.c", category: "Hydrology", x: 340, y: 40 },
+    { id: "treatmnt.c", label: "treatmnt.c", category: "Quality", x: 80, y: 450 },
+    { id: "snow.c", label: "snow.c", category: "Hydrology", x: 340, y: 120 },
+    { id: "dwflow.c", label: "dwflow.c", category: "Hydraulics", x: 340, y: 450 },
+    { id: "hotstart.c", label: "hotstart.c", category: "Data", x: 450, y: 450 },
+    { id: "iface.c", label: "iface.c", category: "Data", x: 450, y: 40 },
   ],
   edges: [
     { from: "rain.c", to: "subcatch.c", label: "rainfall" },
@@ -556,6 +562,14 @@ const MODULE_GRAPH = {
     { from: "node.c", to: "qualrout.c", label: "volumes" },
     { from: "node.c", to: "massbal.c", label: "totals" },
     { from: "routing.c", to: "massbal.c", label: "totals" },
+    { from: "rain.c", to: "rdii.c", label: "rainfall" },
+    { from: "rdii.c", to: "node.c", label: "RDII flow" },
+    { from: "snow.c", to: "subcatch.c", label: "snowmelt" },
+    { from: "climate.c", to: "snow.c", label: "temperature" },
+    { from: "qualrout.c", to: "treatmnt.c", label: "pollutants" },
+    { from: "dwflow.c", to: "dynwave.c", label: "init" },
+    { from: "dwflow.c", to: "kinwave.c", label: "init" },
+    { from: "iface.c", to: "node.c", label: "inflows" },
   ],
 };
 
@@ -563,11 +577,11 @@ const catColors = { Hydraulics: "#61afef", Hydrology: "#98c379", Quality: "#c678
 
 function ModuleDependencyDiagram({ t, onClickModule }) {
   const scale = 1.2;
-  const W = 560 * scale, H = 440 * scale;
+  const W = 560 * scale, H = 520 * scale;
 
   return (
     <div style={{ overflowX: "auto", padding: "0 20px" }}>
-      <svg width={W} height={H} viewBox={`0 0 ${560} ${440}`} style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
+      <svg width={W} height={H} viewBox={`0 0 ${560} ${520}`} style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
         <defs>
           <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill={t.textDim} />
@@ -626,6 +640,7 @@ export default function SWMM5CodeViewer() {
   const [showLanding, setShowLanding] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rosetta");
+  const [activeGPT, setActiveGPT] = useState("microgpt");
   const [highlightedLine, setHighlightedLine] = useState(-1);
   const [codeSearch, setCodeSearch] = useState("");
   const [showDepDiagram, setShowDepDiagram] = useState(false);
@@ -822,7 +837,7 @@ export default function SWMM5CodeViewer() {
           onClick={() => setActiveTab("microgpt")}
         >
           <span style={{ fontSize: 15 }}>{"\uD83E\uDDE0"}</span>
-          MicroGPT
+          MicroGPTs
         </button>
         <button
           className={`app-tab ${activeTab === "swmanywhere" ? "active" : ""}`}
@@ -861,19 +876,45 @@ export default function SWMM5CodeViewer() {
         </div>
       </div>
 
-      {/* MicroGPT Tab */}
+      {/* MicroGPTs Tab */}
       {activeTab === "microgpt" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://micro-gpt-swmm.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="SWMM5 MicroGPT"
-            allow="clipboard-read; clipboard-write"
-          />
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", display: "flex", flexDirection: "column" }}>
+          <div style={{
+            display: "flex", gap: 0, background: t.headerBg, borderBottom: `1px solid ${t.border}`,
+            overflowX: "auto", flexShrink: 0,
+          }}>
+            {[
+              { id: "microgpt", label: "Manning's Equation", icon: "\uD83E\uDDE0" },
+              { id: "partialflow", label: "Partial-Flow", icon: "\uD83D\uDD35" },
+              { id: "rtk", label: "RTK/RDII", icon: "\uD83D\uDCC8" },
+              { id: "hydrology", label: "Hydrology", icon: "\uD83C\uDF27\uFE0F" },
+              { id: "groundwater", label: "Groundwater", icon: "\uD83D\uDCA7" },
+              { id: "idfmusk", label: "IDF & Muskingum", icon: "\u26C8\uFE0F" },
+            ].map(gpt => (
+              <button key={gpt.id}
+                onClick={() => setActiveGPT(gpt.id)}
+                style={{
+                  padding: "8px 14px", border: "none", cursor: "pointer",
+                  background: activeGPT === gpt.id ? t.accent + "22" : "transparent",
+                  borderBottom: activeGPT === gpt.id ? `2px solid ${t.accent}` : "2px solid transparent",
+                  color: activeGPT === gpt.id ? t.accent : t.textDim,
+                  fontSize: 11, fontWeight: 600, fontFamily: "'JetBrains Mono', monospace",
+                  whiteSpace: "nowrap", display: "flex", alignItems: "center", gap: 5,
+                  transition: "all 0.2s",
+                }}
+              >
+                <span style={{ fontSize: 13 }}>{gpt.icon}</span>{gpt.label}
+              </button>
+            ))}
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            {activeGPT === "microgpt" && <iframe src="https://micro-gpt-swmm.replit.app" style={{ width: "100%", height: "100%", border: "none" }} title="Manning's Equation MicroGPT" allow="clipboard-read; clipboard-write" />}
+            {activeGPT === "partialflow" && <iframe src="/partial-flow-microgpt.html" style={{ width: "100%", height: "100%", border: "none" }} title="Partial-Flow MicroGPT" />}
+            {activeGPT === "rtk" && <iframe src="/rtk-microgpt-v2.html" style={{ width: "100%", height: "100%", border: "none" }} title="RTK MicroGPT v2" />}
+            {activeGPT === "hydrology" && <iframe src="/swmm5-hydrology-microgpt-v2.html" style={{ width: "100%", height: "100%", border: "none" }} title="Hydrology MicroGPT v2" />}
+            {activeGPT === "groundwater" && <iframe src="/swmm5-groundwater-microgpt.html" style={{ width: "100%", height: "100%", border: "none" }} title="Groundwater MicroGPT" />}
+            {activeGPT === "idfmusk" && <iframe src="/idf-muskingum-microgpt.html" style={{ width: "100%", height: "100%", border: "none" }} title="IDF & Muskingum MicroGPT" />}
+          </div>
         </div>
       )}
 
@@ -969,7 +1010,7 @@ export default function SWMM5CodeViewer() {
             <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
               target="_blank" rel="noopener noreferrer"
               style={{ color: t.accent, textDecoration: "none" }}>EPA SWMM5</a>
-            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into 23 programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
+            {" "}&mdash; the world's most widely-used stormwater model &mdash; translated from the original C engine into {languages.length} programming languages. Compare how different paradigms handle hydrologic and hydraulic computations side-by-side.
           </p>
           <div style={{
             display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20,
@@ -994,7 +1035,7 @@ export default function SWMM5CodeViewer() {
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
-            }}>{moduleKeys.length} algorithm modules</span>
+            }}>{moduleKeys.length} of 25+ engine modules</span>
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
@@ -1393,6 +1434,8 @@ export default function SWMM5CodeViewer() {
         <span>EPA Storm Water Management Model</span>
         <span>&bull;</span>
         <span>{moduleKeys.length} Modules &bull; {languages.length} Languages</span>
+        <span>&bull;</span>
+        <span>v2.0 &mdash; March 2026</span>
         <span>&bull;</span>
         <a href="https://www.epa.gov/water-research/storm-water-management-model-swmm"
           target="_blank" rel="noopener noreferrer"

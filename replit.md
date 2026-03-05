@@ -5,25 +5,26 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Six top-level tabs: "Rosetta Stone" (code comparison), "MicroGPT" (embedded SWMM5 MicroGPT via iframe), "SWMManywhere" (embedded SWMManywhere urban drainage synthesizer via iframe), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe), and "SWMM Apps" (interactive showcase of 13 language-native SWMM application concepts)
-- Sixteen SWMM5 modules organized by engineering priority:
-  - Hydraulics: routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch), kinwave.c (Kinematic Wave Routing), xsect.c (Cross-Section Geometry), link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes)
-  - Hydrology: subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure), gwater.c (Groundwater Flow), climate.c (Climate/Evaporation Processing)
-  - Water Quality: qualrout.c (Water Quality Routing)
+- Six top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "SWMManywhere" (embedded urban drainage synthesizer via iframe), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
+- Twenty-two SWMM5 modules organized by engineering priority:
+  - Hydraulics: routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch), kinwave.c (Kinematic Wave Routing), xsect.c (Cross-Section Geometry), link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes), dwflow.c (Steady/Normal Flow Initialization)
+  - Hydrology: subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure), gwater.c (Groundwater Flow), climate.c (Climate/Evaporation Processing), rdii.c (Rainfall-Dependent I&I), snow.c (Snowpack/Snowmelt)
+  - Water Quality: qualrout.c (Water Quality Routing), treatmnt.c (Water Quality Treatment)
   - Operations: controls.c (Rule-Based Controls)
-  - Data Processing: rain.c (Rainfall Processing), massbal.c (Mass Balance Checking)
+  - Data Processing: rain.c (Rainfall Processing), massbal.c (Mass Balance Checking), hotstart.c (Simulation State Save/Restore), iface.c (Interface File Handling)
 - 23 languages organized in tiers:
   - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
   - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal
   - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
   - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
+- MicroGPTs tab with 6 sub-tabs: Manning's Equation, Partial-Flow, RTK/RDII, Hydrology (Green-Ampt/Horton/NLR/SCS), Groundwater, IDF & Muskingum
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
 - 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
 - Synchronized scrolling between code panels
 - Line-by-line correspondence highlighting (hover a line to highlight same line in both panels)
 - Code search across panels with match highlighting and count display
 - "Try Online" playground links per language (Godbolt, Rust Playground, Go Playground, etc.)
-- Module dependency diagram (SVG graph showing how 16 modules interconnect, clickable to navigate)
+- Module dependency diagram (SVG graph showing how 22 modules interconnect, clickable to navigate)
 - Copy-to-clipboard per code panel (with execCommand fallback)
 - Responsive mobile layout (panels stack vertically below 900px)
 - Enriched module descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links
@@ -32,11 +33,12 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
 - Per-language-pair translation notes (253 pairs covering all 23 languages)
 - All module/language counts are dynamic (no hardcoded numbers)
+- Version stamp in footer (v2.0 — March 2026)
 
 ## Project Architecture
 - **Framework**: React + Vite
 - **Structure**: 
-  - `src/modules.js` — All module data (code samples for 23 languages × 16 modules, metadata, languages array, 253 translation notes)
+  - `src/modules.js` — All module data (code samples for 23 languages × 22 modules, metadata, languages array, 253 translation notes)
   - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app
   - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 13 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
   - `src/appIdeas.js` — Data for 13 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, TypeScript, MATLAB, C#, Java)
@@ -53,6 +55,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/HydrographPlotter.jsx` — MATLAB Hydrograph Plotter: SCS design storm + unit hydrograph runoff computation
   - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
   - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
+  - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
 - **Port**: 5000 (Vite dev server)
@@ -67,4 +70,5 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Search filters modules by name, description, category, equations, inputs/outputs, and tags
 - Share buttons use standard LinkedIn/Twitter intent URLs (no API keys needed)
 - Translation notes use sorted language-pair keys (e.g., "c-rust", "python-julia") looked up via [left, right].sort().join("-")
+- MicroGPTs served as standalone HTML files from public/ directory via Vite, embedded as iframes with sub-tab navigation
 - No external dependencies beyond React and Vite

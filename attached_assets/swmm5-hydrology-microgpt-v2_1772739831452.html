@@ -1,0 +1,318 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWMM5 Hydrology MicroGPT v2 — Green-Ampt · Horton · Nonlinear Reservoir · SCS CN</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=DM+Sans:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0a1014;--card:rgba(20,30,38,0.6);--bdr:rgba(45,60,72,0.5);
+    --t1:#d4dde6;--t2:#8899a8;--t3:#5a6d7c;--t4:#3d4f5e;
+    --ga:#14b8a6;--ho:#f472b6;--nr:#f59e0b;--cn:#0ea5e9;--emerald:#10b981;--rose:#f43f5e;
+  }
+  body{background:var(--bg);color:var(--t1);font-family:'JetBrains Mono',monospace;min-height:100vh;line-height:1.5}
+  .hdr{padding:20px 24px 12px;border-bottom:1px solid var(--bdr)}
+  .hdr h1{font:700 20px/1.2 'DM Sans',sans-serif;color:#fff;letter-spacing:-.5px}
+  .hdr .sub{font-size:10px;color:var(--t3);letter-spacing:.8px;margin-top:4px;text-transform:uppercase}
+
+  .msel{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:8px;padding:14px 24px}
+  .mc{padding:12px;border-radius:12px;cursor:pointer;border:2px solid transparent;transition:.25s}
+  .mc:hover{transform:translateY(-1px)}
+  .mc.sel{border-color:var(--sel)}
+  .mc-tag{font:700 8px/1 inherit;padding:2px 6px;border-radius:3px;display:inline-block;margin-bottom:6px;letter-spacing:.5px}
+  .mc-name{font:600 12px/1.3 'DM Sans',sans-serif;color:#fff;margin-bottom:3px}
+  .mc-eq{font-size:9px;color:var(--t3);line-height:1.4}
+  .mc-diff{position:absolute;top:10px;right:10px;font-size:7px;padding:2px 5px;border-radius:3px;font-weight:600}
+
+  .content{padding:0 24px 24px}
+  .panel{display:none}.panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:18px;margin-bottom:14px}
+  .card-t{font:700 13px/1.3 'DM Sans',sans-serif;margin-bottom:10px}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .sl-grp{margin-bottom:6px}.sl-grp input[type=range]{width:100%}
+  .sl-v{font-size:13px;font-weight:600}
+  .sl-tip{font-size:9px;color:var(--t4);margin-top:2px}
+  .stat{background:rgba(10,16,20,0.5);border-radius:10px;padding:12px;border:1px solid rgba(45,60,72,0.3)}
+  .stat .sl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .stat .sv{font-size:20px;font-weight:700}
+  .stat .su{font-size:9px;color:var(--t4);margin-top:2px}
+  .btn{padding:10px 20px;border-radius:10px;border:none;font:600 12px inherit;cursor:pointer;transition:.2s}
+  .btn:disabled{background:#1e2a32;color:#3d4f5e;cursor:not-allowed}
+  .btn-row{display:flex;gap:10px;margin-bottom:14px}
+  .cw{position:relative;height:200px}.cwt{position:relative;height:280px}
+  .sts{font:11px/1.4 inherit;color:var(--t3);background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;margin-bottom:14px}
+  .pbtn{padding:5px 10px;font:10px inherit;border-radius:6px;cursor:pointer;background:rgba(45,60,72,0.4);color:var(--t2);border:1px solid rgba(60,75,88,0.3);transition:.2s}
+  .pbtn:hover{color:#fff}
+  .sec-div{display:flex;align-items:center;gap:10px;margin:16px 0 10px}
+  .sec-div .line{flex:1;height:1px;background:var(--bdr)}
+  .sec-div .tag{font:600 9px inherit;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+  .footer{padding:12px 24px;text-align:center;border-top:1px solid var(--bdr);margin-top:16px;font-size:10px;color:var(--t4)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1>SWMM5 Hydrology MicroGPT v2</h1>
+  <div class="sub">Four neural networks learn SWMM5's core hydrology — infiltration, runoff &amp; event rainfall-runoff</div>
+</div>
+
+<div class="msel">
+  <div class="mc sel" style="background:rgba(20,184,166,0.07);--sel:var(--ga)" onclick="selM('ga')" id="mcga">
+    <div class="mc-tag" style="background:rgba(20,184,166,0.15);color:var(--ga)">GREEN-AMPT</div>
+    <div class="mc-name">Implicit Infiltration</div>
+    <div class="mc-eq">f = K<sub>s</sub>(1+ψΔθ/F)<br>Bypass iteration</div>
+  </div>
+  <div class="mc" style="background:rgba(244,114,182,0.05);--sel:var(--ho)" onclick="selM('ho')" id="mcho">
+    <div class="mc-tag" style="background:rgba(244,114,182,0.15);color:var(--ho)">HORTON</div>
+    <div class="mc-name">Exponential Decay</div>
+    <div class="mc-eq">f = f<sub>∞</sub>+(f₀−f<sub>∞</sub>)e<sup>−kt</sup><br>Classic decay curve</div>
+  </div>
+  <div class="mc" style="background:rgba(245,158,11,0.05);--sel:var(--nr)" onclick="selM('nr')" id="mcnr">
+    <div class="mc-tag" style="background:rgba(245,158,11,0.15);color:var(--nr)">NONLINEAR RESERVOIR</div>
+    <div class="mc-name">Subcatchment Runoff</div>
+    <div class="mc-eq">∂d/∂t = i − f − q<br>Learn the ODE</div>
+  </div>
+  <div class="mc" style="background:rgba(14,165,233,0.05);--sel:var(--cn)" onclick="selM('cn')" id="mccn">
+    <div class="mc-tag" style="background:rgba(14,165,233,0.15);color:var(--cn)">SCS CURVE NUMBER</div>
+    <div class="mc-name">Event Runoff</div>
+    <div class="mc-eq">Q=(P−Iₐ)²/(P−Iₐ+S)<br>Threshold problem</div>
+  </div>
+</div>
+
+<div class="content">
+
+<!-- ============ GREEN-AMPT ============ -->
+<div class="panel active" id="pga">
+  <div class="card" style="border-color:rgba(20,184,166,0.2)">
+    <div class="card-t" style="color:var(--ga)">Green-Ampt — Bypass SWMM5's Newton Iteration</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px">SWMM5 iterates to solve F = Ks·t + ψΔθ·ln(1+F/(ψΔθ)). The network jumps straight to f(t).</p>
+    <div class="g4" style="margin-bottom:10px">
+      <div class="sl-grp"><div class="lbl">Samples</div><input type="range" id="gaN" min="1000" max="8000" step="500" value="3000" style="accent-color:var(--ga)"><span class="sl-v" style="color:var(--ga)" id="gaNv">3000</span></div>
+      <div class="sl-grp"><div class="lbl">Neurons</div><input type="range" id="gaH" min="16" max="64" step="4" value="32" style="accent-color:var(--ga)"><span class="sl-v" style="color:var(--ga)" id="gaHv">32</span></div>
+      <div class="sl-grp"><div class="lbl">LR</div><input type="range" id="gaLR" min="0.001" max="0.01" step="0.001" value="0.005" style="accent-color:var(--ga)"><span class="sl-v" style="color:var(--ga)" id="gaLRv">0.005</span></div>
+      <div class="sl-grp"><div class="lbl">Epochs</div><input type="range" id="gaE" min="100" max="1000" step="50" value="400" style="accent-color:var(--ga)"><span class="sl-v" style="color:var(--ga)" id="gaEv">400</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="gaGen" style="background:linear-gradient(135deg,#0d9488,#14b8a6);color:#fff">Generate</button>
+      <button class="btn" id="gaTr" style="background:rgba(20,184,166,0.15);color:var(--ga);border:1px solid rgba(20,184,166,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="gaSt" style="display:none"></div>
+    <div class="cw" id="gaLC" style="display:none"><canvas id="gaLoss"></canvas></div>
+  </div>
+  <div id="gaTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(20,184,166,0.1);color:var(--ga)">Test</div><div class="line"></div></div>
+    <div class="card" style="border-color:rgba(20,184,166,0.15)">
+      <div class="g4" style="margin-bottom:8px">
+        <div class="sl-grp"><div class="lbl">Ks (in/hr)</div><input type="range" id="gaKs" min="0.01" max="5" step="0.01" value="0.5" style="accent-color:var(--ga)"><div class="sl-v" style="color:var(--ga)" id="gaKsv">0.50</div></div>
+        <div class="sl-grp"><div class="lbl">ψ Suction (in)</div><input type="range" id="gaPsi" min="1" max="20" step="0.5" value="6" style="accent-color:var(--ga)"><div class="sl-v" style="color:var(--ga)" id="gaPsiv">6.0</div></div>
+        <div class="sl-grp"><div class="lbl">Δθ Deficit</div><input type="range" id="gaDth" min="0.05" max="0.45" step="0.01" value="0.3" style="accent-color:var(--ga)"><div class="sl-v" style="color:var(--ga)" id="gaDthv">0.30</div></div>
+        <div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px"><button class="pbtn" onclick="gaP(0.12,4,0.35)">Clay</button><button class="pbtn" onclick="gaP(1.2,2,0.25)">Sandy Loam</button><button class="pbtn" onclick="gaP(3,1.2,0.2)">Sand</button></div></div>
+      </div>
+      <div class="g3" style="margin-bottom:8px" id="gaStats"></div>
+      <div class="lbl">Infiltration f(t) — AI (dashed) vs Exact (solid)</div>
+      <div class="cwt"><canvas id="gaChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ HORTON ============ -->
+<div class="panel" id="pho">
+  <div class="card" style="border-color:rgba(244,114,182,0.2)">
+    <div class="card-t" style="color:var(--ho)">Horton Infiltration — The Exponential Decay</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px">The original SWMM infiltration model: f(t) = f<sub>∞</sub> + (f₀ − f<sub>∞</sub>)·e<sup>−kt</sup>. Starts at f₀, decays exponentially to f<sub>∞</sub> with rate k. The network must discover the exponential relationship — can ReLU neurons learn e<sup>−x</sup>?</p>
+    <div class="g4" style="margin-bottom:10px">
+      <div class="sl-grp"><div class="lbl">Samples</div><input type="range" id="hoN" min="500" max="6000" step="500" value="2000" style="accent-color:var(--ho)"><span class="sl-v" style="color:var(--ho)" id="hoNv">2000</span></div>
+      <div class="sl-grp"><div class="lbl">Neurons</div><input type="range" id="hoH" min="12" max="48" step="4" value="24" style="accent-color:var(--ho)"><span class="sl-v" style="color:var(--ho)" id="hoHv">24</span></div>
+      <div class="sl-grp"><div class="lbl">LR</div><input type="range" id="hoLR" min="0.001" max="0.01" step="0.001" value="0.006" style="accent-color:var(--ho)"><span class="sl-v" style="color:var(--ho)" id="hoLRv">0.006</span></div>
+      <div class="sl-grp"><div class="lbl">Epochs</div><input type="range" id="hoE" min="100" max="800" step="50" value="300" style="accent-color:var(--ho)"><span class="sl-v" style="color:var(--ho)" id="hoEv">300</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="hoGen" style="background:linear-gradient(135deg,#db2777,#f472b6);color:#fff">Generate</button>
+      <button class="btn" id="hoTr" style="background:rgba(244,114,182,0.15);color:var(--ho);border:1px solid rgba(244,114,182,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="hoSt" style="display:none"></div>
+    <div class="cw" id="hoLC" style="display:none"><canvas id="hoLoss"></canvas></div>
+  </div>
+  <div id="hoTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(244,114,182,0.1);color:var(--ho)">Test</div><div class="line"></div></div>
+    <div class="card" style="border-color:rgba(244,114,182,0.15)">
+      <div class="g4" style="margin-bottom:8px">
+        <div class="sl-grp"><div class="lbl">f₀ Initial (in/hr)</div><input type="range" id="hoF0" min="0.5" max="10" step="0.1" value="3" style="accent-color:var(--ho)"><div class="sl-v" style="color:var(--ho)" id="hoF0v">3.00</div></div>
+        <div class="sl-grp"><div class="lbl">f∞ Final (in/hr)</div><input type="range" id="hoFi" min="0.01" max="3" step="0.01" value="0.5" style="accent-color:var(--ho)"><div class="sl-v" style="color:var(--ho)" id="hoFiv">0.50</div></div>
+        <div class="sl-grp"><div class="lbl">k Decay (1/hr)</div><input type="range" id="hoK" min="0.5" max="8" step="0.1" value="2" style="accent-color:var(--ho)"><div class="sl-v" style="color:var(--ho)" id="hoKv">2.0</div></div>
+        <div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px"><button class="pbtn" onclick="hoP(5,0.5,4)">Dry Sand</button><button class="pbtn" onclick="hoP(3,0.3,2)">Loam</button><button class="pbtn" onclick="hoP(1.5,0.1,1)">Wet Clay</button><button class="pbtn" onclick="hoP(8,1,6)">Cracked Soil</button></div></div>
+      </div>
+      <div class="g3" style="margin-bottom:8px" id="hoStats"></div>
+      <div class="lbl">Horton f(t) — AI (dashed) vs Exact (solid)</div>
+      <div class="cwt"><canvas id="hoChart"></canvas></div>
+      <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:4px">Classic exponential decay: starts at f₀, decays to f<sub>∞</sub> with rate k. Half-life = ln(2)/k.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ NONLINEAR RESERVOIR ============ -->
+<div class="panel" id="pnr">
+  <div class="card" style="border-color:rgba(245,158,11,0.2)">
+    <div class="card-t" style="color:var(--nr)">Nonlinear Reservoir — Heart of SWMM5 Hydrology</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px">SWMM5 solves ∂d/∂t = i − q where q = (1/n)(d−d<sub>s</sub>)<sup>5/3</sup>S<sup>1/2</sup>. Manning's on a plane — the network learns the ODE solution.</p>
+    <div class="g4" style="margin-bottom:10px">
+      <div class="sl-grp"><div class="lbl">Samples</div><input type="range" id="nrN" min="1000" max="10000" step="500" value="4000" style="accent-color:var(--nr)"><span class="sl-v" style="color:var(--nr)" id="nrNv">4000</span></div>
+      <div class="sl-grp"><div class="lbl">Neurons</div><input type="range" id="nrH" min="24" max="80" step="4" value="48" style="accent-color:var(--nr)"><span class="sl-v" style="color:var(--nr)" id="nrHv">48</span></div>
+      <div class="sl-grp"><div class="lbl">LR</div><input type="range" id="nrLR" min="0.001" max="0.01" step="0.001" value="0.004" style="accent-color:var(--nr)"><span class="sl-v" style="color:var(--nr)" id="nrLRv">0.004</span></div>
+      <div class="sl-grp"><div class="lbl">Epochs</div><input type="range" id="nrE" min="100" max="1500" step="50" value="500" style="accent-color:var(--nr)"><span class="sl-v" style="color:var(--nr)" id="nrEv">500</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="nrGen" style="background:linear-gradient(135deg,#d97706,#f59e0b);color:#fff">Generate</button>
+      <button class="btn" id="nrTr" style="background:rgba(245,158,11,0.15);color:var(--nr);border:1px solid rgba(245,158,11,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="nrSt" style="display:none"></div>
+    <div class="cw" id="nrLC" style="display:none"><canvas id="nrLoss"></canvas></div>
+  </div>
+  <div id="nrTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(245,158,11,0.1);color:var(--nr)">Test</div><div class="line"></div></div>
+    <div class="card" style="border-color:rgba(245,158,11,0.15)">
+      <div class="g4" style="margin-bottom:8px">
+        <div class="sl-grp"><div class="lbl">Manning's n</div><input type="range" id="nrMn" min="0.01" max="0.8" step="0.01" value="0.15" style="accent-color:var(--nr)"><div class="sl-v" style="color:var(--nr)" id="nrMnv">0.15</div></div>
+        <div class="sl-grp"><div class="lbl">Slope</div><input type="range" id="nrS" min="0.001" max="0.05" step="0.001" value="0.01" style="accent-color:var(--nr)"><div class="sl-v" style="color:var(--nr)" id="nrSv">0.010</div></div>
+        <div class="sl-grp"><div class="lbl">Rain (in/hr)</div><input type="range" id="nrI" min="0.2" max="4" step="0.1" value="1.5" style="accent-color:var(--nr)"><div class="sl-v" style="color:var(--nr)" id="nrIv">1.50</div></div>
+        <div class="sl-grp"><div class="lbl">Depress. (in)</div><input type="range" id="nrDs" min="0.02" max="0.5" step="0.01" value="0.1" style="accent-color:var(--nr)"><div class="sl-v" style="color:var(--nr)" id="nrDsv">0.10</div></div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px"><button class="pbtn" onclick="nrP(0.015,0.02,3,0.05)">Paved</button><button class="pbtn" onclick="nrP(0.15,0.01,1.5,0.1)">Lawn</button><button class="pbtn" onclick="nrP(0.4,0.005,1,0.25)">Forest</button></div>
+      <div class="g3" style="margin-bottom:8px" id="nrStats"></div>
+      <div class="lbl">Subcatchment Hydrograph — AI (dashed) vs Exact ODE (solid)</div>
+      <div class="cwt"><canvas id="nrChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SCS CURVE NUMBER ============ -->
+<div class="panel" id="pcn">
+  <div class="card" style="border-color:rgba(14,165,233,0.2)">
+    <div class="card-t" style="color:var(--cn)">SCS Curve Number — The Threshold</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px">Zero runoff until P > I<sub>a</sub>, then Q = (P−I<sub>a</sub>)²/(P−I<sub>a</sub>+S). The network learns the discontinuous transition.</p>
+    <div class="g4" style="margin-bottom:10px">
+      <div class="sl-grp"><div class="lbl">Samples</div><input type="range" id="cnN" min="500" max="5000" step="500" value="2000" style="accent-color:var(--cn)"><span class="sl-v" style="color:var(--cn)" id="cnNv">2000</span></div>
+      <div class="sl-grp"><div class="lbl">Neurons</div><input type="range" id="cnH" min="8" max="48" step="4" value="24" style="accent-color:var(--cn)"><span class="sl-v" style="color:var(--cn)" id="cnHv">24</span></div>
+      <div class="sl-grp"><div class="lbl">LR</div><input type="range" id="cnLR" min="0.001" max="0.01" step="0.001" value="0.006" style="accent-color:var(--cn)"><span class="sl-v" style="color:var(--cn)" id="cnLRv">0.006</span></div>
+      <div class="sl-grp"><div class="lbl">Epochs</div><input type="range" id="cnE" min="50" max="600" step="50" value="250" style="accent-color:var(--cn)"><span class="sl-v" style="color:var(--cn)" id="cnEv">250</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="cnGen" style="background:linear-gradient(135deg,#0284c7,#0ea5e9);color:#fff">Generate</button>
+      <button class="btn" id="cnTr" style="background:rgba(14,165,233,0.15);color:var(--cn);border:1px solid rgba(14,165,233,0.3)" disabled>Train</button>
+    </div>
+    <div class="sts" id="cnSt" style="display:none"></div>
+    <div class="cw" id="cnLC" style="display:none"><canvas id="cnLoss"></canvas></div>
+  </div>
+  <div id="cnTest" style="display:none">
+    <div class="sec-div"><div class="line"></div><div class="tag" style="background:rgba(14,165,233,0.1);color:var(--cn)">Test</div><div class="line"></div></div>
+    <div class="card" style="border-color:rgba(14,165,233,0.15)">
+      <div class="g3" style="margin-bottom:8px">
+        <div class="sl-grp"><div class="lbl">Curve Number</div><input type="range" id="cnCN" min="40" max="98" step="1" value="75" style="accent-color:var(--cn)"><div class="sl-v" style="color:var(--cn);font-size:20px" id="cnCNv">75</div></div>
+        <div class="sl-grp"><div class="lbl">λ (Ia/S)</div><input type="range" id="cnLam" min="0.05" max="0.3" step="0.01" value="0.20" style="accent-color:var(--cn)"><div class="sl-v" style="color:var(--cn);font-size:20px" id="cnLamv">0.20</div></div>
+        <div><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px"><button class="pbtn" onclick="cnP(98,0.2)">Paved</button><button class="pbtn" onclick="cnP(80,0.2)">Lawn B</button><button class="pbtn" onclick="cnP(65,0.2)">Woods B</button><button class="pbtn" onclick="cnP(55,0.05)">Forest A</button></div></div>
+      </div>
+      <div class="g3" style="margin-bottom:8px" id="cnStats"></div>
+      <div class="lbl">Runoff Q vs Rainfall P — AI (dashed) vs SCS (solid)</div>
+      <div class="cwt"><canvas id="cnChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+</div>
+<div class="footer">SWMM5 Hydrology MicroGPT v2 &middot; Green-Ampt + Horton + Nonlinear Reservoir + SCS CN &middot; A SWMM5.org Vibe Coding App</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const show=e=>{(typeof e==='string'?$(e):e).style.display=''};
+const hide=e=>{(typeof e==='string'?$(e):e).style.display='none'};
+const shuf=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]]}return b};
+function selM(m){['ga','ho','nr','cn'].forEach(k=>{
+  const s=k===m;$('mc'+k).classList.toggle('sel',s);$('p'+k).classList.toggle('active',s)})}
+
+class Net{
+  constructor(sz){this.L=[];this.lr=.005;
+    for(let i=0;i<sz.length-1;i++){const r=sz[i+1],c=sz[i],s=Math.sqrt(2/c);
+      this.L.push({W:Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*s)),b:Array(r).fill(0)})}}
+  fwd(x){const a=[x.slice()];let c=x.slice();
+    for(let l=0;l<this.L.length;l++){const{W,b}=this.L[l];const n=[];
+      for(let i=0;i<W.length;i++){let s=b[i];for(let j=0;j<W[i].length;j++)s+=W[i][j]*c[j];
+        n.push(l<this.L.length-1?Math.max(0,s):s)}a.push(n);c=n}return{o:c,a}}
+  train1(x,t){const{o,a}=this.fwd(x);const L=.5*(o[0]-t[0])**2;
+    let d=[o[0]-t[0]];for(let l=this.L.length-1;l>=0;l--){const{W,b}=this.L[l];const p=a[l];
+      for(let i=0;i<W.length;i++){for(let j=0;j<W[i].length;j++)W[i][j]-=this.lr*d[i]*p[j];b[i]-=this.lr*d[i]}
+      if(l>0){const nd=[];for(let j=0;j<W[0].length;j++){let s=0;for(let i=0;i<W.length;i++)s+=W[i][j]*d[i];
+        nd.push(s*(a[l][j]>0?1:0))}d=nd}}return L}
+  pred(x){return this.fwd(x).o}
+}
+function mkLC(cv,col){return new Chart(cv.getContext('2d'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:col,borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#3d4f5e',font:{size:8}},grid:{color:'rgba(45,60,72,0.3)'}},y:{ticks:{color:'#3d4f5e',font:{size:8},callback:v=>v.toExponential(1)},grid:{color:'rgba(45,60,72,0.3)'}}},plugins:{legend:{display:false}},animation:{duration:0}}})}
+async function trainL(net,data,maxQ,ep,lr,stEl,lC){
+  const losses=[];let best=1e9,stale=0;
+  for(let e=0;e<ep;e++){
+    net.lr=lr*0.5*(1+Math.cos(Math.PI*e/ep));const sh=shuf(data);let el=0;
+    for(const s of sh)el+=net.train1(s.x,s.y.map(v=>v/maxQ));
+    const avg=el/data.length;losses.push(avg);if(avg<best){best=avg;stale=0}else stale++;
+    if(stale>=60){stEl.textContent=`Early stop @ ${e+1}. Loss: ${avg.toExponential(3)}`;break}
+    if(e%5===0||e===ep-1){stEl.textContent=`Epoch ${e+1}/${ep} — Loss: ${avg.toExponential(3)}${stale>20?' ⚠':''}`;
+      lC.data.labels=losses.map((_,i)=>i+1);lC.data.datasets[0].data=losses;lC.update();await new Promise(r=>setTimeout(r,0))}}}
+function wireSliders(prefix,keys){keys.forEach(k=>{$(`${prefix}${k}`).addEventListener('input',()=>{const v=$(`${prefix}${k}`).value;$(`${prefix}${k}v`).textContent=k==='LR'?parseFloat(v).toFixed(3):v})})}
+wireSliders('ga',['N','H','LR','E']);wireSliders('ho',['N','H','LR','E']);wireSliders('nr',['N','H','LR','E']);wireSliders('cn',['N','H','LR','E']);
+
+// ============ GREEN-AMPT ============
+function gaF(Ks,psi,dth,t){const M=psi*dth;let F=Ks*t;for(let i=0;i<50;i++){const g=F-Ks*t-M*Math.log(1+F/M);const gp=1-M/(M+F);F-=g/gp;if(Math.abs(g/gp)<1e-8)break}if(F<0)F=0;return Math.min(F>1e-10?Ks*(1+M/F):50,50)}
+let gaNet=null,gaD=null,gaMx=1,gaLC=null,gaC=null;
+$('gaGen').onclick=()=>{const n=+$('gaN').value;gaD=[];for(let i=0;i<n;i++){const Ks=.01+Math.random()*4.99,psi=1+Math.random()*19,dth=.05+Math.random()*.4,t=.05+Math.random()*11.95;const f=gaF(Ks,psi,dth,t);gaD.push({x:[(Ks-.01)/4.99,(psi-1)/19,(dth-.05)/.4,t/12],y:[f]})}gaMx=Math.max(...gaD.map(d=>d.y[0]),.01);$('gaSt').textContent=`${n} samples. Max f=${gaMx.toFixed(1)} in/hr.`;show('gaSt');$('gaTr').disabled=false;hide('gaTest')};
+$('gaTr').onclick=async()=>{if(!gaD)return;gaNet=new Net([4,+$('gaH').value,+$('gaH').value,1]);show('gaLC');if(gaLC)gaLC.destroy();gaLC=mkLC($('gaLoss'),'#14b8a6');await trainL(gaNet,gaD,gaMx,+$('gaE').value,+$('gaLR').value,$('gaSt'),gaLC);show('gaTest');updGA()};
+function gaP(Ks,psi,dth){$('gaKs').value=Ks;$('gaKsv').textContent=Ks.toFixed(2);$('gaPsi').value=psi;$('gaPsiv').textContent=psi.toFixed(1);$('gaDth').value=dth;$('gaDthv').textContent=dth.toFixed(2);if(gaNet)updGA()}
+['Ks','Psi','Dth'].forEach(k=>{$('ga'+k).addEventListener('input',()=>{const v=parseFloat($('ga'+k).value);$('ga'+k+'v').textContent=k==='Ks'?v.toFixed(2):k==='Psi'?v.toFixed(1):v.toFixed(2);if(gaNet)updGA()})});
+function updGA(){const Ks=+$('gaKs').value,psi=+$('gaPsi').value,dth=+$('gaDth').value,M=psi*dth;const lb=[],ex=[],ai=[];
+  for(let t=.1;t<=12;t+=.15){lb.push(t.toFixed(1));ex.push(gaF(Ks,psi,dth,t));ai.push(Math.max(0,gaNet.pred([(Ks-.01)/4.99,(psi-1)/19,(dth-.05)/.4,t/12])[0]*gaMx))}
+  $('gaStats').innerHTML=`<div class="stat"><div class="sl">f(0)</div><div class="sv" style="color:var(--ga)">${gaF(Ks,psi,dth,.05).toFixed(1)}</div><div class="su">in/hr initial</div></div><div class="stat"><div class="sl">Ks steady</div><div class="sv" style="color:var(--ga)">${Ks.toFixed(2)}</div><div class="su">in/hr</div></div><div class="stat"><div class="sl">ψΔθ</div><div class="sv" style="color:var(--ga)">${M.toFixed(1)}</div><div class="su">in</div></div>`;
+  if(gaC)gaC.destroy();gaC=new Chart($('gaChart').getContext('2d'),{type:'line',data:{labels:lb,datasets:[{label:'Exact',data:ex,borderColor:'#14b8a6',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(20,184,166,0.05)'},{label:'AI',data:ai,borderColor:'#38bdf8',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Time (hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:8},maxTicksLimit:12},grid:{color:'rgba(45,60,72,0.3)'}},y:{title:{display:true,text:'f (in/hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:9}},grid:{color:'rgba(45,60,72,0.3)'},min:0}},plugins:{legend:{labels:{color:'#8899a8',font:{size:9}}}},animation:{duration:200}}})}
+
+// ============ HORTON ============
+function hoF(f0,fi,k,t){return fi+(f0-fi)*Math.exp(-k*t)}
+let hoNet=null,hoD=null,hoMx=1,hoLC=null,hoC=null;
+$('hoGen').onclick=()=>{const n=+$('hoN').value;hoD=[];for(let i=0;i<n;i++){const f0=.5+Math.random()*9.5,fi=.01+Math.random()*Math.min(f0*.8,2.99),k=.5+Math.random()*7.5,t=Math.random()*12;const f=hoF(f0,fi,k,t);hoD.push({x:[(f0-.5)/9.5,(fi-.01)/2.99,(k-.5)/7.5,t/12],y:[f]})}hoMx=Math.max(...hoD.map(d=>d.y[0]),.01);$('hoSt').textContent=`${n} Horton samples. Max f=${hoMx.toFixed(1)} in/hr.`;show('hoSt');$('hoTr').disabled=false;hide('hoTest')};
+$('hoTr').onclick=async()=>{if(!hoD)return;hoNet=new Net([4,+$('hoH').value,+$('hoH').value,1]);show('hoLC');if(hoLC)hoLC.destroy();hoLC=mkLC($('hoLoss'),'#f472b6');await trainL(hoNet,hoD,hoMx,+$('hoE').value,+$('hoLR').value,$('hoSt'),hoLC);show('hoTest');updHO()};
+function hoP(f0,fi,k){$('hoF0').value=f0;$('hoF0v').textContent=f0.toFixed(2);$('hoFi').value=fi;$('hoFiv').textContent=fi.toFixed(2);$('hoK').value=k;$('hoKv').textContent=k.toFixed(1);if(hoNet)updHO()}
+['F0','Fi','K'].forEach(k=>{$('ho'+k).addEventListener('input',()=>{const v=parseFloat($('ho'+k).value);$('ho'+k+'v').textContent=k==='K'?v.toFixed(1):v.toFixed(2);if(hoNet)updHO()})});
+function updHO(){const f0=+$('hoF0').value,fi=+$('hoFi').value,k=+$('hoK').value;const hl=Math.log(2)/k;const lb=[],ex=[],ai=[];
+  for(let t=0;t<=12;t+=.15){lb.push(t.toFixed(1));ex.push(hoF(f0,fi,k,t));ai.push(Math.max(0,hoNet.pred([(f0-.5)/9.5,(fi-.01)/2.99,(k-.5)/7.5,t/12])[0]*hoMx))}
+  $('hoStats').innerHTML=`<div class="stat"><div class="sl">f₀ (initial)</div><div class="sv" style="color:var(--ho)">${f0.toFixed(1)}</div><div class="su">in/hr</div></div><div class="stat"><div class="sl">f∞ (final)</div><div class="sv" style="color:var(--ho)">${fi.toFixed(2)}</div><div class="su">in/hr</div></div><div class="stat"><div class="sl">Half-life</div><div class="sv" style="color:var(--ho)">${hl.toFixed(2)}</div><div class="su">hr (ln2/k)</div></div>`;
+  if(hoC)hoC.destroy();hoC=new Chart($('hoChart').getContext('2d'),{type:'line',data:{labels:lb,datasets:[{label:'Exact Horton',data:ex,borderColor:'#f472b6',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(244,114,182,0.05)'},{label:'AI',data:ai,borderColor:'#fbbf24',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Time (hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:8},maxTicksLimit:12},grid:{color:'rgba(45,60,72,0.3)'}},y:{title:{display:true,text:'f (in/hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:9}},grid:{color:'rgba(45,60,72,0.3)'},min:0}},plugins:{legend:{labels:{color:'#8899a8',font:{size:9}}}},animation:{duration:200}}})}
+
+// ============ NONLINEAR RESERVOIR ============
+function solveNR(n,S,iR,ds,dur){const dt=.005,tot=dur+4,st=Math.ceil(tot/dt),r=[];let d=0;const sS=Math.sqrt(S);
+  for(let i=0;i<=st;i++){const t=i*dt,rain=t<dur?iR:0;let q=0;if(d>ds)q=(1/n)*Math.pow(d-ds,5/3)*sS;r.push({t,d,q,rain});d+=(rain-q)*dt;if(d<0)d=0}return r}
+let nrNet=null,nrD=null,nrMx=1,nrLC=null,nrC=null;
+$('nrGen').onclick=()=>{const cnt=+$('nrN').value;nrD=[];for(let i=0;i<cnt;){const n=.01+Math.random()*.79,S=.001+Math.random()*.049,iR=.2+Math.random()*3.8,ds=.02+Math.random()*.48;const c=solveNR(n,S,iR,ds,2);
+  for(let s=0;s<3&&i<cnt;s++,i++){const idx=0|Math.random()*c.length;const p=c[idx];nrD.push({x:[(n-.01)/.79,(S-.001)/.049,(iR-.2)/3.8,(ds-.02)/.48,p.t/6],y:[p.q]})}}
+  nrMx=Math.max(...nrD.map(d=>d.y[0]),.001);$('nrSt').textContent=`${nrD.length} samples. Max q=${nrMx.toFixed(3)} in/hr.`;show('nrSt');$('nrTr').disabled=false;hide('nrTest')};
+$('nrTr').onclick=async()=>{if(!nrD)return;nrNet=new Net([5,+$('nrH').value,+$('nrH').value,1]);show('nrLC');if(nrLC)nrLC.destroy();nrLC=mkLC($('nrLoss'),'#f59e0b');await trainL(nrNet,nrD,nrMx,+$('nrE').value,+$('nrLR').value,$('nrSt'),nrLC);show('nrTest');updNR()};
+function nrP(n,S,i,ds){$('nrMn').value=n;$('nrMnv').textContent=n.toFixed(2);$('nrS').value=S;$('nrSv').textContent=S.toFixed(3);$('nrI').value=i;$('nrIv').textContent=i.toFixed(2);$('nrDs').value=ds;$('nrDsv').textContent=ds.toFixed(2);if(nrNet)updNR()}
+['Mn','S','I','Ds'].forEach(k=>{$('nr'+k).addEventListener('input',()=>{const v=parseFloat($('nr'+k).value);$('nr'+k+'v').textContent=k==='S'?v.toFixed(3):v.toFixed(2);if(nrNet)updNR()})});
+function updNR(){const n=+$('nrMn').value,S=+$('nrS').value,iR=+$('nrI').value,ds=+$('nrDs').value;const c=solveNR(n,S,iR,ds,2);const lb=[],ex=[],ai=[],rb=[];const st=Math.max(1,0|c.length/100);
+  for(let i=0;i<c.length;i+=st){const p=c[i];lb.push(p.t.toFixed(2));ex.push(p.q);rb.push(p.rain);ai.push(Math.max(0,nrNet.pred([(n-.01)/.79,(S-.001)/.049,(iR-.2)/3.8,(ds-.02)/.48,p.t/6])[0]*nrMx))}
+  $('nrStats').innerHTML=`<div class="stat"><div class="sl">Peak (exact)</div><div class="sv" style="color:var(--nr)">${Math.max(...ex).toFixed(3)}</div><div class="su">in/hr</div></div><div class="stat"><div class="sl">Peak (AI)</div><div class="sv" style="color:#38bdf8">${Math.max(...ai).toFixed(3)}</div><div class="su">in/hr</div></div><div class="stat"><div class="sl">Equilibrium</div><div class="sv" style="color:var(--t2)">${iR.toFixed(2)}</div><div class="su">in/hr</div></div>`;
+  if(nrC)nrC.destroy();nrC=new Chart($('nrChart').getContext('2d'),{type:'line',data:{labels:lb,datasets:[{label:'Rain',data:rb,borderColor:'rgba(56,189,248,0.4)',backgroundColor:'rgba(56,189,248,0.06)',borderWidth:1,pointRadius:0,fill:true,yAxisID:'y2'},{label:'Exact',data:ex,borderColor:'#f59e0b',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(245,158,11,0.05)'},{label:'AI',data:ai,borderColor:'#34d399',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Time (hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:8},maxTicksLimit:12},grid:{color:'rgba(45,60,72,0.3)'}},y:{position:'left',title:{display:true,text:'q (in/hr)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:9}},grid:{color:'rgba(45,60,72,0.3)'},min:0},y2:{position:'right',ticks:{color:'#3d4f5e',font:{size:8}},grid:{drawOnChartArea:false},min:0}},plugins:{legend:{labels:{color:'#8899a8',font:{size:9}}}},animation:{duration:200}}})}
+
+// ============ SCS CURVE NUMBER ============
+function scsQ(P,CN,lam){const S=1000/CN-10,Ia=lam*S;return P<=Ia?{Q:0,S,Ia}:{Q:Math.pow(P-Ia,2)/(P-Ia+S),S,Ia}}
+let cnNet=null,cnD=null,cnMx=1,cnLC=null,cnC=null;
+$('cnGen').onclick=()=>{const n=+$('cnN').value;cnD=[];for(let i=0;i<n;i++){const P=.1+Math.random()*9.9,CN=40+Math.random()*58,lam=.05+Math.random()*.25;cnD.push({x:[(P-.1)/9.9,(CN-40)/58,(lam-.05)/.25],y:[scsQ(P,CN,lam).Q]})}cnMx=Math.max(...cnD.map(d=>d.y[0]),.01);$('cnSt').textContent=`${n} SCS samples. Max Q=${cnMx.toFixed(2)} in.`;show('cnSt');$('cnTr').disabled=false;hide('cnTest')};
+$('cnTr').onclick=async()=>{if(!cnD)return;cnNet=new Net([3,+$('cnH').value,+$('cnH').value,1]);show('cnLC');if(cnLC)cnLC.destroy();cnLC=mkLC($('cnLoss'),'#0ea5e9');await trainL(cnNet,cnD,cnMx,+$('cnE').value,+$('cnLR').value,$('cnSt'),cnLC);show('cnTest');updCN()};
+function cnP(cn,lam){$('cnCN').value=cn;$('cnCNv').textContent=cn;$('cnLam').value=lam;$('cnLamv').textContent=lam.toFixed(2);if(cnNet)updCN()}
+['CN','Lam'].forEach(k=>{$('cn'+k).addEventListener('input',()=>{const v=parseFloat($('cn'+k).value);$('cn'+k+'v').textContent=k==='CN'?v.toFixed(0):v.toFixed(2);if(cnNet)updCN()})});
+function updCN(){const CN=+$('cnCN').value,lam=+$('cnLam').value;const S=1000/CN-10,Ia=lam*S;const lb=[],ex=[],ai=[];
+  for(let P=0;P<=10;P+=.1){lb.push(P.toFixed(1));ex.push(scsQ(P,CN,lam).Q);ai.push(Math.max(0,cnNet.pred([(P-.1)/9.9,(CN-40)/58,(lam-.05)/.25])[0]*cnMx))}
+  $('cnStats').innerHTML=`<div class="stat"><div class="sl">S retention</div><div class="sv" style="color:var(--cn)">${S.toFixed(2)}</div><div class="su">in</div></div><div class="stat"><div class="sl">Ia threshold</div><div class="sv" style="color:var(--amber)">${Ia.toFixed(2)}</div><div class="su">in</div></div><div class="stat"><div class="sl">Q @P=5"</div><div class="sv" style="color:var(--emerald)">${scsQ(5,CN,lam).Q.toFixed(2)}</div><div class="su">in</div></div>`;
+  if(cnC)cnC.destroy();cnC=new Chart($('cnChart').getContext('2d'),{type:'line',data:{labels:lb,datasets:[{label:'Exact SCS',data:ex,borderColor:'#0ea5e9',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(14,165,233,0.05)'},{label:'AI',data:ai,borderColor:'#f59e0b',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'P (in)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(45,60,72,0.3)'}},y:{title:{display:true,text:'Q (in)',color:'#5a6d7c',font:{size:10}},ticks:{color:'#3d4f5e',font:{size:9}},grid:{color:'rgba(45,60,72,0.3)'},min:0}},plugins:{legend:{labels:{color:'#8899a8',font:{size:10}}}},animation:{duration:200}}})}
+</script>
+</body>
+</html>

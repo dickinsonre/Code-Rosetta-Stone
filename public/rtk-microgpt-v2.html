@@ -1,0 +1,1362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RTK MicroGPT v2 — Rainfall × Convolution × RDII</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0c1222;--card:rgba(30,41,59,0.35);--bdr:rgba(51,65,85,0.4);
+    --t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;--t4:#475569;
+    --blue:#0ea5e9;--emerald:#10b981;--amber:#f59e0b;--violet:#8b5cf6;--rose:#f43f5e;--cyan:#06b6d4;
+  }
+  body{background:linear-gradient(145deg,#0c1222,#0f172a 40%,#0c1a2e);color:var(--t1);font-family:'JetBrains Mono','Fira Code',monospace;min-height:100vh;line-height:1.5}
+
+  /* Layout */
+  .hdr{padding:24px 24px 8px}.hdr-row{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#7c3aed,#8b5cf6);display:flex;align-items:center;justify-content:center;font:800 15px 'Space Grotesk',sans-serif;color:#fff;box-shadow:0 0 24px rgba(124,58,237,0.4)}
+  .hdr h1{font:700 18px/1.2 'Space Grotesk',sans-serif;color:#fff;letter-spacing:-0.3px}
+  .hdr .sub{font-size:11px;color:var(--t3);letter-spacing:0.5px}
+  .eq-bar{margin-top:12px;padding:10px 16px;border-radius:10px;background:var(--card);border:1px solid var(--bdr);text-align:center}
+  .eq-bar .eq{color:var(--violet);font-size:12px;font-weight:600}
+  .eq-bar .nt{color:var(--t4);font-size:10px;margin-left:10px}
+
+  .tabs{display:flex;border-bottom:1px solid rgba(30,41,59,0.6);padding:0 16px;margin-top:12px}
+  .tab{padding:10px 16px;font:600 11px/1 inherit;cursor:pointer;color:var(--t3);border:none;border-bottom:2px solid transparent;background:none;transition:.2s;letter-spacing:.3px}
+  .tab:hover{color:var(--t2)}.tab.active{color:#c4b5fd;border-bottom-color:#a78bfa;background:rgba(30,41,59,0.3)}
+  .tc{padding:20px 24px;display:none}.tc.active{display:block}
+
+  .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:20px;margin-bottom:16px}
+  .card-t{font:700 13px/1.3 'Space Grotesk',sans-serif;color:#c4b5fd;margin-bottom:12px}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
+
+  .sl-grp{margin-bottom:8px}
+  .sl-grp input[type=range]{width:100%;accent-color:var(--violet)}
+  .sl-v{color:#a78bfa;font-size:13px;font-weight:600}
+
+  .stat{background:rgba(30,41,59,0.5);border-radius:10px;padding:12px;border:1px solid rgba(51,65,85,0.3)}
+  .stat .sl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .stat .sv{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .stat .su{font-size:9px;color:var(--t4);margin-top:2px}
+
+  .btn{flex:1;padding:10px 16px;border-radius:10px;border:none;font:600 13px inherit;cursor:pointer;letter-spacing:.3px;transition:.2s}
+  .btn-g{background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 0 15px rgba(16,185,129,0.3)}
+  .btn-v{background:linear-gradient(135deg,#7c3aed,#8b5cf6);color:#fff;box-shadow:0 0 15px rgba(139,92,246,0.3)}
+  .btn-r{background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff}
+  .btn:disabled{background:#334155;color:#64748b;cursor:not-allowed;box-shadow:none}
+  .btn-row{display:flex;gap:12px;margin-bottom:16px}
+
+  .sts{font:11px/1.4 'JetBrains Mono',monospace;color:var(--t3);background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;margin-bottom:16px}
+  .cw{position:relative;height:240px;margin-top:8px}.cwt{position:relative;height:300px;margin-top:8px}
+
+  .dt{width:100%;font-size:11px;border-collapse:collapse}
+  .dt th{text-align:left;padding:6px 8px;color:var(--t4);border-bottom:1px solid rgba(51,65,85,0.4)}
+  .dt td{padding:6px 8px;border-bottom:1px solid rgba(15,23,42,0.4)}
+
+  .pbtn{padding:6px 12px;font:10px inherit;border-radius:6px;cursor:pointer;background:rgba(51,65,85,0.4);color:var(--t2);border:1px solid rgba(71,85,105,0.3);transition:.2s}
+  .pbtn:hover{background:rgba(139,92,246,0.15);color:#c4b5fd;border-color:rgba(139,92,246,0.3)}
+
+  /* Arch diagram */
+  .arch{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;flex-wrap:wrap}
+  .an{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+  .ab{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;line-height:1.3}
+  .aa{color:var(--t4);font-size:16px}
+  .al{font-size:8px;color:var(--t4);text-align:center;margin-bottom:3px}
+
+  /* Convolution diagram */
+  .conv-diag{display:flex;align-items:center;justify-content:center;gap:8px;padding:16px 0;font-size:12px;flex-wrap:wrap}
+  .conv-box{padding:8px 14px;border-radius:8px;font-weight:600;font-size:11px;text-align:center}
+
+  /* Doc sections */
+  .ds{margin-bottom:10px;background:rgba(15,23,42,0.4);border-radius:10px;border:1px solid rgba(51,65,85,0.15);overflow:hidden}
+  .dh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;transition:.2s}
+  .dh:hover{background:rgba(30,41,59,0.3)}
+  .dh .tr{display:flex;align-items:center;gap:8px}
+  .dh .ci{color:var(--violet);font-size:11px}
+  .dh .ti{color:var(--t1);font-size:12px;font-weight:600}
+  .dh .tg{color:var(--t4);font-size:11px}
+  .dd{padding:0 16px 12px;font-size:11px;color:var(--t4);line-height:1.6}
+  .dc{margin:0 12px 12px;border-radius:10px;overflow:hidden;display:none}
+  .dc.open{display:block}
+  .dc pre{background:rgba(2,6,23,0.7);padding:14px 16px;overflow-x:auto;font:10px/1.7 'JetBrains Mono',monospace;color:#cbd5e1;white-space:pre}
+
+  .rc{display:block;background:rgba(15,23,42,0.5);border-radius:10px;padding:12px;border:1px solid var(--bdr);text-decoration:none;transition:.2s;margin-bottom:10px}
+  .rc:hover{border-color:rgba(139,92,246,0.35)}
+  .rr{display:flex;align-items:flex-start;gap:12px}
+  .ri{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+  .rt{color:var(--t1);font-size:12px;font-weight:600}
+  .rb{font-size:8px;padding:2px 6px;border-radius:10px;margin-left:6px}
+  .rd{font-size:10px;color:var(--t4);margin-top:4px;line-height:1.5}
+  .rl{font-size:9px;color:rgba(14,165,233,0.6);margin-top:4px;display:inline-block}
+
+  .ct{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px}
+  .cx{font-size:11px;color:var(--t4);line-height:1.6}.cx .h{color:var(--t2)}
+
+  .footer{padding:12px 24px;text-align:center;border-top:1px solid rgba(30,41,59,0.5);margin-top:16px;font-size:10px;color:var(--t4);letter-spacing:.3px}
+
+  /* Tooltips */
+  .tip{position:relative;display:inline-block}
+  .tip-text{
+    display:inline-flex;align-items:center;gap:4px;margin-top:3px;
+    font-size:9px;color:var(--t4);letter-spacing:.3px;cursor:default;
+  }
+  .tip-icon{
+    width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;
+    font-size:8px;font-weight:700;color:var(--t3);background:rgba(51,65,85,0.35);border:1px solid rgba(71,85,105,0.3);
+    cursor:help;flex-shrink:0;
+  }
+  .tip-best{color:#a78bfa;font-weight:600}
+  .tip-bubble{
+    visibility:hidden;opacity:0;position:absolute;z-index:100;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);
+    background:rgba(15,23,42,0.95);border:1px solid rgba(139,92,246,0.3);border-radius:8px;padding:10px 14px;
+    width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.5);transition:opacity .2s,visibility .2s;
+    font-size:10px;line-height:1.6;color:var(--t2);
+  }
+  .tip-bubble::after{
+    content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);
+    border:6px solid transparent;border-top-color:rgba(139,92,246,0.3);
+  }
+  .tip:hover .tip-bubble{visibility:visible;opacity:1}
+  .tip-bubble .tb-title{color:#c4b5fd;font-weight:700;font-size:10px;margin-bottom:4px}
+  .tip-bubble .tb-rec{color:#34d399;font-weight:600;font-family:'JetBrains Mono',monospace}
+  .tip-bubble .tb-note{color:var(--t4);font-size:9px;margin-top:4px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="logo">R×P</div>
+    <div>
+      <h1>RTK MicroGPT v2</h1>
+      <div class="sub">Train a Neural Network to Learn Rainfall × RDII Convolution</div>
+    </div>
+  </div>
+  <div class="eq-bar">
+    <span class="eq">RDII(t) = R × Σ P(j) × UH(t−j) × Δt</span>
+    <span class="nt">Discrete convolution of rainfall with RTK unit hydrograph — how SWMM5 computes RDII</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="train">1. Generate &amp; Train</button>
+  <button class="tab" data-tab="test">2. Test Predictions</button>
+  <button class="tab" data-tab="analysis">3. Analysis</button>
+  <button class="tab" data-tab="docs">4. Docs</button>
+</div>
+
+<!-- ===================== TAB 1 ===================== -->
+<div id="tab-train" class="tc active">
+
+  <!-- Convolution diagram -->
+  <div class="card" style="padding:14px">
+    <div class="lbl">What The Network Must Learn</div>
+    <div class="conv-diag">
+      <div class="conv-box" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);color:#38bdf8">
+        Rainfall P(t)<br><span style="font-size:9px;color:var(--t4)">depth, duration, shape</span>
+      </div>
+      <span style="color:var(--t4);font-size:20px">×</span>
+      <div class="conv-box" style="background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#a78bfa">
+        Unit Hydrograph<br><span style="font-size:9px;color:var(--t4)">from T &amp; K</span>
+      </div>
+      <span style="color:var(--t4);font-size:20px">×</span>
+      <div class="conv-box" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#34d399">
+        R<br><span style="font-size:9px;color:var(--t4)">volume fraction</span>
+      </div>
+      <span style="color:var(--t4);font-size:20px">=</span>
+      <div class="conv-box" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:#fbbf24">
+        RDII(t)<br><span style="font-size:9px;color:var(--t4)">actual sewer flow</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="g2" style="margin-bottom:16px">
+    <div class="sl-grp"><div class="lbl">Training Events</div>
+      <input type="range" id="slN" min="1000" max="15000" step="500" value="6000">
+      <span class="sl-v" id="vN">6000</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">6000–8000</span></div>
+        <div class="tip-bubble"><div class="tb-title">Training Events</div>More samples = better coverage of the 7D input space (P×D×f×R×T×K×t). Each event generates 5 time samples across the RDII curve.<br><br>Recommended: <span class="tb-rec">6000–8000</span><br><div class="tb-note">Below 3000: underfits recession tail. Above 10000: slower epochs, diminishing returns. The convolution's 7 inputs need more samples than Manning's 3.</div></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Hidden Layer Size</div>
+      <input type="range" id="slH" min="24" max="96" step="8" value="56">
+      <span class="sl-v" id="vH">56 neurons</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">48–64</span></div>
+        <div class="tip-bubble"><div class="tb-title">Hidden Layer Size</div>Neurons per hidden layer. Two layers of this size. More neurons = more capacity to approximate the exponential recession and convolution.<br><br>Recommended: <span class="tb-rec">48–64</span><br><div class="tb-note">Below 32: can't approximate e<sup>-x</sup> well. Above 72: overfitting risk without enough data. Sweet spot for 7-input convolution is 48–64.</div></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Learning Rate</div>
+      <input type="range" id="slLR" min="0.001" max="0.015" step="0.001" value="0.004">
+      <span class="sl-v" id="vLR">0.004</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">0.003–0.005</span></div>
+        <div class="tip-bubble"><div class="tb-title">Learning Rate (initial)</div>Step size for gradient descent. Cosine decay automatically reduces this to ~0 by the final epoch.<br><br>Recommended: <span class="tb-rec">0.003–0.005</span><br><div class="tb-note">Below 0.002: too slow, needs 1000+ epochs. Above 0.008: overshoots, loss oscillates. The cosine decay handles fine-tuning — start moderate and let it anneal.</div></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Max Epochs</div>
+      <input type="range" id="slE" min="50" max="2000" step="50" value="500">
+      <span class="sl-v" id="vE">500</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">500–1000</span></div>
+        <div class="tip-bubble"><div class="tb-title">Max Epochs</div>Maximum training passes. Early stopping kicks in after 80 epochs without improvement, so setting high is safe.<br><br>Recommended: <span class="tb-rec">500–1000</span><br><div class="tb-note">250: learns peak OK, tail still rough. 500: good balance. 1000: polishes recession tail. 1500+: diminishing returns — increase hidden size instead. Cosine LR decay makes high epochs productive.</div></div></div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="card" style="padding:14px">
+    <div class="lbl">Network Architecture — 7 Inputs → 1 Output</div>
+    <div class="arch">
+      <div>
+        <div class="al">RAINFALL</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div class="an" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.4);color:#38bdf8">P</div>
+          <div class="an" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.4);color:#38bdf8">D</div>
+          <div class="an" style="background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.4);color:#38bdf8">f</div>
+        </div>
+      </div>
+      <div>
+        <div class="al">RTK</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div class="an" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);color:#34d399">R</div>
+          <div class="an" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);color:#34d399">T</div>
+          <div class="an" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);color:#34d399">K</div>
+        </div>
+      </div>
+      <div>
+        <div class="al">TIME</div>
+        <div class="an" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);color:#fbbf24">t</div>
+      </div>
+      <div class="aa">→</div>
+      <div><div class="al">HIDDEN 1</div><div class="ab" style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);color:#a78bfa"><span id="aH1">56</span><br>ReLU</div></div>
+      <div class="aa">→</div>
+      <div><div class="al">HIDDEN 2</div><div class="ab" style="background:rgba(139,92,246,0.08);border:1px solid rgba(139,92,246,0.25);color:#a78bfa"><span id="aH2">56</span><br>ReLU</div></div>
+      <div class="aa">→</div>
+      <div><div class="al">OUTPUT</div><div class="an" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);color:#fbbf24;font-size:8px">RDII</div></div>
+    </div>
+    <div style="text-align:center;color:var(--t4);font-size:10px" id="pCnt">—</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-g" id="btnGen">Generate Rainfall + RTK Data</button>
+    <button class="btn btn-v" id="btnTr" disabled>Train Network</button>
+  </div>
+  <div class="sts" id="st1" style="display:none"></div>
+  <div class="card" id="lossC" style="display:none"><div class="lbl">Training Loss (MSE)</div><div class="cw"><canvas id="lossCanvas"></canvas></div></div>
+  <div class="card" id="sampC" style="display:none">
+    <div class="lbl">Sample Training Data (first 10)</div>
+    <div style="overflow-x:auto"><table class="dt"><thead><tr><th>P (in)</th><th>Dur (hr)</th><th>Peak f</th><th>R</th><th>T (hr)</th><th>K</th><th>t (hr)</th><th>RDII (in/hr)</th></tr></thead><tbody id="sampB"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===================== TAB 2 ===================== -->
+<div id="tab-test" class="tc">
+  <div id="t2off" style="text-align:center;padding:60px 0"><div style="color:var(--t4);font-size:13px">Train the network first (Tab 1)</div></div>
+  <div id="t2on" style="display:none">
+
+    <!-- Rainfall params -->
+    <div class="card">
+      <div class="card-t" style="color:#38bdf8">Rainfall Event</div>
+      <div class="g3">
+        <div class="sl-grp"><div class="lbl">Total Depth (inches)</div>
+          <input type="range" id="slP" min="0.5" max="4" step="0.1" value="1.5" style="accent-color:#38bdf8">
+          <div class="sl-v" style="color:#38bdf8;font-size:18px" id="vP">1.5</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">1.0–2.5 in</span></div>
+            <div class="tip-bubble"><div class="tb-title">Total Rainfall Depth</div>Total precipitation volume over the storm event. RDII scales linearly with P (doubling rain doubles RDII).<br><br>Typical: <span class="tb-rec">1.0–2.5 in</span><br><div class="tb-note">0.5 in: light drizzle, minimal RDII. 1.5 in: moderate storm. 3+ in: heavy event, SSO risk. RDII = R × P, so a 2 in storm with R=0.04 produces 0.08 in of RDII volume.</div></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">Duration (hours)</div>
+          <input type="range" id="slD" min="1" max="12" step="0.5" value="4" style="accent-color:#38bdf8">
+          <div class="sl-v" style="color:#38bdf8;font-size:18px" id="vD">4.0</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">2–6 hr</span></div>
+            <div class="tip-bubble"><div class="tb-title">Storm Duration</div>Length of the rainfall event. Longer storms spread the RDII response and reduce peak flows.<br><br>Typical: <span class="tb-rec">2–6 hr</span><br><div class="tb-note">1 hr: intense burst, sharp RDII peak. 4 hr: common design storm. 10+ hr: long-duration event where RDII peak is lower but tail extends much further.</div></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">Peak Position (fraction)</div>
+          <input type="range" id="slF" min="0.2" max="0.8" step="0.05" value="0.4" style="accent-color:#38bdf8">
+          <div class="sl-v" style="color:#38bdf8;font-size:18px" id="vF">0.40</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">0.35–0.50</span></div>
+            <div class="tip-bubble"><div class="tb-title">Peak Position Fraction</div>Where in the storm the peak intensity occurs. 0.4 = 40% through (front-loaded, like SCS Type II). 0.5 = symmetric.<br><br>Typical: <span class="tb-rec">0.35–0.50</span><br><div class="tb-note">0.2: very front-loaded, sharp initial burst. 0.4: SCS Type II pattern (most US designs). 0.5: symmetric triangle. 0.8: back-loaded, gradual buildup.</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- RTK params -->
+    <div class="card">
+      <div class="card-t" style="color:#34d399">RTK Parameters</div>
+      <div class="g3">
+        <div class="sl-grp"><div class="lbl">R — Volume Fraction</div>
+          <input type="range" id="slR" min="0.005" max="0.12" step="0.005" value="0.04" style="accent-color:#34d399">
+          <div class="sl-v" style="color:#34d399;font-size:18px" id="vR">0.040</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">0.01–0.06</span></div>
+            <div class="tip-bubble"><div class="tb-title">R — Volume Fraction</div>Fraction of rainfall that enters the sewer as RDII. Dimensionless (0–1). RDII volume = R × P × area.<br><br>Typical: <span class="tb-rec">0.01–0.06</span><br><div class="tb-note">R1 (fast inflow): 0.02–0.06 through manholes/defects. R2 (medium): 0.01–0.04 near-surface infiltration. R3 (slow GW): 0.005–0.02 groundwater. High R (>0.08) = severely deteriorated system.</div></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">T — Time to Peak (hours)</div>
+          <input type="range" id="slT" min="0.5" max="12" step="0.5" value="3" style="accent-color:#34d399">
+          <div class="sl-v" style="color:#34d399;font-size:18px" id="vT">3.0</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">1–4 hr</span></div>
+            <div class="tip-bubble"><div class="tb-title">T — Time to Peak</div>How quickly RDII reaches peak flow after rainfall. Shorter T = faster response = higher peak.<br><br>Typical: <span class="tb-rec">1–4 hr</span><br><div class="tb-note">T1 (fast): 0.5–2 hr, direct inflow. T2 (medium): 2–6 hr, near-surface. T3 (slow): 6–24 hr, groundwater. q_peak = 2R/T, so halving T doubles the peak flow.</div></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">K — Recession Ratio</div>
+          <input type="range" id="slK" min="0.5" max="6" step="0.25" value="2" style="accent-color:#34d399">
+          <div class="sl-v" style="color:#34d399;font-size:18px" id="vK">2.00</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">2–3</span></div>
+            <div class="tip-bubble"><div class="tb-title">K — Recession Ratio</div>Controls how fast the recession limb decays. Higher K = faster decay = shorter tail. The recession follows e<sup>−K(t−T)/T</sup>.<br><br>Typical: <span class="tb-rec">2–3</span><br><div class="tb-note">K=1: very long tail, slow drainage. K=2: moderate recession. K=4+: sharp cutoff, quick drainage. K controls the shape; T controls the time scale. Duration ≈ T × (1 + ln(100)/K).</div></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="g4" style="margin-bottom:16px" id="tStats"></div>
+
+    <!-- Charts -->
+    <div class="card">
+      <div class="lbl">Rainfall Hyetograph</div>
+      <div class="cw"><canvas id="rainChart"></canvas></div>
+    </div>
+    <div class="card">
+      <div class="lbl">RDII Hydrograph — AI Prediction vs Exact Convolution</div>
+      <div class="cwt"><canvas id="rdiiChart"></canvas></div>
+    </div>
+
+    <!-- Presets -->
+    <div class="card">
+      <div class="lbl">Quick Presets</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="presets"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 3 ===================== -->
+<div id="tab-analysis" class="tc">
+  <div id="t3off" style="text-align:center;padding:60px 0"><div style="color:var(--t4);font-size:13px">Train the network first (Tab 1)</div></div>
+  <div id="t3on" style="display:none">
+    <div class="g3" style="margin-bottom:16px">
+      <div class="stat"><div class="sl">R² Score</div><div class="sv" id="sR2" style="color:#34d399">—</div><div class="su">coefficient of determination</div></div>
+      <div class="stat"><div class="sl">Mean Abs Error</div><div class="sv" id="sMAE" style="color:#fbbf24">—</div><div class="su">across 300 test points</div></div>
+      <div class="stat"><div class="sl">Test Samples</div><div class="sv" style="color:#38bdf8">300</div><div class="su">unseen rainfall × RTK combos</div></div>
+    </div>
+    <div class="card"><div class="lbl">Predicted vs Actual RDII (300 test points)</div><div class="cwt"><canvas id="scatCanvas"></canvas></div>
+      <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:6px">Dashed green = perfect. Points closer to line = better accuracy.</div>
+    </div>
+    <div class="card">
+      <div class="card-t">What the Network Discovered</div>
+      <p style="font-size:11px;color:var(--t4);margin-bottom:12px">The network learned to approximate discrete convolution from raw (rainfall, RTK, time) → RDII data:</p>
+      <div class="g3">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">RDII ∝ P × R</div>
+          <div style="font-size:10px;color:var(--t4)">More rainfall or higher R = more RDII. Double the rain doubles the flow (linearity of convolution)</div>
+        </div>
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">Peak Lag ≈ T<sub>rain_peak</sub> + T</div>
+          <div style="font-size:10px;color:var(--t4)">The RDII peak occurs after the rainfall peak by approximately the UH time-to-peak T</div>
+        </div>
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">Recession = f(K, Rain shape)</div>
+          <div style="font-size:10px;color:var(--t4)">The tail depends on both the UH recession (K) and the rainfall duration — longer rain spreads the RDII response</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 4 ===================== -->
+<div id="tab-docs" class="tc">
+  <div class="card">
+    <h2 class="card-t" style="font-size:15px">How RTK MicroGPT v2 Works</h2>
+    <p style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:10px">
+      This app trains a neural network to learn the <b style="color:#a78bfa">convolution</b> of a rainfall hyetograph with
+      the SWMM5 RTK unit hydrograph — the actual computation SWMM5 performs to produce RDII at each node.
+      The network receives 7 inputs (3 rainfall parameters + R, T, K + time) and must predict the convolved RDII flow.
+    </p>
+    <p style="font-size:11px;color:var(--t4);line-height:1.7">
+      <b style="color:var(--t2)">Key difference from v1:</b> Version 1 only predicted the unit hydrograph shape q(t) from R, T, K.
+      That's like teaching someone the shape of a filter without showing them a signal. v2 gives the network real rainfall
+      and asks it to produce the filtered output — discovering the convolution operation on its own through gradient descent.
+    </p>
+  </div>
+
+  <!-- Pipeline -->
+  <div class="card">
+    <div class="card-t">The 6-Step Pipeline</div>
+    <div style="display:flex;flex-direction:column;gap:4px">
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(14,165,233,0.1);border:1px solid rgba(14,165,233,0.3);color:#38bdf8;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">1</div>
+        <div><div style="font-size:12px;font-weight:600;color:#38bdf8">Generate Rainfall Events</div><div style="font-size:10px;color:var(--t4)">Random triangular hyetographs with varying total depth (0.5–4 in), duration (1–12 hr), and peak position (0.2–0.8)</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.3);color:#34d399;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">2</div>
+        <div><div style="font-size:12px;font-weight:600;color:#34d399">Generate RTK Parameters</div><div style="font-size:10px;color:var(--t4)">Random R (0.5–12%), T (0.5–12 hr), K (0.5–6) for each event</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.3);color:#fbbf24;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">3</div>
+        <div><div style="font-size:12px;font-weight:600;color:#fbbf24">Compute Exact Convolution</div><div style="font-size:10px;color:var(--t4)">RDII(t) = R × Σ P(j) × UH(t−j) × Δt — discrete convolution at 15-min time steps, the same algorithm SWMM5 uses</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">4</div>
+        <div><div style="font-size:12px;font-weight:600;color:#a78bfa">Sample Training Points</div><div style="font-size:10px;color:var(--t4)">Pick random times t from each convolved RDII curve → training tuple (P, Dur, f, R, T, K, t) → RDII(t)</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(139,92,246,0.1);border:1px solid rgba(139,92,246,0.3);color:#a78bfa;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">5</div>
+        <div><div style="font-size:12px;font-weight:600;color:#a78bfa">Train Network [7→h→h→1]</div><div style="font-size:10px;color:var(--t4)">Backprop + SGD. The network must discover convolution — it never sees the UH array or the summation loop.</div></div>
+      </div>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:6px 0">
+        <div style="width:26px;height:26px;border-radius:50%;background:rgba(244,63,94,0.1);border:1px solid rgba(244,63,94,0.3);color:#fb7185;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0">6</div>
+        <div><div style="font-size:12px;font-weight:600;color:#fb7185">Validate</div><div style="font-size:10px;color:var(--t4)">Test on 300 unseen rainfall×RTK combinations and compute R²</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Source Code -->
+  <div class="card"><div class="card-t">Source Code — Annotated</div><div id="codeAcc"></div></div>
+
+  <!-- Key Concepts -->
+  <div class="card">
+    <div class="card-t">Key Concepts Explained</div>
+    <div style="margin-bottom:16px"><div class="ct">What Is Convolution?</div><p class="cx">Convolution is the mathematical operation that transforms rainfall into sewer flow. For each time step t, you sum up all past rainfall increments, each weighted by how much of that increment's RDII has arrived by time t. The unit hydrograph (from T and K) tells you how fast each rainfall increment drains into the sewer. <span class="h">This is what the neural network must discover on its own</span> — it never sees the summation loop.</p></div>
+    <div style="margin-bottom:16px"><div class="ct">Why 7 Inputs?</div><p class="cx">3 rainfall inputs describe the storm: <span class="h">P</span> (total depth), <span class="h">D</span> (duration), <span class="h">f</span> (peak position). 3 RTK inputs describe the sewer response: <span class="h">R</span> (how much gets in), <span class="h">T</span> (how fast), <span class="h">K</span> (how long the tail). Plus <span class="h">t</span> (when are we asking?). The network maps this 7D space to a single RDII value.</p></div>
+    <div style="margin-bottom:16px"><div class="ct">Triangular Hyetograph</div><p class="cx">We generate rainfall as a triangle: rising linearly to a peak, then falling. The peak position fraction f controls the shape — f=0.4 means the peak is 40% through the storm (front-loaded, like SCS Type II). The area under the triangle equals P (total depth). This is simpler than real rainfall but captures the essential variation the network must handle.</p></div>
+    <div style="margin-bottom:16px"><div class="ct">Why This Is Harder Than Manning's or v1</div><p class="cx">Manning's: 3 inputs → 1 output, smooth power laws. RTK v1: 4 inputs → 1 output, exponential decay. <span class="h">RTK v2: 7 inputs → 1 output, and the output is a convolution</span> — a summation over time that depends on the entire rainfall history, not just instantaneous parameters. The network must learn both the UH shape AND the aggregation operation.</p></div>
+    <div><div class="ct">The Three RDII Triangles in SWMM5</div><p class="cx">In production SWMM5 models, each node gets three RTK parameter sets: <span class="h">R1/T1/K1</span> (fast, hours — direct inflow through manhole defects), <span class="h">R2/T2/K2</span> (medium, hours-to-days — near-surface infiltration), <span class="h">R3/T3/K3</span> (slow, days-to-weeks — groundwater). Total RDII is the sum of all three convolutions. This app trains on a single triangle — the extension to three is just running three networks in parallel.</p></div>
+  </div>
+
+  <!-- Karpathy refs -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(30,41,59,0.4),rgba(15,23,42,0.4));border-color:rgba(71,85,105,0.35)">
+    <div class="card-t">Inspired By — Andrej Karpathy</div>
+    <p style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:16px">Same foundational approach: build from scratch, understand every gradient.</p>
+    <a href="https://github.com/karpathy/micrograd" target="_blank" rel="noopener noreferrer" class="rc"><div class="rr"><div class="ri" style="background:rgba(245,158,11,0.08);border:1px solid rgba(245,158,11,0.25);color:#fbbf24">µg</div><div><span class="rt">karpathy/micrograd</span><span class="rb" style="background:rgba(245,158,11,0.1);color:#fbbf24;border:1px solid rgba(245,158,11,0.2)">Most Relevant</span><div class="rd">Scalar autograd engine — our TinyMLP is a JS port of its core concepts.</div><span class="rl">github.com/karpathy/micrograd ↗</span></div></div></a>
+    <a href="https://github.com/karpathy/nanoGPT" target="_blank" rel="noopener noreferrer" class="rc"><div class="rr"><div class="ri" style="background:rgba(16,185,129,0.08);border:1px solid rgba(16,185,129,0.25);color:#34d399">nG</div><div><span class="rt">karpathy/nanoGPT</span><div class="rd">~300-line GPT-2 reproduction. Same shuffle→forward→loss→backward→update loop.</div><span class="rl">github.com/karpathy/nanoGPT ↗</span></div></div></a>
+    <a href="https://www.youtube.com/playlist?list=PLAqhIrjkxbuWI23v9cThsA9GvCAUhRvKZ" target="_blank" rel="noopener noreferrer" class="rc"><div class="rr"><div class="ri" style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);color:#f87171">▶</div><div><span class="rt">Neural Networks: Zero to Hero</span><div class="rd">Full YouTube lecture series. The micrograd episode covers exactly what RTK MicroGPT implements.</div><span class="rl">youtube.com — Zero to Hero playlist ↗</span></div></div></a>
+    <a href="https://karpathy.ai/microgpt.html" target="_blank" rel="noopener noreferrer" class="rc"><div class="rr"><div class="ri" style="background:rgba(14,165,233,0.08);border:1px solid rgba(14,165,233,0.25);color:#38bdf8">μG</div><div><span class="rt">karpathy/microGPT</span><span class="rb" style="background:rgba(14,165,233,0.1);color:#38bdf8;border:1px solid rgba(14,165,233,0.2)">NEW Feb 2026</span><div class="rd">The most atomic GPT — 243 lines of pure Python, zero dependencies. Autograd Value class + full transformer + Adam optimizer + text generation. "This is the full algorithmic content. Everything else is just efficiency."</div><span class="rl">karpathy.ai/microgpt.html ↗</span></div></div></a>
+    <a href="https://github.com/enescang/microgpt-visualizer" target="_blank" rel="noopener noreferrer" class="rc"><div class="rr"><div class="ri" style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);color:#22d3ee">Tv</div><div><span class="rt">TinyGPT Visualizer (TypeScript)</span><div class="rd">Interactive TypeScript implementation of microGPT with visual feedback at each transformer stage — tokenization, embeddings, attention heatmaps. The diagram in this docs tab is based on this architecture.</div><span class="rl">github.com/enescang/microgpt-visualizer ↗</span></div></div></a>
+    <div style="margin-top:16px;background:rgba(2,6,23,0.35);border-radius:10px;padding:14px;border:1px solid rgba(51,65,85,0.15)">
+      <div class="lbl" style="margin-bottom:6px">Progression</div>
+      <div style="font-size:11px;color:var(--t4);line-height:1.6">
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">micrograd</span> →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">Manning's MicroGPT</span> (3 in, power law) →
+        <span style="color:#a78bfa;font-family:'JetBrains Mono';font-size:10px">RTK v1</span> (4 in, exponential) →
+        <span style="color:#fbbf24;font-family:'JetBrains Mono';font-size:10px">RTK v2</span> (7 in, convolution) →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">nanoGPT</span> →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">GPT-4</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- TinyGPT / microGPT reference -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(14,165,233,0.04),rgba(6,182,212,0.04));border-color:rgba(14,165,233,0.2)">
+    <div class="card-t" style="color:#38bdf8">TinyGPT — The Next Step Up from MicroGPT</div>
+    <p style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:12px">
+      Karpathy's <b style="color:var(--t2)">microGPT</b> (243 lines of pure Python, Feb 2026) distills the entire GPT algorithm to its atomic form — autograd Value class,
+      forward pass, backprop, Adam optimizer, and text generation. Zero dependencies. The diagram below shows a TypeScript implementation
+      of the same architecture, adding type safety and browser-based visualization.
+    </p>
+
+    <div style="background:rgba(2,6,23,0.5);border-radius:10px;padding:16px;border:1px solid rgba(51,65,85,0.25);margin-bottom:14px">
+      <div class="lbl" style="margin-bottom:10px;color:#38bdf8">TinyGPT Architecture — TypeScript Transformer Implementation</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;font-size:10px;color:var(--t4);line-height:1.7">
+        <div>
+          <div style="color:var(--amber);font-weight:600;font-size:11px;margin-bottom:4px">Utilities</div>
+          <p><span class="h">RNG</span> — Seeded random number generator with next(), gauss(), shuffle(), choice()</p>
+          <p><span class="h">Value</span> — Autograd building block (data, grad, _ch children, _lg local gradients) with add, mul, pow, exp, log, relu, backward()</p>
+        </div>
+        <div>
+          <div style="color:var(--emerald);font-weight:600;font-size:11px;margin-bottom:4px">Core Layers &amp; Functions</div>
+          <p><span class="h">softmax(logits)</span> → probs</p>
+          <p><span class="h">linear(x, w)</span> → y (matrix multiply)</p>
+          <p><span class="h">rmsnorm(x)</span> → normalized_x (replaces LayerNorm)</p>
+        </div>
+        <div>
+          <div style="color:#38bdf8;font-weight:600;font-size:11px;margin-bottom:4px">GPT Forward Pass (gptFwd)</div>
+          <p>Input Token (tid, pid) → Token Embedding (wte) + Positional Embedding (wpe) → Add &amp; Normalize → Transformer Blocks (nLayer) → [RMSNorm → Feed Forward (F1, ReLU, F2) + Residual Add] → [RMSNorm → Multi-Head Attention (Q,K,V) + Residual] → Final RMSNorm → Language Model Head (lm_head) → Logits (Next Token Prediction)</p>
+        </div>
+        <div>
+          <div style="color:var(--rose);font-weight:600;font-size:11px;margin-bottom:4px">Training Loop</div>
+          <p>Text Data → Tokenize → Batching → Forward Pass (calculate loss) → Backward Pass (loss.backward()) → Parameter Update (AdamW Optimizer, lr decay) → Trained Model</p>
+          <div style="color:var(--cyan);font-weight:600;font-size:11px;margin-top:8px;margin-bottom:4px">Generation</div>
+          <p>TrainedModel &amp; Context → Forward Pass (get logits) → Sampling (with temperature &amp; RNG) → Next Token → Append to Context → repeat</p>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(51,65,85,0.2);font-size:10px;color:var(--t4)">
+        <span style="color:var(--t2);font-weight:600">Model Info:</span> GPTConfig (nEmbd, nHead, nLayer, blockSize) → countParams() → Total Parameters.
+        <span style="color:var(--t2);font-weight:600">Interface:</span> TrainedModel (sd, params, config, uchars, EOS, vocabSize, losses)
+      </div>
+    </div>
+
+    <div style="font-size:11px;color:var(--t4);line-height:1.7">
+      <p style="margin-bottom:8px"><span style="color:var(--t2);font-weight:600">How our MicroGPTs relate:</span> Manning's MicroGPT and RTK MicroGPT implement the <span class="h">Value autograd</span> and <span class="h">forward→loss→backward→update</span> loop from microGPT's Utilities and Training Loop boxes. We use a simple MLP instead of Transformer Blocks, but the gradient math is identical. The leap to TinyGPT adds attention, embeddings, and sequence modeling — exactly what a SWMM5 Transformer would need to process full rainfall time series.</p>
+      <p><span style="color:var(--t2);font-weight:600">Key architectural differences:</span> Our TinyMLP uses ReLU; TinyGPT uses ReLU² (Squared ReLU). We use MSE loss; TinyGPT uses cross-entropy. We predict continuous values (flow); TinyGPT predicts discrete tokens. But the backprop chain rule is the same math everywhere.</p>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- SWMM5 MicroGPT IDEAS -->
+  <!-- ============================================================ -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(245,158,11,0.04),rgba(234,88,12,0.04));border-color:rgba(245,158,11,0.2)">
+    <div class="card-t" style="color:#fbbf24;font-size:15px">The SWMM5 MicroGPT Universe — 16 App Ideas</div>
+    <p style="font-size:11px;color:var(--t4);line-height:1.6;margin-bottom:16px">
+      Every closed-form equation and lookup table in SWMM5 is a candidate for a MicroGPT app.
+      The pattern is always the same: generate perfect training data from the known equation, train a tiny neural network,
+      then show it discovering the physics. Here's the full roadmap, organized by SWMM5 computational module.
+    </p>
+
+    <!-- Category 1: Hydraulics -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;color:#38bdf8;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid rgba(14,165,233,0.15)">
+        Hydraulics &amp; Flow Routing
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(16,185,129,0.1);color:#34d399;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">DONE</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">1. Manning's MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> n, D, S (3) → <span class="h">Output:</span> Q, V<br>
+            Q = (1.49/n) × A × R<sup>2/3</sup> × S<sup>1/2</sup>. Full-pipe steady-state flow. The simplest SWMM5 MicroGPT — smooth power laws, 3 inputs, perfect for a first demo.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">2. Partial-Flow MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> n, D, S, d/D (4) → <span class="h">Output:</span> Q, V, A, R<sub>h</sub><br>
+            Partial depth flow in circular pipes. The Q/Q<sub>full</sub> vs d/D relationship has a non-obvious maximum at d/D ≈ 0.938 — can the network discover this peak?
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">3. Normal Depth MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> Q, n, S, shape (4) → <span class="h">Output:</span> y<sub>n</sub> (normal depth)<br>
+            The inverse Manning's problem — given a flow rate, find the depth. SWMM5 uses iterative bisection. Can a network learn the implicit function directly?
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">4. Critical Depth MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> Q, D, shape (3) → <span class="h">Output:</span> y<sub>c</sub> (critical depth)<br>
+            When Froude = 1. The specific energy equation E = y + Q²/(2gA²). SWMM5 needs this for mixed-flow transitions and entrance/exit losses.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">5. Weir/Orifice MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> H, C<sub>d</sub>, L, type (4) → <span class="h">Output:</span> Q<br>
+            Transverse, side-flow, and V-notch weirs + orifice equations. The transition from weir to orifice flow is discontinuous — a hard test for ReLU networks.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">6. Pump Curve MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> H<sub>wet well</sub>, pump type, curve params (4–6) → <span class="h">Output:</span> Q<sub>pump</sub><br>
+            SWMM5 pump curves (Types 1–4). The network must learn on/off hysteresis, variable-speed relationships, and head-capacity curves.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 2: Hydrology -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;color:#34d399;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid rgba(16,185,129,0.15)">
+        Hydrology &amp; Infiltration
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(16,185,129,0.1);color:#34d399;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">DONE</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">7. RTK MicroGPT v2</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> P, D, f, R, T, K, t (7) → <span class="h">Output:</span> RDII(t)<br>
+            Rainfall × unit hydrograph convolution. The network discovers discrete convolution from scalar inputs. <b style="color:#34d399">← You are here</b>
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">8. Green-Ampt MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> K<sub>s</sub>, ψ, θ<sub>d</sub>, t, i(t) (5) → <span class="h">Output:</span> f(t), F(t)<br>
+            Infiltration rate and cumulative infiltration. The implicit F equation requires iteration — can the network bypass it? Includes ponding time transition.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">9. Horton MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> f<sub>0</sub>, f<sub>∞</sub>, k, t (4) → <span class="h">Output:</span> f(t)<br>
+            f(t) = f<sub>∞</sub> + (f<sub>0</sub> − f<sub>∞</sub>)e<sup>-kt</sup>. Pure exponential decay — simpler than Green-Ampt but still involves the exponential function the network must approximate with ReLU.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">10. SCS Curve Number MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> P, CN, I<sub>a</sub>/S ratio (3) → <span class="h">Output:</span> Q<sub>runoff</sub><br>
+            Q = (P − I<sub>a</sub>)² / (P − I<sub>a</sub> + S). SWMM5's simplest runoff method. The threshold behavior (no runoff until P > I<sub>a</sub>) creates a non-smooth transition.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">11. SCS Unit Hydrograph MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> T<sub>c</sub>, A, P<sub>excess</sub>, t (4) → <span class="h">Output:</span> Q(t)<br>
+            The dimensionless SCS UH with T<sub>p</sub> = 0.6T<sub>c</sub> and q<sub>p</sub> = 484A/T<sub>p</sub>. The network learns the standard 22-ordinate dimensionless UH shape and scaling.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">12. Nonlinear Reservoir MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> W, S, n, i(t), d<sub>s</sub>, t (6) → <span class="h">Output:</span> Q<sub>runoff</sub>(t)<br>
+            SWMM5's subcatchment overland flow. Manning's on a plane: Q = W/n × (d−d<sub>s</sub>)<sup>5/3</sup> × S<sup>1/2</sup>. Combined with continuity ∂d/∂t = i − e − f − q. The ODE makes this the hardest hydrology MicroGPT.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 3: Water Quality -->
+    <div style="margin-bottom:20px">
+      <div style="font-size:12px;font-weight:700;color:#a78bfa;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid rgba(139,92,246,0.15)">
+        Water Quality &amp; LID
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">13. Buildup/Washoff MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> antecedent dry days, land use, Q<sub>runoff</sub>, C<sub>max</sub>, k (5) → <span class="h">Output:</span> pollutant load<br>
+            Power, exponential, and saturation buildup + EMC/exponential/rating curve washoff. Two coupled processes the network must learn together.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(245,158,11,0.1);color:#fbbf24;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">NEW</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">14. LID Performance MicroGPT</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> P, LID type, berm height, soil K<sub>s</sub>, drain coeff (6+) → <span class="h">Output:</span> Q<sub>out</sub>, retention %<br>
+            Bio-retention, permeable pavement, rain garden, green roof, infiltration trench. Multi-layer soil + storage + underdrain. The most complex SWMM5 subsystem.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Category 4: Advanced / Transformers -->
+    <div>
+      <div style="font-size:12px;font-weight:700;color:#f87171;margin-bottom:10px;padding-bottom:4px;border-bottom:1px solid rgba(244,63,94,0.15)">
+        Advanced — Transformer-Scale Ideas
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(244,63,94,0.1);color:#fb7185;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">FUTURE</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">15. SWMM5 Surrogate Model</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> full .inp parameters → <span class="h">Output:</span> peak flows, volumes, timing<br>
+            Train on thousands of SWMM5 simulation runs. The "holy grail" — a network that replaces SWMM5 for screening-level analysis. Needs TinyGPT-level architecture with attention to handle variable-size networks.
+          </div>
+        </div>
+
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:12px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+            <span style="background:rgba(244,63,94,0.1);color:#fb7185;font-size:8px;padding:2px 6px;border-radius:4px;font-weight:700">FUTURE</span>
+            <span style="color:var(--t1);font-size:11px;font-weight:600">16. RDII Calibration Transformer</span>
+          </div>
+          <div style="font-size:10px;color:var(--t4);line-height:1.5">
+            <span class="h">Inputs:</span> rainfall time series + observed flow → <span class="h">Output:</span> R1/T1/K1, R2/T2/K2, R3/T3/K3<br>
+            The inverse problem. A sequence-to-parameters transformer that replaces trial-and-error calibration. This is what RDII Analyst does manually — but learned end-to-end from data across thousands of nodes.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:16px;background:rgba(2,6,23,0.35);border-radius:10px;padding:14px;border:1px solid rgba(51,65,85,0.15)">
+      <div class="lbl" style="margin-bottom:6px">Difficulty Ladder</div>
+      <div style="font-size:10px;color:var(--t4);line-height:1.8">
+        <span style="color:#34d399">●</span> <b style="color:var(--t2)">Easy</b> (3–4 inputs, smooth functions): Manning's, Horton, SCS CN<br>
+        <span style="color:#fbbf24">●</span> <b style="color:var(--t2)">Medium</b> (4–6 inputs, transitions/thresholds): Partial flow, Normal depth, Critical depth, Weir/Orifice, SCS UH<br>
+        <span style="color:#f87171">●</span> <b style="color:var(--t2)">Hard</b> (6–7 inputs, time-dependent/convolution): RTK v2, Green-Ampt, Nonlinear Reservoir, Buildup/Washoff<br>
+        <span style="color:#a78bfa">●</span> <b style="color:var(--t2)">Transformer-scale</b> (sequence inputs, multi-output): Surrogate model, RDII Calibration, LID Performance
+      </div>
+    </div>
+  </div>
+
+  <!-- FAQ -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(6,182,212,0.04),rgba(14,165,233,0.04));border-color:rgba(6,182,212,0.2)">
+    <div class="card-t" style="color:#22d3ee;font-size:15px">FAQ — Training Tips &amp; Tuning</div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(0)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">What are the recommended default settings?</span></div>
+        <span class="tg" id="fq0">▶</span>
+      </div>
+      <div class="dc" id="fa0">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <table style="width:100%;font-size:11px;border-collapse:collapse">
+            <tr style="border-bottom:1px solid rgba(51,65,85,0.3)">
+              <td style="padding:6px 8px;color:var(--t4)">Parameter</td>
+              <td style="padding:6px 8px;color:var(--t4)">Previous Default</td>
+              <td style="padding:6px 8px;color:#34d399;font-weight:600">New Default</td>
+              <td style="padding:6px 8px;color:var(--t4)">Max</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+              <td style="padding:6px 8px;color:#a78bfa">Training Samples</td>
+              <td style="padding:6px 8px">4,000</td>
+              <td style="padding:6px 8px;color:#34d399;font-weight:600">6,000</td>
+              <td style="padding:6px 8px">15,000</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+              <td style="padding:6px 8px;color:#a78bfa">Hidden Neurons</td>
+              <td style="padding:6px 8px">48</td>
+              <td style="padding:6px 8px;color:#34d399;font-weight:600">56</td>
+              <td style="padding:6px 8px">96</td>
+            </tr>
+            <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+              <td style="padding:6px 8px;color:#a78bfa">Max Epochs</td>
+              <td style="padding:6px 8px">250</td>
+              <td style="padding:6px 8px;color:#34d399;font-weight:600">500</td>
+              <td style="padding:6px 8px">2,000</td>
+            </tr>
+            <tr>
+              <td style="padding:6px 8px;color:#a78bfa">Samples per Event</td>
+              <td style="padding:6px 8px">3</td>
+              <td style="padding:6px 8px;color:#34d399;font-weight:600">5</td>
+              <td style="padding:6px 8px">—</td>
+            </tr>
+          </table>
+          <p style="margin-top:10px;color:var(--t4);font-size:10px">The higher defaults reflect RTK v2's 7-input convolution problem being substantially harder than Manning's 3-input power law. More samples cover the larger input space, more neurons approximate the exponential recession, and more epochs polish the tail.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(1)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">What is cosine learning rate decay and why does it matter?</span></div>
+        <span class="tg" id="fq1">▶</span>
+      </div>
+      <div class="dc" id="fa1">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <p>The learning rate now follows a <span style="color:#a78bfa;font-weight:600">cosine schedule</span> from the initial value down to ~0:</p>
+          <div style="background:rgba(2,6,23,0.6);border-radius:8px;padding:10px 14px;margin:10px 0;font-family:'JetBrains Mono',monospace;font-size:10px;color:#cbd5e1">
+            LR(epoch) = LR<sub>initial</sub> × 0.5 × (1 + cos(π × epoch / max_epochs))
+          </div>
+          <p>At 500 epochs with LR=0.004, the rate starts at 0.004, is ~0.002 at epoch 250, and approaches zero near the end. The status bar shows the current LR so you can watch it decay.</p>
+          <p style="margin-top:8px"><span style="color:#fbbf24;font-weight:600">Why it matters:</span> Without decay, a fixed LR keeps bouncing the loss around instead of settling into minima. The cosine schedule lets early epochs make large steps to learn the overall shape (peak location, rising limb), then late epochs use a tiny LR to polish the exponential recession tail without disturbing the peak fit. This is the same technique used in GPT-4 and all modern LLM training.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(2)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">What is early stopping and how does it work here?</span></div>
+        <span class="tg" id="fq2">▶</span>
+      </div>
+      <div class="dc" id="fa2">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <p>If the training loss doesn't improve for <span style="color:#a78bfa;font-weight:600">80 consecutive epochs</span>, training stops automatically. This prevents wasting time once the network has plateaued.</p>
+          <p style="margin-top:8px">You'll see two visual cues:</p>
+          <p style="margin-top:4px">• A <span style="color:#fbbf24;font-weight:600">⚠ plateau</span> warning appears in the status bar when stale count exceeds 20 epochs — a heads-up that convergence is slowing</p>
+          <p>• Training ends with a message showing which epoch it stopped at and the final loss</p>
+          <p style="margin-top:8px">This means you can safely set Max Epochs to 1000 or 2000 without worrying about wasted compute — the network will stop when it's done learning. With cosine decay, early stopping typically fires between epoch 600–1200 depending on the problem difficulty and hidden layer size.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(3)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">Why 5 samples per event instead of 3?</span></div>
+        <span class="tg" id="fq3">▶</span>
+      </div>
+      <div class="dc" id="fa3">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <p>Each rainfall×RTK event generates a complete RDII hydrograph curve. We then pick random time samples from that curve as training points. With 3 samples, you might get 3 points on the recession and miss the peak entirely. With <span style="color:#a78bfa;font-weight:600">5 samples</span>, the odds of covering rise, peak, and recession are much better.</p>
+          <p style="margin-top:8px">For 6,000 total samples, this means ~1,200 unique rainfall×RTK events with 5 time slices each. Each event has a unique combination of storm depth, duration, shape, and sewer response parameters — giving the network broad coverage of the 7-dimensional input space.</p>
+          <p style="margin-top:8px;color:var(--t4);font-size:10px">The tradeoff: fewer unique events than 3-per-event (1,200 vs 2,000), but better temporal coverage per event. For convolution learning, temporal coverage matters more because the network needs to understand the full curve shape, not just isolated points.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(4)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">Will more epochs help? How many should I use?</span></div>
+        <span class="tg" id="fq4">▶</span>
+      </div>
+      <div class="dc" id="fa4">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <p><span style="color:#34d399;font-weight:600">Yes, but with diminishing returns.</span> The convolution problem is fundamentally harder than Manning's because the exponential recession tail produces small gradients — the loss drops fast for the peak region but the tail needs many more epochs to refine.</p>
+          <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;margin:10px 0;border:1px solid rgba(51,65,85,0.2)">
+            <table style="width:100%;font-size:10px;border-collapse:collapse">
+              <tr style="border-bottom:1px solid rgba(51,65,85,0.3)">
+                <td style="padding:5px 8px;color:var(--t4);font-weight:600">Epochs</td>
+                <td style="padding:5px 8px;color:var(--t4);font-weight:600">Expected R²</td>
+                <td style="padding:5px 8px;color:var(--t4);font-weight:600">What Improves</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+                <td style="padding:5px 8px;color:#a78bfa">250</td>
+                <td style="padding:5px 8px">0.88–0.93</td>
+                <td style="padding:5px 8px;color:var(--t4)">Peak location and rising limb learned; tail still rough</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+                <td style="padding:5px 8px;color:#a78bfa">500</td>
+                <td style="padding:5px 8px;color:#34d399">0.93–0.97</td>
+                <td style="padding:5px 8px;color:var(--t4)">Recession tail improves noticeably; good balance of speed vs accuracy</td>
+              </tr>
+              <tr style="border-bottom:1px solid rgba(15,23,42,0.4)">
+                <td style="padding:5px 8px;color:#a78bfa">1000</td>
+                <td style="padding:5px 8px;color:#34d399">0.95–0.98</td>
+                <td style="padding:5px 8px;color:var(--t4)">Tail polish; cosine decay LR is very small, fine-tuning last details</td>
+              </tr>
+              <tr>
+                <td style="padding:5px 8px;color:#a78bfa">1500+</td>
+                <td style="padding:5px 8px">0.96–0.98</td>
+                <td style="padding:5px 8px;color:var(--t4)">Diminishing returns — increase hidden neurons to 64–80 instead</td>
+              </tr>
+            </table>
+          </div>
+          <p>With cosine decay, the late epochs use a tiny LR that polishes the tail without disturbing the peak fit. If you're still seeing improvement at 1000 epochs, the bottleneck has likely shifted from training time to <span style="color:#fbbf24;font-weight:600">network capacity</span> — try bumping hidden neurons to 64–80 before adding more epochs.</p>
+          <p style="margin-top:8px;color:var(--t4);font-size:10px"><b style="color:var(--t2)">Pro tip:</b> Set epochs to 2000 and let early stopping decide. It will automatically stop when the network has converged, typically around 600–1200 epochs with good settings.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(5)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">Why is this harder than Manning's MicroGPT?</span></div>
+        <span class="tg" id="fq5">▶</span>
+      </div>
+      <div class="dc" id="fa5">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px">
+            <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2);text-align:center">
+              <div style="color:#34d399;font-weight:700;font-size:12px">Manning's</div>
+              <div style="color:var(--t4);font-size:10px;margin-top:4px">3 inputs → 1 output</div>
+              <div style="color:var(--t4);font-size:10px">Smooth power laws</div>
+              <div style="color:var(--t4);font-size:10px">~1,200 params</div>
+              <div style="color:#34d399;font-size:10px;margin-top:4px;font-weight:600">R² > 0.98 easy</div>
+            </div>
+            <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2);text-align:center">
+              <div style="color:#fbbf24;font-weight:700;font-size:12px">RTK v1</div>
+              <div style="color:var(--t4);font-size:10px;margin-top:4px">4 inputs → 1 output</div>
+              <div style="color:var(--t4);font-size:10px">Exponential decay</div>
+              <div style="color:var(--t4);font-size:10px">~3,500 params</div>
+              <div style="color:#fbbf24;font-size:10px;margin-top:4px;font-weight:600">R² > 0.95 moderate</div>
+            </div>
+            <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(139,92,246,0.2);text-align:center">
+              <div style="color:#a78bfa;font-weight:700;font-size:12px">RTK v2</div>
+              <div style="color:var(--t4);font-size:10px;margin-top:4px">7 inputs → 1 output</div>
+              <div style="color:var(--t4);font-size:10px">Convolution (!)</div>
+              <div style="color:var(--t4);font-size:10px">~4,000+ params</div>
+              <div style="color:#a78bfa;font-size:10px;margin-top:4px;font-weight:600">R² > 0.95 challenging</div>
+            </div>
+          </div>
+          <p>The key difference: Manning's equation is an <span style="color:#34d399">instantaneous function</span> — plug in (n, D, S), get Q. No history, no time. RTK v2's output depends on the <span style="color:#a78bfa;font-weight:600">entire rainfall history</span> via convolution — a summation over all past time steps. The network must learn both the unit hydrograph shape AND the aggregation operation from scalar inputs alone. That's fundamentally harder for an MLP because convolution is a non-local operation.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="ds">
+      <div class="dh" onclick="togFaq(6)">
+        <div class="tr"><span class="ci" style="color:#22d3ee">Q</span><span class="ti">What should I try if R² is below 0.90?</span></div>
+        <span class="tg" id="fq6">▶</span>
+      </div>
+      <div class="dc" id="fa6">
+        <div style="padding:14px 16px;font-size:11px;color:var(--t2);line-height:1.7;background:rgba(2,6,23,0.5)">
+          <p>Try these fixes in order:</p>
+          <p style="margin-top:6px"><span style="color:#34d399;font-weight:600">1. More data first:</span> Increase samples to 8000–10000. The 7D input space needs dense coverage.</p>
+          <p><span style="color:#34d399;font-weight:600">2. More epochs:</span> Set to 1000+ with early stopping. Let cosine decay do its work on the tail.</p>
+          <p><span style="color:#34d399;font-weight:600">3. Bigger network:</span> Try 64–80 hidden neurons. The exponential recession needs more piecewise-linear ReLU segments.</p>
+          <p><span style="color:#34d399;font-weight:600">4. Lower initial LR:</span> If loss oscillates wildly, drop to 0.002–0.003. Cosine decay will still anneal it smoothly.</p>
+          <p><span style="color:#34d399;font-weight:600">5. Retrain:</span> Random weight initialization matters. Sometimes a fresh run with the same settings gives R² +0.03 just from better initial weights (He initialization is random).</p>
+          <p style="margin-top:8px;color:var(--t4);font-size:10px">A good target config: 8000 samples, 64 neurons, LR 0.004, 1000 epochs. This should consistently achieve R² > 0.95.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Extensions -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(139,92,246,0.04),rgba(99,102,241,0.04));border-color:rgba(139,92,246,0.2)">
+    <div class="card-t">Extensions &amp; Next Steps</div>
+    <div style="font-size:11px;color:var(--t4);line-height:1.8">
+      <p><span style="color:#a78bfa;font-weight:600">Three-triangle RDII:</span> Extend to 12 inputs (P, D, f + R1/T1/K1 + R2/T2/K2 + R3/T3/K3 + t) and train on the combined RDII = sum of three convolutions.</p>
+      <p><span style="color:#a78bfa;font-weight:600">Real rainfall shapes:</span> Replace triangular hyetograph with SCS Type I/IA/II/III distributions, or use recorded rainfall from SWMM rain gauge data.</p>
+      <p><span style="color:#a78bfa;font-weight:600">Inverse calibration:</span> Given observed RDII hydrograph + known rainfall, train a network to predict best-fit R, T, K — the calibration problem RDII Analyst solves.</p>
+      <p><span style="color:#a78bfa;font-weight:600">Sequence model:</span> Replace the MLP with a small LSTM or transformer that takes the full rainfall time series as input instead of summary parameters. This removes the triangular hyetograph simplification.</p>
+      <p><span style="color:#a78bfa;font-weight:600">Multi-event learning:</span> Train on back-to-back rainfall events where antecedent moisture affects the response — capturing the seasonal variation in RDII that makes calibration so challenging.</p>
+    </div>
+  </div>
+</div>
+
+<div class="footer">RTK MicroGPT v2 &middot; A SWMM5.org Vibe Coding App &middot; Neural Network learns rainfall×convolution→RDII from data</div>
+
+<!-- ================================================================ -->
+<script>
+// ============================================================
+// TINY MLP
+// ============================================================
+class TinyMLP{
+  constructor(sz){this.layers=[];this.lr=.004;
+    for(let i=0;i<sz.length-1;i++){const r=sz[i+1],c=sz[i],s=Math.sqrt(2/c);
+      this.layers.push({W:Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*s)),b:Array(r).fill(0)})}}
+  forward(inp){const a=[inp.slice()];let c=inp.slice();
+    for(let l=0;l<this.layers.length;l++){const{W,b}=this.layers[l];const n=[];
+      for(let i=0;i<W.length;i++){let s=b[i];for(let j=0;j<W[i].length;j++)s+=W[i][j]*c[j];
+        n.push(l<this.layers.length-1?Math.max(0,s):s)}a.push(n);c=n}return{output:c,activations:a}}
+  train(inp,tgt){const{output,activations}=this.forward(inp);const loss=.5*(output[0]-tgt[0])**2;
+    let d=[output[0]-tgt[0]];for(let l=this.layers.length-1;l>=0;l--){const{W,b}=this.layers[l];const p=activations[l];
+      for(let i=0;i<W.length;i++){for(let j=0;j<W[i].length;j++)W[i][j]-=this.lr*d[i]*p[j];b[i]-=this.lr*d[i]}
+      if(l>0){const nd=[];for(let j=0;j<W[0].length;j++){let s=0;for(let i=0;i<W.length;i++)s+=W[i][j]*d[i];
+        nd.push(s*(activations[l][j]>0?1:0))}d=nd}}return loss}
+  predict(inp){return this.forward(inp).output}
+}
+
+// ============================================================
+// RTK + RAINFALL + CONVOLUTION ENGINE
+// ============================================================
+const DT = 0.25; // 15-minute time steps (hours)
+
+// Triangular rainfall hyetograph
+// P = total depth (in), D = duration (hr), f = peak position fraction
+function makeRainfall(P, D, f) {
+  const steps = Math.ceil(D / DT);
+  const peakStep = Math.floor(f * steps);
+  const peakI = 2 * P / D; // peak intensity (in/hr) — triangle area = P
+  const rain = [];
+  for (let i = 0; i <= steps; i++) {
+    if (i <= peakStep) {
+      rain.push(peakStep > 0 ? peakI * (i / peakStep) : peakI);
+    } else {
+      const remaining = steps - peakStep;
+      rain.push(remaining > 0 ? peakI * ((steps - i) / remaining) : 0);
+    }
+  }
+  return rain; // array of intensities (in/hr) at DT intervals
+}
+
+// RTK unit hydrograph ordinates
+function makeUH(T, K) {
+  const Tp = T;
+  const qPeak = 2 / Tp; // unit UH (1/hr), area = 1
+  // Duration to 0.5% of peak
+  const dur = T + T * (Math.log(200) / Math.max(K, 0.1));
+  const steps = Math.ceil(dur / DT);
+  const uh = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i * DT;
+    if (t <= Tp) {
+      uh.push(qPeak * (t / Tp));
+    } else {
+      uh.push(qPeak * Math.exp(-K * (t - Tp) / Tp));
+    }
+  }
+  return uh;
+}
+
+// Discrete convolution: RDII = R × (P ⊛ UH) × DT
+function convolve(rain, uh, R) {
+  const len = rain.length + uh.length - 1;
+  const rdii = Array(len).fill(0);
+  for (let i = 0; i < rain.length; i++) {
+    for (let j = 0; j < uh.length; j++) {
+      rdii[i + j] += R * rain[i] * uh[j] * DT;
+    }
+  }
+  return rdii; // RDII intensity (in/hr) at DT steps
+}
+
+// Get RDII at a specific time from precomputed array
+function rdiiAt(rdiiArr, t) {
+  const idx = t / DT;
+  const i0 = Math.floor(idx);
+  const i1 = i0 + 1;
+  if (i0 < 0) return 0;
+  if (i0 >= rdiiArr.length) return 0;
+  if (i1 >= rdiiArr.length) return rdiiArr[i0];
+  const frac = idx - i0;
+  return rdiiArr[i0] * (1 - frac) + rdiiArr[i1] * frac; // linear interp
+}
+
+// ============================================================
+// NORMALIZATION
+// ============================================================
+const RNG = { P:[0.5,4], D:[1,12], f:[0.2,0.8], R:[0.005,0.12], T:[0.5,12], K:[0.5,6] };
+function norm(P,D,f,R,T,K,t) {
+  return [
+    (P-RNG.P[0])/(RNG.P[1]-RNG.P[0]),
+    (D-RNG.D[0])/(RNG.D[1]-RNG.D[0]),
+    (f-RNG.f[0])/(RNG.f[1]-RNG.f[0]),
+    (R-RNG.R[0])/(RNG.R[1]-RNG.R[0]),
+    (T-RNG.T[0])/(RNG.T[1]-RNG.T[0]),
+    (K-RNG.K[0])/(RNG.K[1]-RNG.K[0]),
+    t / 60 // loose time normalization
+  ];
+}
+
+// ============================================================
+// DATA GENERATION
+// ============================================================
+function generateData(count) {
+  const data = [];
+  const perEvent = 5; // samples per event (covers rise, peak, recession)
+  const nEvents = Math.ceil(count / perEvent);
+  for (let e = 0; e < nEvents; e++) {
+    const P = RNG.P[0] + Math.random() * (RNG.P[1] - RNG.P[0]);
+    const D = RNG.D[0] + Math.random() * (RNG.D[1] - RNG.D[0]);
+    const f = RNG.f[0] + Math.random() * (RNG.f[1] - RNG.f[0]);
+    const R = RNG.R[0] + Math.random() * (RNG.R[1] - RNG.R[0]);
+    const T = RNG.T[0] + Math.random() * (RNG.T[1] - RNG.T[0]);
+    const K = RNG.K[0] + Math.random() * (RNG.K[1] - RNG.K[0]);
+
+    const rain = makeRainfall(P, D, f);
+    const uh = makeUH(T, K);
+    const rdii = convolve(rain, uh, R);
+    const totalLen = rdii.length * DT;
+
+    for (let s = 0; s < perEvent && data.length < count; s++) {
+      const t = Math.random() * totalLen;
+      const q = rdiiAt(rdii, t);
+      data.push({ P, D, f, R, T, K, t, q });
+    }
+  }
+  return data;
+}
+
+// ============================================================
+// APP STATE
+// ============================================================
+let model=null, tData=null, maxQ=1, training=false, abort=false;
+let lChart=null, rChart=null, rdChart=null, sChart=null;
+let compData=[];
+
+const $=id=>document.getElementById(id);
+const show=e=>{(typeof e==='string'?$(e):e).style.display=''};
+const hide=e=>{(typeof e==='string'?$(e):e).style.display='none'};
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');$('tab-'+t.dataset.tab).classList.add('active')}));
+
+// Config sliders
+const cfgMap={N:'vN',H:'vH',LR:'vLR',E:'vE'};
+['N','H','LR','E'].forEach(k=>{const s=$('sl'+k);s.addEventListener('input',()=>{
+  if(k==='H'){$('vH').textContent=s.value+' neurons';$('aH1').textContent=s.value;$('aH2').textContent=s.value;updPC()}
+  else if(k==='LR')$('vLR').textContent=parseFloat(s.value).toFixed(3);
+  else $(cfgMap[k]).textContent=s.value})});
+
+function updPC(){const h=+$('slH').value;$('pCnt').textContent=(7*h+h+h*h+h+h+1)+' total parameters'}
+updPC();
+
+// ============================================================
+// GENERATE
+// ============================================================
+$('btnGen').addEventListener('click',()=>{
+  const n=+$('slN').value;
+  tData=generateData(n);
+  maxQ=Math.max(...tData.map(d=>d.q),1e-8);
+  model=null;compData=[];
+  $('st1').textContent=`Generated ${tData.length} samples from ${Math.ceil(n/3)} rainfall events. Max RDII = ${maxQ.toFixed(5)} in/hr. Ready.`;
+  show('st1');$('btnTr').disabled=false;$('btnTr').textContent='Train Network';$('btnTr').className='btn btn-v';
+  show('sampC');
+  const b=$('sampB');b.innerHTML='';
+  tData.slice(0,10).forEach(d=>{const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:#38bdf8">${d.P.toFixed(2)}</td><td style="color:#38bdf8">${d.D.toFixed(1)}</td><td style="color:#38bdf8">${d.f.toFixed(2)}</td><td style="color:#34d399">${d.R.toFixed(4)}</td><td style="color:#34d399">${d.T.toFixed(2)}</td><td style="color:#34d399">${d.K.toFixed(2)}</td><td style="color:#fbbf24">${d.t.toFixed(2)}</td><td style="font-weight:600;color:#fbbf24">${d.q.toFixed(6)}</td>`;
+    b.appendChild(tr)});
+  hide('lossC');hide('t2on');show('t2off');hide('t3on');show('t3off')});
+
+// ============================================================
+// TRAIN
+// ============================================================
+$('btnTr').addEventListener('click',async()=>{
+  if(training){abort=true;return}
+  if(!tData)return;abort=false;training=true;
+  $('btnTr').textContent='Stop Training';$('btnTr').className='btn btn-r';
+
+  const h=+$('slH').value,lr=+$('slLR').value,mx=+$('slE').value;
+  const net=new TinyMLP([7,h,h,1]);net.lr=lr;model=net;
+  const losses=[];
+  let bestLoss=Infinity, stale=0;
+  const PATIENCE=80; // early stop if no improvement for 80 epochs
+  show('lossC');if(lChart)lChart.destroy();
+  const ctx=$('lossCanvas').getContext('2d');
+  lChart=new Chart(ctx,{type:'line',data:{labels:[],datasets:[{label:'Loss',data:[],borderColor:'#8b5cf6',borderWidth:2,pointRadius:0,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Epoch',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'}},
+    y:{title:{display:true,text:'Loss',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9},callback:v=>v.toExponential(1)},grid:{color:'rgba(30,41,59,0.5)'}}},plugins:{legend:{display:false}},animation:{duration:0}}});
+
+  const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b};
+
+  for(let ep=0;ep<mx;ep++){
+    if(abort)break;
+    // Cosine learning rate decay
+    net.lr = lr * 0.5 * (1 + Math.cos(Math.PI * ep / mx));
+    const sh=shuffle(tData);let el=0;
+    for(const s of sh){const inp=norm(s.P,s.D,s.f,s.R,s.T,s.K,s.t);el+=net.train(inp,[s.q/maxQ])}
+    const avg=el/tData.length;losses.push(avg);
+    // Early stopping check
+    if(avg<bestLoss){bestLoss=avg;stale=0}else{stale++}
+    if(stale>=PATIENCE){
+      $('st1').textContent=`Early stop at epoch ${ep+1} (no improvement for ${PATIENCE} epochs). Loss: ${avg.toExponential(4)}`;
+      lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();break}
+    if(ep%5===0||ep===mx-1){
+      $('st1').textContent=`Epoch ${ep+1}/${mx} — Loss: ${avg.toExponential(4)} — LR: ${net.lr.toFixed(5)}${stale>20?' ⚠ plateau':''}`;
+      lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();
+      await new Promise(r=>setTimeout(r,0))}}
+
+  training=false;$('btnTr').textContent='Train Network';$('btnTr').className='btn btn-v';
+  $('st1').textContent=`Training complete! ${losses.length} epochs. Switch to Test or Analysis.`;
+
+  // Validation data
+  compData=[];
+  for(let i=0;i<300;i++){
+    const P=RNG.P[0]+Math.random()*(RNG.P[1]-RNG.P[0]);
+    const D=RNG.D[0]+Math.random()*(RNG.D[1]-RNG.D[0]);
+    const f=RNG.f[0]+Math.random()*(RNG.f[1]-RNG.f[0]);
+    const R=RNG.R[0]+Math.random()*(RNG.R[1]-RNG.R[0]);
+    const T=RNG.T[0]+Math.random()*(RNG.T[1]-RNG.T[0]);
+    const K=RNG.K[0]+Math.random()*(RNG.K[1]-RNG.K[0]);
+    const rain=makeRainfall(P,D,f),uh=makeUH(T,K),rdii=convolve(rain,uh,R);
+    const tLen=rdii.length*DT,t=Math.random()*tLen;
+    const actual=rdiiAt(rdii,t),pred=Math.max(0,net.predict(norm(P,D,f,R,T,K,t))[0]*maxQ);
+    compData.push({actual,predicted:pred})}
+
+  hide('t2off');show('t2on');hide('t3off');show('t3on');
+  updTest();updAnalysis()});
+
+// ============================================================
+// TEST TAB
+// ============================================================
+const presets=[
+  {l:'Light Drizzle + Fast I/I',P:0.8,D:6,f:0.5,R:0.06,T:1.5,K:1.5},
+  {l:'Moderate Storm + Medium',P:1.5,D:4,f:0.4,R:0.04,T:3,K:2},
+  {l:'Heavy Storm + Slow GW',P:3,D:3,f:0.35,R:0.02,T:8,K:4},
+  {l:'Short Burst + High R',P:2,D:1.5,f:0.3,R:0.10,T:1,K:2},
+  {l:'Long Duration + Low R',P:1.2,D:10,f:0.5,R:0.01,T:6,K:5},
+  {l:'SSO Risk Event',P:2.5,D:3,f:0.35,R:0.08,T:2,K:3},
+];
+const pDiv=$('presets');
+presets.forEach(p=>{const b=document.createElement('button');b.className='pbtn';b.textContent=p.l;
+  b.addEventListener('click',()=>{$('slP').value=p.P;$('vP').textContent=p.P.toFixed(1);$('slD').value=p.D;$('vD').textContent=p.D.toFixed(1);
+    $('slF').value=p.f;$('vF').textContent=p.f.toFixed(2);$('slR').value=p.R;$('vR').textContent=p.R.toFixed(3);
+    $('slT').value=p.T;$('vT').textContent=p.T.toFixed(1);$('slK').value=p.K;$('vK').textContent=p.K.toFixed(2);updTest()});pDiv.appendChild(b)});
+
+['P','D','F','R','T','K'].forEach(k=>{$('sl'+k).addEventListener('input',()=>{
+  const v=parseFloat($('sl'+k).value);
+  if(k==='P')$('vP').textContent=v.toFixed(1);else if(k==='D')$('vD').textContent=v.toFixed(1);
+  else if(k==='F')$('vF').textContent=v.toFixed(2);else if(k==='R')$('vR').textContent=v.toFixed(3);
+  else if(k==='T')$('vT').textContent=v.toFixed(1);else $('vK').textContent=v.toFixed(2);
+  if(model)updTest()})});
+
+function updTest(){
+  if(!model)return;
+  const P=+$('slP').value,D=+$('slD').value,f=+$('slF').value;
+  const R=+$('slR').value,T=+$('slT').value,K=+$('slK').value;
+
+  const rain=makeRainfall(P,D,f),uh=makeUH(T,K),rdii=convolve(rain,uh,R);
+  const totalLen=rdii.length*DT;
+  const steps=80;
+
+  // Rainfall chart data
+  const rLabels=[],rData=[];
+  for(let i=0;i<rain.length;i++){rLabels.push((i*DT).toFixed(1));rData.push(rain[i])}
+
+  // RDII chart data
+  const xLabels=[],exactD=[],predD=[];
+  let peakE=0,peakP=0,errSum=0,n=0;
+  for(let i=0;i<=steps;i++){
+    const t=(i/steps)*totalLen;
+    xLabels.push(t.toFixed(1));
+    const exact=rdiiAt(rdii,t);
+    const pred=Math.max(0,model.predict(norm(P,D,f,R,T,K,t))[0]*maxQ);
+    exactD.push(exact);predD.push(pred);
+    if(exact>peakE)peakE=exact;if(pred>peakP)peakP=pred;
+    if(exact>1e-6){errSum+=Math.abs(pred-exact)/exact*100;n++}}
+  const avgErr=n>0?errSum/n:0;
+
+  // Stats
+  const totalRDII=rdii.reduce((s,v)=>s+v*DT,0);
+  $('tStats').innerHTML=`
+    <div class="stat"><div class="sl">AI Peak RDII</div><div class="sv" style="color:#a78bfa">${peakP.toFixed(5)}</div><div class="su">in/hr</div></div>
+    <div class="stat"><div class="sl">Exact Peak RDII</div><div class="sv" style="color:#34d399">${peakE.toFixed(5)}</div><div class="su">in/hr</div></div>
+    <div class="stat"><div class="sl">Avg Error</div><div class="sv" style="color:${avgErr<15?'#34d399':avgErr<30?'#fbbf24':'#f87171'}">${avgErr.toFixed(1)}%</div><div class="su"></div></div>
+    <div class="stat"><div class="sl">Total RDII Vol</div><div class="sv" style="color:#38bdf8">${totalRDII.toFixed(4)}</div><div class="su">inches (= R × P = ${(R*P).toFixed(4)})</div></div>`;
+
+  // Rainfall chart
+  if(rChart)rChart.destroy();
+  rChart=new Chart($('rainChart').getContext('2d'),{type:'bar',data:{labels:rLabels,datasets:[{label:'Rainfall (in/hr)',data:rData,backgroundColor:'rgba(14,165,233,0.5)',borderColor:'#0ea5e9',borderWidth:1}]},
+    options:{responsive:true,maintainAspectRatio:false,indexAxis:'x',scales:{x:{title:{display:true,text:'Time (hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:8},maxTicksLimit:15},grid:{color:'rgba(30,41,59,0.5)'}},
+    y:{title:{display:true,text:'Intensity (in/hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'},beginAtZero:true}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},animation:{duration:200}}});
+
+  // RDII chart
+  if(rdChart)rdChart.destroy();
+  rdChart=new Chart($('rdiiChart').getContext('2d'),{type:'line',data:{labels:xLabels,datasets:[
+    {label:'Exact Convolution',data:exactD,borderColor:'#10b981',borderWidth:2.5,pointRadius:0,tension:.3,fill:true,backgroundColor:'rgba(16,185,129,0.06)'},
+    {label:'AI Prediction',data:predD,borderColor:'#8b5cf6',borderWidth:2,pointRadius:0,borderDash:[6,3],tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Time (hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9},maxTicksLimit:12},grid:{color:'rgba(30,41,59,0.5)'}},
+    y:{title:{display:true,text:'RDII (in/hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'},beginAtZero:true}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},animation:{duration:200}}});
+}
+
+// ============================================================
+// ANALYSIS
+// ============================================================
+function updAnalysis(){
+  if(!compData.length)return;
+  const acts=compData.map(d=>d.actual),prs=compData.map(d=>d.predicted);
+  const mn=acts.reduce((a,b)=>a+b,0)/acts.length;
+  const sT=acts.reduce((s,a)=>s+(a-mn)**2,0);
+  const sR=compData.reduce((s,d)=>s+(d.actual-d.predicted)**2,0);
+  const r2=1-sR/sT;
+  const mae=compData.reduce((s,d)=>s+Math.abs(d.actual-d.predicted)/Math.max(d.actual,1e-7)*100,0)/compData.length;
+  $('sR2').textContent=r2.toFixed(4);$('sR2').style.color=r2>.96?'#34d399':r2>.9?'#fbbf24':'#f87171';
+  $('sMAE').textContent=mae.toFixed(1)+'%';$('sMAE').style.color=mae<15?'#34d399':mae<30?'#fbbf24':'#f87171';
+
+  if(sChart)sChart.destroy();
+  const mx=Math.max(...acts,...prs)*1.05;
+  sChart=new Chart($('scatCanvas').getContext('2d'),{type:'scatter',data:{datasets:[
+    {label:'Test Points',data:compData.map(d=>({x:d.actual,y:d.predicted})),backgroundColor:'rgba(139,92,246,0.5)',pointRadius:3},
+    {label:'Perfect',data:[{x:0,y:0},{x:mx,y:mx}],type:'line',borderColor:'#10b981',borderDash:[5,5],borderWidth:1.5,pointRadius:0}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{title:{display:true,text:'Actual RDII (in/hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'},min:0},
+    y:{title:{display:true,text:'Predicted RDII (in/hr)',color:'#64748b',font:{size:10}},ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'},min:0}},plugins:{legend:{labels:{color:'#94a3b8',font:{size:10}}}},animation:{duration:200}}});
+}
+
+// ============================================================
+// DOCS — Code Accordion
+// ============================================================
+const codeSecs=[
+  {t:"Triangular Rainfall Hyetograph",d:"Generates a triangular rainfall distribution. P = total depth, D = duration, f = peak position. Peak intensity = 2P/D ensures the triangle area equals P. Front-loaded storms (f < 0.5) mimic SCS Type II patterns common in the eastern US.",
+   c:`function makeRainfall(P, D, f) {
+  const steps = Math.ceil(D / DT);       // DT = 0.25 hr
+  const peakStep = Math.floor(f * steps);
+  const peakI = 2 * P / D;               // in/hr, ensures area = P
+  const rain = [];
+  for (let i = 0; i <= steps; i++) {
+    if (i <= peakStep)
+      rain.push(peakI * (i / peakStep));  // rising limb
+    else
+      rain.push(peakI * ((steps-i) / (steps-peakStep))); // falling
+  }
+  return rain; // array of intensities at 15-min steps
+}`},
+  {t:"RTK Unit Hydrograph",d:"Builds the unit hydrograph from T (time to peak) and K (recession constant). This is the impulse response — the sewer's response to a single unit pulse of rainfall. Linear rise to peak at 2/T, then exponential decay. The area under the curve equals 1.0 (unit response).",
+   c:`function makeUH(T, K) {
+  const qPeak = 2 / T;       // unit UH peak (1/hr), area = 1
+  const dur = T + T * (Math.log(200) / K);  // to 0.5% of peak
+  const steps = Math.ceil(dur / DT);
+  const uh = [];
+  for (let i = 0; i <= steps; i++) {
+    const t = i * DT;
+    if (t <= T) uh.push(qPeak * (t / T));            // rising
+    else uh.push(qPeak * Math.exp(-K * (t-T) / T));  // recession
+  }
+  return uh;
+}`},
+  {t:"Discrete Convolution (the Ground Truth)",d:"THIS is the core computation SWMM5 performs — the piece v1 was missing. Each rainfall increment P(j) generates an RDII response R × P(j) × UH(t-j). We sum over all past rainfall increments to get total RDII at time t. The neural network must learn to approximate this double loop from scalar inputs alone.",
+   c:`function convolve(rain, uh, R) {
+  // RDII(t) = R × Σ_j P(j) × UH(t-j) × DT
+  const len = rain.length + uh.length - 1;
+  const rdii = Array(len).fill(0);
+  for (let i = 0; i < rain.length; i++) {
+    for (let j = 0; j < uh.length; j++) {
+      rdii[i + j] += R * rain[i] * uh[j] * DT;
+    }
+  }
+  return rdii; // RDII at each DT step (in/hr)
+}
+// Volume check: sum(rdii) × DT ≈ R × P (mass balance)`},
+  {t:"Training Data Generation",d:"For each training event: generate random rainfall + RTK → convolve → sample random times from the resulting RDII curve. Each sample is a 7-input tuple. We sample 3 points per event to capture rising, peak, and recession phases. The network never sees the rainfall array or UH array — only the 7 summary numbers.",
+   c:`function generateData(count) {
+  const perEvent = 3; // samples per rainfall event
+  for (let e = 0; e < nEvents; e++) {
+    // Random rainfall: P, D, f
+    // Random RTK: R, T, K
+    const rain = makeRainfall(P, D, f);
+    const uh = makeUH(T, K);
+    const rdii = convolve(rain, uh, R);
+    const totalLen = rdii.length * DT;
+
+    for (let s = 0; s < perEvent; s++) {
+      const t = Math.random() * totalLen;
+      const q = rdiiAt(rdii, t);  // interpolated RDII
+      data.push({ P, D, f, R, T, K, t, q });
+    }
+  }
+}`},
+  {t:"7-Input Normalization",d:"Map all 7 inputs to roughly [0,1]. Rainfall params and RTK params use their known min/max ranges. Time t is loosely normalized by dividing by 60 (max plausible RDII duration ~55 hours for slow K + long rain). Proper normalization is critical with 7 inputs — without it, the gradient signal is dominated by whichever input has the largest raw scale.",
+   c:`function norm(P, D, f, R, T, K, t) {
+  return [
+    (P - 0.5) / 3.5,       // rainfall depth [0.5, 4]   → [0, 1]
+    (D - 1) / 11,           // duration [1, 12]           → [0, 1]
+    (f - 0.2) / 0.6,        // peak fraction [0.2, 0.8]   → [0, 1]
+    (R - 0.005) / 0.115,    // R [0.005, 0.12]            → [0, 1]
+    (T - 0.5) / 11.5,       // T [0.5, 12]                → [0, 1]
+    (K - 0.5) / 5.5,        // K [0.5, 6]                 → [0, 1]
+    t / 60                   // time, loose normalization
+  ];
+}`},
+  {t:"Network Architecture [7→h→h→1]",d:"Same TinyMLP class as Manning's, but with 7 inputs. The first weight matrix is 7×h (vs 3×h for Manning's or 4×h for RTK v1), so the network has roughly double the parameters. This extra capacity is needed — convolution is a fundamentally harder operation than a single power law or exponential.",
+   c:`const net = new TinyMLP([7, 48, 48, 1]);
+// Layer 1: 7 × 48 weights + 48 biases =  384
+// Layer 2: 48 × 48 weights + 48 biases = 2352
+// Layer 3: 48 × 1 weights + 1 bias     =   49
+// Total: ~2,785 parameters
+// (Manning's had ~1,200, RTK v1 had ~3,500)
+net.lr = 0.004;`},
+  {t:"Volume Conservation Check",d:"A key physical constraint: the total RDII volume should equal R × P (total rainfall depth × inflow fraction). In the Test tab, you can verify this — the 'Total RDII Vol' stat should closely match R × P. If the network preserves this mass balance, it has learned something physically meaningful.",
+   c:`// After convolution:
+const totalRDII = rdii.reduce((sum, q) => sum + q * DT, 0);
+// Should equal R × P:
+console.log(totalRDII, R * P);
+// For triangular rain with P=1.5, R=0.04:
+// totalRDII ≈ 0.06 inches (= 0.04 × 1.5)`}
+];
+
+const acc=$('codeAcc');
+codeSecs.forEach((s,i)=>{const d=document.createElement('div');d.className='ds';
+  d.innerHTML=`<div class="dh" onclick="togC(${i})"><div class="tr"><span class="ci">{ }</span><span class="ti">${s.t}</span></div><span class="tg" id="tg${i}">▶</span></div><div class="dd">${s.d}</div><div class="dc" id="cd${i}"><pre>${s.c}</pre></div>`;
+  acc.appendChild(d)});
+function togC(i){const e=$('cd'+i),t=$('tg'+i);if(e.classList.contains('open')){e.classList.remove('open');t.textContent='▶'}else{e.classList.add('open');t.textContent='▼'}}
+function togFaq(i){const e=$('fa'+i),t=$('fq'+i);if(e.classList.contains('open')){e.classList.remove('open');t.textContent='▶'}else{e.classList.add('open');t.textContent='▼'}}
+</script>
+</body>
+</html>

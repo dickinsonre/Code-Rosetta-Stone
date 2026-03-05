@@ -1,0 +1,215 @@
+uggestions — Organized by Impact/Effort
+
+Tier 1: Quick Wins (< 1 day each)
+
+1. Fix the 7/8 Language Inconsistency
+
+Footer currently: "10 Modules • 7 Languages"
+Should be:        "10 Modules • 8 Languages"
+
+Time to fix: 2 minutes
+Impact: +2 points (removes the most visible flaw)
+
+2. Add "Try Online" Links for All Languages
+
+C          → Godbolt (Compiler Explorer)
+Rust       → play.rust-lang.org
+Python     → repl.it or Python Playground
+Fortran    → Godbolt
+Julia      → julialang.org/learning/tryjulia
+JavaScript → jsfiddle.net or CodePen
+Go         → go.dev/play
+Zig        → zig.godbolt.org
+
+These may already exist (visible in first search result).
+Verify all 8 are present and functional.
+
+3. Add Module Dependency Diagram
+
+A simple text or SVG diagram showing:
+
+  rain.c → subcatch.c → infil.c
+                ↓           ↓
+             lid.c      gwater.c (future)
+                ↓
+           flowrout.c → routing.c → dynwave.c
+                              ↓          ↓
+                           link.c     node.c
+                              ↓
+                          massbal.c
+
+This helps users understand the SWMM5 execution flow
+and choose which module to explore first.
+
+Time: 2-4 hours
+Impact: +1 point
+
+4. Deep-Link URLs for Module + Language Pairs
+
+Current:  https://code-rosetta-stone.replit.app/
+Better:   https://code-rosetta-stone.replit.app/#routing/c/rust
+          https://code-rosetta-stone.replit.app/#infil/python/julia
+
+This enables:
+  - Shareable links in tutorials/papers
+  - Bookmarking specific comparisons
+  - Direct linking from other apps in the ecosystem
+
+Time: 2-4 hours
+Impact: +1 point
+
+
+
+Tier 2: Medium Effort (1-3 days each)
+
+5. Add xsect.c Module (Highest Priority New Module)
+
+xsect.c contains the geometry functions that EVERY hydraulic
+computation depends on:
+
+  xsect_getAofY(xsect, y)    — area at depth y
+  xsect_getWofY(xsect, y)    — top width at depth y
+  xsect_getRofY(xsect, y)    — hydraulic radius at depth y
+  xsect_getYofA(xsect, a)    — depth at area a (inverse)
+  xsect_getSofA(xsect, a)    — section factor
+
+For circular pipes, these are the classic geometric formulas:
+  A = (D²/4)(θ - sinθcosθ)   where θ = arccos(1 - 2y/D)
+  W = D·sinθ
+  R = A / (D·θ)
+
+Showing these across 8 languages would be both:
+  - Highly educational (geometry + hydraulics)
+  - Practically useful (engineers implement these constantly)
+
+Time: 1-2 days
+Impact: +2 points
+
+6. Add Line-by-Line Correspondence Highlighting
+
+CURRENT:
+  Hover over line 25 in C → nothing happens in Rust panel
+
+IMPROVED:
+  Hover over line 25 in C (hRadius = area / c->width)
+  → Rust panel highlights line 19 (let h_radius = area / self.width)
+  → Tooltip: "C pointer access → Rust self reference"
+
+Implementation:
+  Add data-correspondence="friction_slope_hradius" attributes
+  to corresponding lines across all languages.
+  On hover, highlight all elements with matching correspondence ID.
+
+Time: 2-3 days
+Impact: +3 points (single biggest UX upgrade possible)
+
+7. Add controls.c Module
+
+SWMM5's control rules are unique — a domain-specific language
+embedded within an engineering model:
+
+  RULE R1
+  IF NODE J5 DEPTH > 4.5
+  THEN PUMP P1 STATUS = ON
+
+  RULE R2
+  IF NODE J5 DEPTH < 1.0
+  AND SIMULATION TIME > 01:00:00
+  THEN PUMP P1 STATUS = OFF
+
+Translating this rule parser across 8 languages would showcase:
+  - Pattern matching (Rust, Julia)
+  - String parsing (all languages)
+  - State machines (Go, Zig)
+  - Interpreter design (Python, JavaScript)
+
+Time: 2-3 days
+Impact: +1 point
+
+8. Translation Notes for All Major Language Pairs
+
+Currently visible: C ↔ Rust notes
+
+Should also include at minimum:
+  C ↔ Python:    dynamic typing, no pointers, numpy arrays
+  C ↔ Fortran:   column-major arrays, COMMON blocks → modules
+  C ↔ Julia:     multiple dispatch, broadcasting, Unicode
+  C ↔ JavaScript: prototype chain, floating point quirks
+  C ↔ Go:        goroutines, interfaces, error handling
+  C ↔ Zig:       comptime, explicit allocators, no hidden control flow
+
+Time: 1 day per pair (6 days total)
+Impact: +2 points
+
+
+
+Tier 3: Higher Effort (1-2 weeks)
+
+9. Add 5 More Languages (Biggest Coverage Expansion)
+
+The first search result at the top of our conversation showed 23 languages in the full vision:
+
+CURRENTLY IMPLEMENTED (8):
+  C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
+
+HIGHEST-VALUE ADDITIONS (5):
+  C++       — Most SWMM extensions use C++, largest unserved audience
+  MATLAB    — Dominant in hydraulic engineering education/research
+  C#        — .NET ecosystem, SWMM GUI history, municipal IT
+  TypeScript — Low effort (extend existing JavaScript), shows type safety
+  CUDA      — GPU-accelerated solver, research frontier
+
+SECOND WAVE (5):
+  Java, Kotlin, Swift, R, Delphi
+
+AMBITIOUS (5):
+  WAT/WASM, Mojo, Nim, Ada, Chapel
+
+Reaching 13 languages (adding C++, MATLAB, C#, TypeScript, CUDA)
+would cover ~95% of the SWMM user community.
+
+Time: 2-3 days per language × 10 modules = significant effort
+Impact: +3 points
+
+10. Interactive Code Execution
+
+Transform from VIEWER to PLAYGROUND:
+
+  - "Run" button on each code panel
+  - Pre-populated test case:
+      Conduit: L=500ft, n=0.013, D=2ft
+      Flow: Q=5cfs, A=2.1ft², hUp=10ft, hDown=9.5ft, dt=30s
+  - Execute in-browser:
+      Python: Pyodide (WASM)
+      JavaScript: native
+      Rust: via WASM
+      C: via Emscripten/WASM
+      Go: via GopherJS
+  - Show output: "Qnew = 5.342 cfs"
+  - Compare results across all 8 languages
+    (should be identical to ~15 decimal places)
+
+Time: 1-2 weeks
+Impact: +4 points (transforms the tool's category)
+
+11. Cross-Link to Ecosystem Apps
+
+For each module, add contextual links:
+
+  routing.c:
+    "Generate a model with these equations → INP MAKER"
+    "Run this solver in your browser → Simulation Engine"
+    "See 34 rainfall patterns that feed this solver → Rain Canvas"
+
+  infil.c:
+    "Generate models with Horton/Green-Ampt/CN → INP MAKER"
+    "Compare infiltration across 1,729 real models → INP MAKER data"
+
+  lid.c:
+    "Design LID controls → INP MAKER [LID_CONTROLS] section"
+
+This turns the Rosetta Stone from a standalone educational tool
+into a navigation hub for the entire ecosystem.
+
+Time: 1-2 days
+Impact: +1 point

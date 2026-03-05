@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SWMM5 Groundwater MicroGPT — Lateral Flow, Two-Zone Model &amp; GW/SW Interaction</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#060b10;--card:rgba(14,22,32,0.75);--bdr:rgba(38,52,66,0.55);
+    --t1:#c8d4e0;--t2:#7a8d9e;--t3:#4a5d6e;--t4:#344454;
+    --gw:#22d3ee;--sw:#f472b6;--perc:#a78bfa;--zone:#fbbf24;--emerald:#34d399;--amber:#f59e0b;--rose:#fb7185;
+  }
+  body{background:radial-gradient(ellipse at 30% 20%,#0c1620,var(--bg) 70%);color:var(--t1);font-family:'JetBrains Mono',monospace;min-height:100vh;line-height:1.5}
+
+  .hdr{padding:22px 24px 14px;border-bottom:1px solid var(--bdr)}
+  .hdr h1{font:800 22px/1.2 'Outfit',sans-serif;letter-spacing:-.5px}
+  .hdr h1 .cg{color:var(--gw)}.hdr h1 .cs{color:var(--sw)}
+  .hdr .sub{font-size:10px;color:var(--t3);letter-spacing:.7px;margin-top:4px;text-transform:uppercase}
+  .eq-bar{margin-top:10px;padding:10px 16px;border-radius:10px;background:var(--card);border:1px solid var(--bdr);text-align:center}
+  .eq-bar .eq{color:var(--gw);font-size:11px;font-weight:600}
+  .eq-bar .nt{color:var(--t4);font-size:9px;margin-left:8px}
+
+  .tabs{display:flex;border-bottom:1px solid rgba(38,52,66,0.4);padding:0 16px;margin-top:10px}
+  .tab{padding:10px 16px;font:600 11px/1 inherit;cursor:pointer;color:var(--t3);border:none;border-bottom:2px solid transparent;background:none;transition:.2s;letter-spacing:.3px}
+  .tab:hover{color:var(--t2)}.tab.act{color:#67e8f9;border-bottom-color:#22d3ee}
+  .tc{padding:18px 24px;display:none}.tc.act{display:block}
+
+  .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:18px;margin-bottom:14px}
+  .card-t{font:700 13px/1.3 'Outfit',sans-serif;margin-bottom:10px}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .g5{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
+  .sl-grp{margin-bottom:6px}.sl-grp input[type=range]{width:100%}
+  .sl-v{font-size:13px;font-weight:600}
+  .sl-tip{font-size:9px;color:var(--t4);margin-top:2px}
+  .stat{background:rgba(6,11,16,0.6);border-radius:10px;padding:12px;border:1px solid rgba(38,52,66,0.3)}
+  .stat .sl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .stat .sv{font-size:20px;font-weight:700}
+  .stat .su{font-size:9px;color:var(--t4);margin-top:2px}
+  .btn{padding:10px 20px;border-radius:10px;border:none;font:600 12px inherit;cursor:pointer;transition:.2s}
+  .btn:disabled{background:#131d28;color:#344454;cursor:not-allowed}
+  .btn-row{display:flex;gap:10px;margin-bottom:14px}
+  .cw{position:relative;height:200px}.cwt{position:relative;height:300px}
+  .sts{font:11px/1.4 inherit;color:var(--t3);background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;margin-bottom:14px}
+  .pbtn{padding:5px 10px;font:10px inherit;border-radius:6px;cursor:pointer;background:rgba(38,52,66,0.4);color:var(--t2);border:1px solid rgba(48,62,76,0.3);transition:.2s}
+  .pbtn:hover{color:#fff}
+  .sec-div{display:flex;align-items:center;gap:10px;margin:16px 0 10px}
+  .sec-div .line{flex:1;height:1px;background:var(--bdr)}
+  .sec-div .tag{font:600 9px inherit;letter-spacing:1px;text-transform:uppercase;padding:3px 8px;border-radius:5px}
+
+  /* Zone diagram */
+  .zone-wrap{display:flex;justify-content:center;padding:10px 0}
+  .zone-svg{max-width:100%}
+  .disc{border-radius:12px;padding:16px;margin-bottom:14px}
+  .disc-t{font:700 13px 'Outfit',sans-serif;margin-bottom:6px}
+  .footer{padding:12px 24px;text-align:center;border-top:1px solid var(--bdr);margin-top:16px;font-size:10px;color:var(--t4)}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <h1><span class="cg">Groundwater</span> MicroGPT</h1>
+  <div class="sub">Neural network learns SWMM5's two-zone groundwater routine from data alone</div>
+  <div class="eq-bar">
+    <span class="eq">Q<sub>gw</sub> = A₁(H<sub>gw</sub>−H*)<sup>B₁</sup> − A₂(H<sub>sw</sub>−H*)<sup>B₂</sup> + A₃·H<sub>gw</sub>·H<sub>sw</sub></span>
+    <span class="nt">SWMM5 lateral groundwater flow equation — power-law with bidirectional coupling</span>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab act" data-t="train">1. Train</button>
+  <button class="tab" data-t="lateral">2. Lateral Flow</button>
+  <button class="tab" data-t="twozone">3. Two-Zone Sim</button>
+  <button class="tab" data-t="docs">4. Docs</button>
+</div>
+
+<!-- ============ TAB 1: TRAIN ============ -->
+<div id="t-train" class="tc act">
+  <div class="card" style="border-color:rgba(34,211,238,0.2)">
+    <div class="card-t" style="color:var(--gw)">Train on SWMM5's Groundwater Flow Equation</div>
+    <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:12px">
+      The network learns Q<sub>gw</sub> = A₁(H<sub>gw</sub>−H*)<sup>B₁</sup> − A₂(H<sub>sw</sub>−H*)<sup>B₂</sup> + A₃·H<sub>gw</sub>·H<sub>sw</sub>.
+      This has <b style="color:var(--gw)">7 inputs</b> with power-law terms, bidirectional flow (GW↔SW), and nonlinear coupling.
+      The A₂ term means surface water can push flow <em>back</em> into the aquifer — the network must discover flow reversal.
+    </p>
+    <div class="g4" style="margin-bottom:10px">
+      <div class="sl-grp"><div class="lbl">Samples</div><input type="range" id="sN" min="2000" max="12000" step="500" value="5000" style="accent-color:var(--gw)"><span class="sl-v" style="color:var(--gw)" id="sNv">5000</span></div>
+      <div class="sl-grp"><div class="lbl">Hidden Neurons</div><input type="range" id="sH" min="24" max="80" step="4" value="48" style="accent-color:var(--gw)"><span class="sl-v" style="color:var(--gw)" id="sHv">48</span></div>
+      <div class="sl-grp"><div class="lbl">Learning Rate</div><input type="range" id="sLR" min="0.001" max="0.01" step="0.001" value="0.004" style="accent-color:var(--gw)"><span class="sl-v" style="color:var(--gw)" id="sLRv">0.004</span></div>
+      <div class="sl-grp"><div class="lbl">Epochs</div><input type="range" id="sE" min="200" max="1500" step="50" value="500" style="accent-color:var(--gw)"><span class="sl-v" style="color:var(--gw)" id="sEv">500</span></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="bGen" style="background:linear-gradient(135deg,#0891b2,#22d3ee);color:#000;font-weight:700">Generate GW Data</button>
+      <button class="btn" id="bTr" style="background:rgba(34,211,238,0.12);color:var(--gw);border:1px solid rgba(34,211,238,0.3)" disabled>Train Network</button>
+    </div>
+    <div class="sts" id="st1" style="display:none"></div>
+    <div class="cw" id="lcWrap" style="display:none"><canvas id="lossC"></canvas></div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="card" style="padding:14px;border-color:rgba(34,211,238,0.1)">
+    <div class="lbl">Network: 7 inputs → hidden → hidden → 1 output (Q<sub>gw</sub>)</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;padding:8px;flex-wrap:wrap;font-size:10px">
+      <div style="display:flex;flex-direction:column;gap:2px">
+        <span style="color:var(--gw);font-weight:600;font-size:8px;text-align:center">INPUTS</span>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:3px">
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.25);color:var(--gw);text-align:center">A₁</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(34,211,238,0.08);border:1px solid rgba(34,211,238,0.25);color:var(--gw);text-align:center">B₁</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.25);color:var(--sw);text-align:center">A₂</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(244,114,182,0.08);border:1px solid rgba(244,114,182,0.25);color:var(--sw);text-align:center">B₂</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);color:var(--zone);text-align:center">Hgw</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(251,191,36,0.08);border:1px solid rgba(251,191,36,0.25);color:var(--zone);text-align:center">Hsw</span>
+          <span style="padding:3px 6px;border-radius:4px;background:rgba(167,139,250,0.08);border:1px solid rgba(167,139,250,0.25);color:var(--perc);text-align:center;grid-column:span 2">A₃</span>
+        </div>
+      </div>
+      <span style="color:var(--t4);font-size:16px">→</span>
+      <div style="padding:8px 16px;border-radius:8px;background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.15);text-align:center"><span id="aH" style="color:var(--gw);font-weight:700">48</span> ReLU<br><span style="color:var(--t4);font-size:8px">hidden 1</span></div>
+      <span style="color:var(--t4)">→</span>
+      <div style="padding:8px 16px;border-radius:8px;background:rgba(34,211,238,0.06);border:1px solid rgba(34,211,238,0.15);text-align:center"><span id="aH2" style="color:var(--gw);font-weight:700">48</span> ReLU<br><span style="color:var(--t4);font-size:8px">hidden 2</span></div>
+      <span style="color:var(--t4)">→</span>
+      <div style="padding:8px 16px;border-radius:8px;background:rgba(52,211,153,0.08);border:1px solid rgba(52,211,153,0.25)"><span style="color:var(--emerald);font-weight:700">Q<sub>gw</sub></span><br><span style="color:var(--t4);font-size:8px">output</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 2: LATERAL FLOW ============ -->
+<div id="t-lateral" class="tc">
+  <div id="t2off" style="text-align:center;padding:60px 0;color:var(--t4)">Train the network first (Tab 1)</div>
+  <div id="t2on" style="display:none">
+    <div class="card" style="border-color:rgba(34,211,238,0.15)">
+      <div class="card-t" style="color:var(--gw)">Lateral GW Flow — Adjust Heads &amp; Coefficients</div>
+      <div class="g3" style="margin-bottom:10px">
+        <div>
+          <div class="sl-grp"><div class="lbl">A₁ (GW outflow coeff)</div><input type="range" id="rA1" min="0" max="0.05" step="0.001" value="0.01" style="accent-color:var(--gw)"><div class="sl-v" style="color:var(--gw)" id="rA1v">0.010</div></div>
+          <div class="sl-grp"><div class="lbl">B₁ (GW exponent)</div><input type="range" id="rB1" min="0.5" max="3" step="0.1" value="1.5" style="accent-color:var(--gw)"><div class="sl-v" style="color:var(--gw)" id="rB1v">1.5</div></div>
+        </div>
+        <div>
+          <div class="sl-grp"><div class="lbl">A₂ (SW inflow coeff)</div><input type="range" id="rA2" min="0" max="0.05" step="0.001" value="0.005" style="accent-color:var(--sw)"><div class="sl-v" style="color:var(--sw)" id="rA2v">0.005</div></div>
+          <div class="sl-grp"><div class="lbl">B₂ (SW exponent)</div><input type="range" id="rB2" min="0.5" max="3" step="0.1" value="1.5" style="accent-color:var(--sw)"><div class="sl-v" style="color:var(--sw)" id="rB2v">1.5</div></div>
+        </div>
+        <div>
+          <div class="sl-grp"><div class="lbl">A₃ (interaction)</div><input type="range" id="rA3" min="0" max="0.005" step="0.0001" value="0.001" style="accent-color:var(--perc)"><div class="sl-v" style="color:var(--perc)" id="rA3v">0.0010</div></div>
+          <div class="sl-grp"><div class="lbl">H<sub>sw</sub> (ft)</div><input type="range" id="rHsw" min="0" max="10" step="0.25" value="3" style="accent-color:var(--sw)"><div class="sl-v" style="color:var(--sw)" id="rHswv">3.0</div></div>
+        </div>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <button class="pbtn" onclick="latP(0.01,1.5,0.005,1.5,0.001,3)">Default SWMM5</button>
+        <button class="pbtn" onclick="latP(0.03,2,0.01,1,0.002,2)">Sandy Aquifer</button>
+        <button class="pbtn" onclick="latP(0.005,1,0.002,2,0.0005,5)">Clay/Deep SW</button>
+        <button class="pbtn" onclick="latP(0.02,1.5,0.02,1.5,0.003,4)">High Interaction</button>
+        <button class="pbtn" onclick="latP(0.015,1.5,0,0,0,2)">No SW Effect</button>
+      </div>
+
+      <div class="g4" style="margin-bottom:12px" id="latStats"></div>
+
+      <div class="lbl">Q<sub>gw</sub> vs H<sub>gw</sub> — AI (dashed) vs Exact (solid) | H* = 0</div>
+      <div class="cwt"><canvas id="latChart"></canvas></div>
+      <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:4px">
+        <span style="color:var(--gw)">Positive Q</span> = GW flows to drain.
+        <span style="color:var(--sw)">Negative Q</span> = SW pushes into aquifer (flow reversal).
+        Zero crossing = equilibrium head.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 3: TWO-ZONE SIM ============ -->
+<div id="t-twozone" class="tc">
+  <div id="t3off" style="text-align:center;padding:60px 0;color:var(--t4)">Train the network first (Tab 1)</div>
+  <div id="t3on" style="display:none">
+    <div class="card" style="border-color:rgba(167,139,250,0.2)">
+      <div class="card-t" style="color:var(--perc)">Two-Zone Groundwater Simulation</div>
+      <p style="font-size:11px;color:var(--t2);line-height:1.6;margin-bottom:10px">Simulates SWMM5's upper (unsaturated) and lower (saturated) zones responding to infiltration. Upper zone percolates to lower zone, which discharges as lateral GW flow. Watch the water table rise and Q<sub>gw</sub> respond.</p>
+      <div class="g4" style="margin-bottom:10px">
+        <div class="sl-grp"><div class="lbl">Infiltration (in/hr)</div><input type="range" id="zInf" min="0" max="3" step="0.1" value="1.0" style="accent-color:var(--perc)"><div class="sl-v" style="color:var(--perc)" id="zInfv">1.0</div></div>
+        <div class="sl-grp"><div class="lbl">Porosity</div><input type="range" id="zPor" min="0.2" max="0.5" step="0.01" value="0.35" style="accent-color:var(--zone)"><div class="sl-v" style="color:var(--zone)" id="zPorv">0.35</div></div>
+        <div class="sl-grp"><div class="lbl">Percolation K (in/hr)</div><input type="range" id="zPK" min="0.05" max="3" step="0.05" value="0.5" style="accent-color:var(--perc)"><div class="sl-v" style="color:var(--perc)" id="zPKv">0.50</div></div>
+        <div class="sl-grp"><div class="lbl">H<sub>sw</sub> fixed (ft)</div><input type="range" id="zHsw" min="0" max="8" step="0.5" value="2" style="accent-color:var(--sw)"><div class="sl-v" style="color:var(--sw)" id="zHswv">2.0</div></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn" id="bSim" style="background:linear-gradient(135deg,#7c3aed,#a78bfa);color:#fff">Run 48hr Simulation</button>
+      </div>
+      <div class="g3" style="margin-bottom:12px" id="zStats"></div>
+      <div class="lbl">GW Table &amp; Lateral Flow Over Time — AI (dashed) vs Exact (solid)</div>
+      <div class="cwt"><canvas id="zChart"></canvas></div>
+      <div style="margin-top:8px"><div class="lbl">Moisture Profile &amp; Percolation</div><div class="cwt"><canvas id="zChart2"></canvas></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TAB 4: DOCS ============ -->
+<div id="t-docs" class="tc">
+  <div class="card">
+    <div class="card-t" style="color:var(--gw);font-size:15px">SWMM5's Groundwater Routine</div>
+    <p style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:12px">
+      SWMM5's groundwater module computes lateral flow between a subcatchment's aquifer and the drainage system. It uses a <b style="color:var(--zone)">two-zone model</b>: an upper unsaturated zone (tracks moisture content θ) and a lower saturated zone (tracks water table elevation H<sub>gw</sub>). The lateral flow equation has three terms that the neural network must discover:
+    </p>
+    <div class="g3" style="margin-bottom:14px">
+      <div style="background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.15);border-radius:8px;padding:12px">
+        <div style="color:var(--gw);font-weight:700;font-size:12px;margin-bottom:6px">Term 1: GW Outflow</div>
+        <div style="color:var(--gw);font-size:11px;margin-bottom:6px">A₁(H<sub>gw</sub> − H*)<sup>B₁</sup></div>
+        <div style="font-size:10px;color:var(--t2)">When H<sub>gw</sub> > H*, groundwater flows OUT to the drain. A₁ controls magnitude, B₁ controls nonlinearity. B₁ > 1 means flow accelerates as head rises.</div>
+      </div>
+      <div style="background:rgba(244,114,182,0.04);border:1px solid rgba(244,114,182,0.15);border-radius:8px;padding:12px">
+        <div style="color:var(--sw);font-weight:700;font-size:12px;margin-bottom:6px">Term 2: SW Inflow</div>
+        <div style="color:var(--sw);font-size:11px;margin-bottom:6px">−A₂(H<sub>sw</sub> − H*)<sup>B₂</sup></div>
+        <div style="font-size:10px;color:var(--t2)">Surface water can push flow BACK into the aquifer. This is the <em>flow reversal</em> the network must discover. High H<sub>sw</sub> reduces or reverses net GW flow.</div>
+      </div>
+      <div style="background:rgba(167,139,250,0.04);border:1px solid rgba(167,139,250,0.15);border-radius:8px;padding:12px">
+        <div style="color:var(--perc);font-weight:700;font-size:12px;margin-bottom:6px">Term 3: Coupling</div>
+        <div style="color:var(--perc);font-size:11px;margin-bottom:6px">A₃ · H<sub>gw</sub> · H<sub>sw</sub></div>
+        <div style="font-size:10px;color:var(--t2)">Nonlinear interaction between GW and SW heads. Creates a product term the network must learn — fundamentally different from the power-law terms.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-t" style="color:var(--zone)">Two-Zone Model</div>
+    <div class="g2">
+      <div style="background:rgba(251,191,36,0.04);border:1px solid rgba(251,191,36,0.15);border-radius:8px;padding:12px">
+        <div style="color:var(--zone);font-weight:700;font-size:11px;margin-bottom:6px">Upper Zone (Unsaturated)</div>
+        <div style="font-size:10px;color:var(--t2);line-height:1.6">Tracks moisture content θ. Receives infiltration from surface, loses water to ET and percolation downward. dθ/dt = (infil − ET − perc) / d<sub>upper</sub>. Percolation rate depends on θ and saturated conductivity K.</div>
+      </div>
+      <div style="background:rgba(34,211,238,0.04);border:1px solid rgba(34,211,238,0.15);border-radius:8px;padding:12px">
+        <div style="color:var(--gw);font-weight:700;font-size:11px;margin-bottom:6px">Lower Zone (Saturated)</div>
+        <div style="font-size:10px;color:var(--t2);line-height:1.6">Tracks water table elevation H<sub>gw</sub>. Receives percolation from upper zone, loses water to lateral GW flow. dH<sub>gw</sub>/dt = (perc − Q<sub>gw</sub>) / (porosity). The lateral flow equation governs discharge to drains.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-t" style="color:var(--emerald)">MicroGPT Series</div>
+    <div style="font-size:10px;color:var(--t3);line-height:1.8">
+      <span style="color:#34d399">Manning's</span> (3 in) →
+      <span style="color:#22d3ee">Partial-Flow</span> (4 in, hidden peak) →
+      <span style="color:#f472b6">Horton</span> (4 in, exponential) →
+      <span style="color:#14b8a6">Green-Ampt</span> (4 in, implicit) →
+      <span style="color:#0ea5e9">SCS CN</span> (3 in, threshold) →
+      <span style="color:#f59e0b">Nonlinear Reservoir</span> (5 in, ODE) →
+      <span style="color:#22d3ee;font-weight:700">Groundwater</span> (7 in, power-law + coupling) ← you are here<br>
+      → <span style="color:#a78bfa">RTK v1/v2</span> (4–7 in, convolution) →
+      <span style="color:#f472b6">IDF Curves</span> (4 in) →
+      <span style="color:#a78bfa">Muskingum</span> (6 in) →
+      <span style="color:#34d399">nanoGPT → GPT-4</span>
+    </div>
+  </div>
+</div>
+
+<div class="footer">SWMM5 Groundwater MicroGPT &middot; A SWMM5.org Vibe Coding App &middot; Lateral Flow + Two-Zone Model</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const show=e=>{(typeof e==='string'?$(e):e).style.display=''};
+const hide=e=>{(typeof e==='string'?$(e):e).style.display='none'};
+const shuf=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=0|Math.random()*(i+1);[b[i],b[j]]=[b[j],b[i]]}return b};
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('act'));
+  document.querySelectorAll('.tc').forEach(x=>x.classList.remove('act'));
+  t.classList.add('act');$('t-'+t.dataset.t).classList.add('act')}));
+
+// ============ NET ============
+class Net{
+  constructor(sz){this.L=[];this.lr=.005;
+    for(let i=0;i<sz.length-1;i++){const r=sz[i+1],c=sz[i],s=Math.sqrt(2/c);
+      this.L.push({W:Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*s)),b:Array(r).fill(0)})}}
+  fwd(x){const a=[x.slice()];let c=x.slice();
+    for(let l=0;l<this.L.length;l++){const{W,b}=this.L[l];const n=[];
+      for(let i=0;i<W.length;i++){let s=b[i];for(let j=0;j<W[i].length;j++)s+=W[i][j]*c[j];
+        n.push(l<this.L.length-1?Math.max(0,s):s)}a.push(n);c=n}return{o:c,a}}
+  train1(x,t){const{o,a}=this.fwd(x);const L=.5*(o[0]-t[0])**2;
+    let d=[o[0]-t[0]];for(let l=this.L.length-1;l>=0;l--){const{W,b}=this.L[l];const p=a[l];
+      for(let i=0;i<W.length;i++){for(let j=0;j<W[i].length;j++)W[i][j]-=this.lr*d[i]*p[j];b[i]-=this.lr*d[i]}
+      if(l>0){const nd=[];for(let j=0;j<W[0].length;j++){let s=0;for(let i=0;i<W.length;i++)s+=W[i][j]*d[i];
+        nd.push(s*(a[l][j]>0?1:0))}d=nd}}return L}
+  pred(x){return this.fwd(x).o}
+}
+
+// ============ GW PHYSICS ============
+// Qgw = A1*(Hgw-Hstar)^B1 - A2*(Hsw-Hstar)^B2 + A3*Hgw*Hsw
+// H* = 0 (node invert, simplification)
+function gwFlow(A1,B1,A2,B2,A3,Hgw,Hsw){
+  const Hstar=0;
+  let q=0;
+  if(Hgw>Hstar) q += A1*Math.pow(Hgw-Hstar,B1);
+  if(Hsw>Hstar) q -= A2*Math.pow(Hsw-Hstar,B2);
+  q += A3*Hgw*Hsw;
+  return q;
+}
+
+// Normalization
+const R={A1:[0,0.05],B1:[0.5,3],A2:[0,0.05],B2:[0.5,3],A3:[0,0.005],Hgw:[0,15],Hsw:[0,10]};
+function norm(A1,B1,A2,B2,A3,Hgw,Hsw){
+  return [(A1-R.A1[0])/(R.A1[1]-R.A1[0]),(B1-R.B1[0])/(R.B1[1]-R.B1[0]),
+          (A2-R.A2[0])/(R.A2[1]-R.A2[0]),(B2-R.B2[0])/(R.B2[1]-R.B2[0]),
+          (A3-R.A3[0])/(R.A3[1]-R.A3[0]),(Hgw-R.Hgw[0])/(R.Hgw[1]-R.Hgw[0]),
+          (Hsw-R.Hsw[0])/(R.Hsw[1]-R.Hsw[0])]}
+
+let net=null,data=null,maxQ=1,minQ=0,lChart=null;
+// We need to handle negative Q (flow reversal) — normalize to [0,1] using minQ/maxQ offset
+let qOffset=0,qRange=1;
+
+['N','H','LR','E'].forEach(k=>{$('s'+k).addEventListener('input',()=>{
+  const v=$('s'+k).value;$('s'+k+'v').textContent=k==='LR'?parseFloat(v).toFixed(3):v;
+  if(k==='H'){$('aH').textContent=v;$('aH2').textContent=v}})});
+
+$('bGen').onclick=()=>{
+  const cnt=+$('sN').value;data=[];
+  for(let i=0;i<cnt;i++){
+    const A1=Math.random()*0.05,B1=0.5+Math.random()*2.5;
+    const A2=Math.random()*0.05,B2=0.5+Math.random()*2.5;
+    const A3=Math.random()*0.005;
+    const Hgw=Math.random()*15,Hsw=Math.random()*10;
+    const q=gwFlow(A1,B1,A2,B2,A3,Hgw,Hsw);
+    data.push({x:norm(A1,B1,A2,B2,A3,Hgw,Hsw),q,A1,B1,A2,B2,A3,Hgw,Hsw})}
+  // Compute offset for negative flows
+  minQ=Math.min(...data.map(d=>d.q));maxQ=Math.max(...data.map(d=>d.q));
+  qOffset=minQ;qRange=maxQ-minQ||1;
+  data.forEach(d=>{d.y=[(d.q-qOffset)/qRange]});
+  const negPct=(data.filter(d=>d.q<0).length/data.length*100).toFixed(1);
+  $('st1').textContent=`Generated ${cnt} GW samples. Q range: [${minQ.toFixed(4)}, ${maxQ.toFixed(4)}] CFS/ft. ${negPct}% have flow reversal.`;
+  show('st1');$('bTr').disabled=false;hide('t2on');show('t2off');hide('t3on');show('t3off')};
+
+$('bTr').onclick=async()=>{
+  if(!data)return;const h=+$('sH').value,lr=+$('sLR').value,ep=+$('sE').value;
+  net=new Net([7,h,h,1]);
+  show('lcWrap');if(lChart)lChart.destroy();
+  lChart=new Chart($('lossC').getContext('2d'),{type:'line',data:{labels:[],datasets:[{data:[],borderColor:'#22d3ee',borderWidth:2,pointRadius:0,tension:.3}]},options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#344454',font:{size:8}},grid:{color:'rgba(38,52,66,0.3)'}},y:{ticks:{color:'#344454',font:{size:8},callback:v=>v.toExponential(1)},grid:{color:'rgba(38,52,66,0.3)'}}} ,plugins:{legend:{display:false}},animation:{duration:0}}});
+  const losses=[];let best=1e9,stale=0;
+  for(let e=0;e<ep;e++){
+    net.lr=lr*0.5*(1+Math.cos(Math.PI*e/ep));const sh=shuf(data);let el=0;
+    for(const s of sh)el+=net.train1(s.x,s.y);
+    const avg=el/data.length;losses.push(avg);if(avg<best){best=avg;stale=0}else stale++;
+    if(stale>=70){$('st1').textContent=`Early stop @ ${e+1}. Loss: ${avg.toExponential(3)}`;break}
+    if(e%5===0||e===ep-1){$('st1').textContent=`Epoch ${e+1}/${ep} — Loss: ${avg.toExponential(3)}${stale>20?' ⚠':''}`;
+      lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();
+      await new Promise(r=>setTimeout(r,0))}}
+  $('st1').textContent+=` Done! Go to Tab 2 or 3.`;
+  hide('t2off');show('t2on');hide('t3off');show('t3on');updLat()};
+
+function predQ(A1,B1,A2,B2,A3,Hgw,Hsw){
+  const raw=net.pred(norm(A1,B1,A2,B2,A3,Hgw,Hsw))[0];
+  return raw*qRange+qOffset; // denormalize
+}
+
+// ============ TAB 2: LATERAL FLOW ============
+let latC=null;
+function latP(A1,B1,A2,B2,A3,Hsw){
+  $('rA1').value=A1;$('rA1v').textContent=A1.toFixed(3);$('rB1').value=B1;$('rB1v').textContent=B1.toFixed(1);
+  $('rA2').value=A2;$('rA2v').textContent=A2.toFixed(3);$('rB2').value=B2;$('rB2v').textContent=B2.toFixed(1);
+  $('rA3').value=A3;$('rA3v').textContent=A3.toFixed(4);$('rHsw').value=Hsw;$('rHswv').textContent=Hsw.toFixed(1);
+  if(net)updLat()}
+['A1','B1','A2','B2','A3','Hsw'].forEach(k=>{$('r'+k).addEventListener('input',()=>{
+  const v=parseFloat($('r'+k).value);$('r'+k+'v').textContent=k==='A1'||k==='A2'?v.toFixed(3):k==='A3'?v.toFixed(4):v.toFixed(1);if(net)updLat()})});
+
+function updLat(){
+  const A1=+$('rA1').value,B1=+$('rB1').value,A2=+$('rA2').value,B2=+$('rB2').value,A3=+$('rA3').value,Hsw=+$('rHsw').value;
+  const lb=[],exQ=[],aiQ=[];
+  let zeroH=-1,maxGW=0,minGW=1e9;
+  for(let Hgw=0;Hgw<=15;Hgw+=0.2){
+    lb.push(Hgw.toFixed(1));
+    const e=gwFlow(A1,B1,A2,B2,A3,Hgw,Hsw);
+    const p=predQ(A1,B1,A2,B2,A3,Hgw,Hsw);
+    exQ.push(e);aiQ.push(p);
+    if(e>maxGW)maxGW=e;if(e<minGW)minGW=e;
+    if(zeroH<0&&e>=0)zeroH=Hgw}
+  const hasReversal=minGW<0;
+  $('latStats').innerHTML=`
+    <div class="stat"><div class="sl">Max Q<sub>gw</sub></div><div class="sv" style="color:var(--gw)">${maxGW.toFixed(4)}</div><div class="su">CFS/ft (outflow)</div></div>
+    <div class="stat"><div class="sl">Min Q<sub>gw</sub></div><div class="sv" style="color:${minGW<0?'var(--sw)':'var(--t2)'}">${minGW.toFixed(4)}</div><div class="su">${minGW<0?'REVERSED':'no reversal'}</div></div>
+    <div class="stat"><div class="sl">Zero Crossing</div><div class="sv" style="color:var(--zone)">${zeroH>=0?'H='+zeroH.toFixed(1)+' ft':'none'}</div><div class="su">equilibrium head</div></div>
+    <div class="stat"><div class="sl">Flow Reversal</div><div class="sv" style="color:${hasReversal?'var(--sw)':'var(--emerald)'}">${hasReversal?'YES':'NO'}</div><div class="su">${hasReversal?'SW pushes into aquifer':'GW always outflows'}</div></div>`;
+  if(latC)latC.destroy();
+  latC=new Chart($('latChart').getContext('2d'),{type:'line',data:{labels:lb,datasets:[
+    {label:'Exact Qgw',data:exQ,borderColor:'#22d3ee',borderWidth:2.5,pointRadius:0,tension:.3,fill:{target:'origin',above:'rgba(34,211,238,0.06)',below:'rgba(244,114,182,0.06)'}},
+    {label:'AI Qgw',data:aiQ,borderColor:'#34d399',borderWidth:2,pointRadius:0,borderDash:[5,3],tension:.3},
+    {label:'Q=0',data:lb.map(()=>0),borderColor:'rgba(255,255,255,0.15)',borderWidth:1,borderDash:[3,3],pointRadius:0}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{
+    x:{title:{display:true,text:'Hgw (ft)',color:'#4a5d6e',font:{size:10}},ticks:{color:'#344454',font:{size:8},maxTicksLimit:15},grid:{color:'rgba(38,52,66,0.3)'}},
+    y:{title:{display:true,text:'Qgw (CFS/ft)',color:'#4a5d6e',font:{size:10}},ticks:{color:'#344454',font:{size:9}},grid:{color:'rgba(38,52,66,0.3)'}}},
+    plugins:{legend:{labels:{color:'#7a8d9e',font:{size:9}}}},animation:{duration:200}}})
+}
+
+// ============ TAB 3: TWO-ZONE SIM ============
+let zC1=null,zC2=null;
+['Inf','Por','PK','Hsw'].forEach(k=>{$('z'+k).addEventListener('input',()=>{
+  const v=parseFloat($('z'+k).value);$('z'+k+'v').textContent=k==='Por'?v.toFixed(2):v.toFixed(1||v.toFixed(2))})});
+
+$('bSim').onclick=()=>{
+  const infRate=+$('zInf').value,por=+$('zPor').value,Kperc=+$('zPK').value,Hsw=+$('zHsw').value;
+  // Fixed GW params for sim
+  const A1=0.01,B1=1.5,A2=0.005,B2=1.5,A3=0.001;
+  const dt=0.1; // hr
+  const dur=24; // rain duration
+  const total=48;
+  let theta=0.15; // initial moisture
+  let Hgw=1; // initial water table
+  const thetaSat=por;
+  const dupper=3; // ft upper zone depth
+
+  const times=[],thetas=[],hgws=[],qgws=[],qgwsAI=[],percs=[],rains=[];
+  for(let t=0;t<=total;t+=dt){
+    const rain=t<dur?infRate:0;
+    // Percolation: simple gravity drainage
+    const percRate=Kperc*Math.min(1,Math.pow(theta/thetaSat,3));
+    // Upper zone
+    const dtheta=(rain-percRate)/(dupper*12); // convert ft to in
+    theta+=dtheta*dt;
+    theta=Math.max(0.05,Math.min(theta,thetaSat));
+    // Lower zone
+    const qgw=gwFlow(A1,B1,A2,B2,A3,Hgw,Hsw);
+    const qgwAI=predQ(A1,B1,A2,B2,A3,Hgw,Hsw);
+    const dHgw=(percRate/12-qgw)/por; // in→ft
+    Hgw+=dHgw*dt;
+    Hgw=Math.max(0,Math.min(Hgw,15));
+
+    times.push(t.toFixed(1));thetas.push(theta);hgws.push(Hgw);
+    qgws.push(qgw);qgwsAI.push(qgwAI);percs.push(percRate);rains.push(rain)}
+
+  const peakHgw=Math.max(...hgws),peakQ=Math.max(...qgws);
+  $('zStats').innerHTML=`
+    <div class="stat"><div class="sl">Peak H<sub>gw</sub></div><div class="sv" style="color:var(--zone)">${peakHgw.toFixed(2)}</div><div class="su">ft</div></div>
+    <div class="stat"><div class="sl">Peak Q<sub>gw</sub></div><div class="sv" style="color:var(--gw)">${peakQ.toFixed(4)}</div><div class="su">CFS/ft</div></div>
+    <div class="stat"><div class="sl">Final H<sub>gw</sub></div><div class="sv" style="color:var(--t2)">${hgws[hgws.length-1].toFixed(2)}</div><div class="su">ft (at 48hr)</div></div>`;
+
+  // Subsample for chart
+  const step=Math.max(1,0|times.length/200);
+  const tl=[],h1=[],q1=[],qa1=[],th1=[],pc1=[],rn1=[];
+  for(let i=0;i<times.length;i+=step){tl.push(times[i]);h1.push(hgws[i]);q1.push(qgws[i]);qa1.push(qgwsAI[i]);th1.push(thetas[i]);pc1.push(percs[i]);rn1.push(rains[i])}
+
+  if(zC1)zC1.destroy();
+  zC1=new Chart($('zChart').getContext('2d'),{type:'line',data:{labels:tl,datasets:[
+    {label:'Hgw (ft)',data:h1,borderColor:'#fbbf24',borderWidth:2.5,pointRadius:0,tension:.3,yAxisID:'y',fill:true,backgroundColor:'rgba(251,191,36,0.04)'},
+    {label:'Qgw exact',data:q1,borderColor:'#22d3ee',borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y2'},
+    {label:'Qgw AI',data:qa1,borderColor:'#34d399',borderWidth:1.5,pointRadius:0,borderDash:[4,3],tension:.3,yAxisID:'y2'}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{
+    x:{title:{display:true,text:'Time (hr)',color:'#4a5d6e',font:{size:10}},ticks:{color:'#344454',font:{size:8},maxTicksLimit:12},grid:{color:'rgba(38,52,66,0.3)'}},
+    y:{position:'left',title:{display:true,text:'Hgw (ft)',color:'#fbbf24',font:{size:10}},ticks:{color:'#fbbf24',font:{size:8}},grid:{color:'rgba(38,52,66,0.3)'},min:0},
+    y2:{position:'right',title:{display:true,text:'Qgw (CFS/ft)',color:'#22d3ee',font:{size:10}},ticks:{color:'#22d3ee',font:{size:8}},grid:{drawOnChartArea:false},min:0}},
+    plugins:{legend:{labels:{color:'#7a8d9e',font:{size:9}}}},animation:{duration:200}}});
+
+  if(zC2)zC2.destroy();
+  zC2=new Chart($('zChart2').getContext('2d'),{type:'line',data:{labels:tl,datasets:[
+    {label:'Rain (in/hr)',data:rn1,borderColor:'rgba(56,189,248,0.4)',backgroundColor:'rgba(56,189,248,0.06)',borderWidth:1,pointRadius:0,fill:true,yAxisID:'y2'},
+    {label:'θ moisture',data:th1,borderColor:'#a78bfa',borderWidth:2,pointRadius:0,tension:.3,yAxisID:'y'},
+    {label:'Percolation',data:pc1,borderColor:'#f472b6',borderWidth:2,pointRadius:0,tension:.3,borderDash:[4,3],yAxisID:'y2'}
+  ]},options:{responsive:true,maintainAspectRatio:false,scales:{
+    x:{title:{display:true,text:'Time (hr)',color:'#4a5d6e',font:{size:10}},ticks:{color:'#344454',font:{size:8},maxTicksLimit:12},grid:{color:'rgba(38,52,66,0.3)'}},
+    y:{position:'left',title:{display:true,text:'θ (moisture)',color:'#a78bfa',font:{size:10}},ticks:{color:'#a78bfa',font:{size:8}},grid:{color:'rgba(38,52,66,0.3)'},min:0},
+    y2:{position:'right',title:{display:true,text:'Rate (in/hr)',color:'#f472b6',font:{size:10}},ticks:{color:'#f472b6',font:{size:8}},grid:{drawOnChartArea:false},min:0}},
+    plugins:{legend:{labels:{color:'#7a8d9e',font:{size:9}}}},animation:{duration:200}}})
+};
+</script>
+</body>
+</html>

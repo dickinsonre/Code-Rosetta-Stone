@@ -24205,7 +24205,9844 @@ data class KinWave(
         return qOut
     }
 }`,
-  },};
+  },
+  "rdii.c — Rainfall-Dependent I&I": {
+    category: "Hydrology",
+    difficulty: "advanced",
+    tags: ["rdii", "infiltration", "inflow", "rainfall-dependent", "unit hydrograph", "sewer", "wet weather"],
+    description: "Models rainfall-dependent infiltration and inflow (RDII) into sanitary and combined sewers using the unit hydrograph approach. Decomposes the RDII response into three triangular unit hydrographs (short/medium/long term) with different time-to-peak values. Each UH captures a different pathway: fast inflow through direct connections, medium-term infiltration through defects, and slow groundwater response.",
+    equations: "Q_rdii(t) = R·A·Σ[fi·UH_i(t)] (convolution); UH triangle: peak = 2/(T_base), T_base = 2·T_peak; RDII = short-term + medium-term + long-term",
+    inputs: "Rainfall hyetograph, sewershed area, UH parameters (R, T_peak, K for 3 UHs), initial abstraction",
+    outputs: "RDII flow hydrograph at each node",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// rdii.c — Rainfall-Dependent I&I
+// EPA SWMM5 Engine — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+#include <math.h>
+#include <stdlib.h>
+
+typedef struct {
+    double R;           // fraction of rainfall volume
+    double Tp;          // time to peak (hours)
+    double K;           // recession limb ratio
+} TUnitHydro;
+
+typedef struct {
+    TUnitHydro uh[3];   // short, medium, long term UHs
+    double area;        // sewershed area (acres)
+    double* rainfall;   // rainfall hyetograph (in/hr)
+    int nRain;          // number of rainfall steps
+} TRDII;
+
+void rdii_getUHOrdinates(TUnitHydro* uh, double dt,
+                          double* ordinates, int* nOrd)
+{
+    double Tbase = 2.0 * uh->Tp * (1.0 + uh->K);
+    double peak = 2.0 / Tbase;
+    int n = (int)(Tbase / dt) + 1;
+    *nOrd = n;
+
+    for (int i = 0; i < n; i++) {
+        double t = i * dt;
+        if (t <= uh->Tp)
+            ordinates[i] = peak * t / uh->Tp;
+        else
+            ordinates[i] = peak * (Tbase - t)
+                           / (Tbase - uh->Tp);
+        if (ordinates[i] < 0.0) ordinates[i] = 0.0;
+    }
+}
+
+double rdii_convolve(double* rain, int nRain,
+                      double* uh, int nUH,
+                      int step)
+{
+    double sum = 0.0;
+    for (int j = 0; j < nUH && j <= step; j++) {
+        sum += rain[step - j] * uh[j];
+    }
+    return sum;
+}
+
+double rdii_getFlow(TRDII* rdii, double dt, int step)
+{
+    double totalQ = 0.0;
+    double ordinates[500];
+    int nOrd;
+
+    for (int i = 0; i < 3; i++) {
+        rdii_getUHOrdinates(&rdii->uh[i], dt,
+                             ordinates, &nOrd);
+        double q = rdii_convolve(rdii->rainfall,
+                                  rdii->nRain,
+                                  ordinates, nOrd, step);
+        totalQ += rdii->uh[i].R * rdii->area * q;
+    }
+    return totalQ;
+}`,
+    rust: `// rdii.rs — Rainfall-Dependent I&I
+// SWMM5 Engine in Rust — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+pub struct UnitHydro {
+    pub r: f64,    // fraction of rainfall volume
+    pub tp: f64,   // time to peak (hours)
+    pub k: f64,    // recession limb ratio
+}
+
+pub struct RDII {
+    pub uh: [UnitHydro; 3],
+    pub area: f64,
+    pub rainfall: Vec<f64>,
+}
+
+impl UnitHydro {
+    pub fn get_ordinates(&self, dt: f64) -> Vec<f64> {
+        let t_base = 2.0 * self.tp * (1.0 + self.k);
+        let peak = 2.0 / t_base;
+        let n = (t_base / dt) as usize + 1;
+        let mut ordinates = vec![0.0; n];
+
+        for i in 0..n {
+            let t = i as f64 * dt;
+            ordinates[i] = if t <= self.tp {
+                peak * t / self.tp
+            } else {
+                (peak * (t_base - t)
+                 / (t_base - self.tp)).max(0.0)
+            };
+        }
+        ordinates
+    }
+}
+
+fn convolve(rain: &[f64], uh: &[f64], step: usize) -> f64 {
+    let mut sum = 0.0;
+    for j in 0..uh.len().min(step + 1) {
+        sum += rain[step - j] * uh[j];
+    }
+    sum
+}
+
+impl RDII {
+    pub fn get_flow(&self, dt: f64, step: usize) -> f64 {
+        let mut total_q = 0.0;
+        for u in &self.uh {
+            let ordinates = u.get_ordinates(dt);
+            let q = convolve(&self.rainfall,
+                              &ordinates, step);
+            total_q += u.r * self.area * q;
+        }
+        total_q
+    }
+}`,
+    python: `# rdii.py — Rainfall-Dependent I&I
+# SWMM5 Engine in Python — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+from dataclasses import dataclass, field
+from typing import List
+
+@dataclass
+class UnitHydro:
+    R: float      # fraction of rainfall volume
+    Tp: float     # time to peak (hours)
+    K: float      # recession limb ratio
+
+    def get_ordinates(self, dt: float) -> List[float]:
+        t_base = 2.0 * self.Tp * (1.0 + self.K)
+        peak = 2.0 / t_base
+        n = int(t_base / dt) + 1
+        ordinates = []
+        for i in range(n):
+            t = i * dt
+            if t <= self.Tp:
+                ordinates.append(peak * t / self.Tp)
+            else:
+                val = peak * (t_base - t) / (t_base - self.Tp)
+                ordinates.append(max(0.0, val))
+        return ordinates
+
+def convolve(rain: List[float], uh: List[float],
+             step: int) -> float:
+    total = 0.0
+    for j in range(min(len(uh), step + 1)):
+        total += rain[step - j] * uh[j]
+    return total
+
+@dataclass
+class RDII:
+    uh: List[UnitHydro]
+    area: float
+    rainfall: List[float]
+
+    def get_flow(self, dt: float, step: int) -> float:
+        total_q = 0.0
+        for u in self.uh:
+            ordinates = u.get_ordinates(dt)
+            q = convolve(self.rainfall, ordinates, step)
+            total_q += u.R * self.area * q
+        return total_q`,
+    fortran: `! rdii.f90 — Rainfall-Dependent I&I
+! SWMM5 Engine in Fortran — Unit Hydrograph RDII Model
+! Models RDII into sewers using three triangular
+! unit hydrographs (short/medium/long term)
+
+module rdii_module
+    implicit none
+
+    type :: UnitHydro
+        real(8) :: R       ! fraction of rainfall volume
+        real(8) :: Tp      ! time to peak (hours)
+        real(8) :: K       ! recession limb ratio
+    end type UnitHydro
+
+    type :: RDII
+        type(UnitHydro) :: uh(3)
+        real(8) :: area
+        real(8), allocatable :: rainfall(:)
+    end type RDII
+
+contains
+
+    subroutine get_uh_ordinates(u, dt, ordinates, nOrd)
+        type(UnitHydro), intent(in) :: u
+        real(8), intent(in) :: dt
+        real(8), intent(out) :: ordinates(500)
+        integer, intent(out) :: nOrd
+        real(8) :: t_base, peak, t
+        integer :: i
+
+        t_base = 2.0d0 * u%Tp * (1.0d0 + u%K)
+        peak = 2.0d0 / t_base
+        nOrd = int(t_base / dt) + 1
+
+        do i = 1, nOrd
+            t = (i - 1) * dt
+            if (t <= u%Tp) then
+                ordinates(i) = peak * t / u%Tp
+            else
+                ordinates(i) = peak * (t_base - t) &
+                               / (t_base - u%Tp)
+                if (ordinates(i) < 0.0d0) ordinates(i) = 0.0d0
+            end if
+        end do
+    end subroutine
+
+    function convolve(rain, nRain, uh, nUH, step) result(s)
+        real(8), intent(in) :: rain(:), uh(:)
+        integer, intent(in) :: nRain, nUH, step
+        real(8) :: s
+        integer :: j
+
+        s = 0.0d0
+        do j = 1, min(nUH, step)
+            s = s + rain(step - j + 1) * uh(j)
+        end do
+    end function
+
+    function get_rdii_flow(r, dt, step) result(totalQ)
+        type(RDII), intent(in) :: r
+        real(8), intent(in) :: dt
+        integer, intent(in) :: step
+        real(8) :: totalQ, ordinates(500), q
+        integer :: i, nOrd
+
+        totalQ = 0.0d0
+        do i = 1, 3
+            call get_uh_ordinates(r%uh(i), dt, &
+                                   ordinates, nOrd)
+            q = convolve(r%rainfall, size(r%rainfall), &
+                          ordinates, nOrd, step)
+            totalQ = totalQ + r%uh(i)%R * r%area * q
+        end do
+    end function
+
+end module rdii_module`,
+    julia: `# rdii.jl — Rainfall-Dependent I&I
+# SWMM5 Engine in Julia — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+struct UnitHydro
+    R::Float64      # fraction of rainfall volume
+    Tp::Float64     # time to peak (hours)
+    K::Float64      # recession limb ratio
+end
+
+mutable struct RDII
+    uh::Vector{UnitHydro}
+    area::Float64
+    rainfall::Vector{Float64}
+end
+
+function get_uh_ordinates(u::UnitHydro, dt::Float64)
+    t_base = 2.0 * u.Tp * (1.0 + u.K)
+    peak = 2.0 / t_base
+    n = Int(floor(t_base / dt)) + 1
+    ordinates = zeros(n)
+
+    for i in 1:n
+        t = (i - 1) * dt
+        if t ≤ u.Tp
+            ordinates[i] = peak * t / u.Tp
+        else
+            ordinates[i] = max(0.0,
+                peak * (t_base - t) / (t_base - u.Tp))
+        end
+    end
+    return ordinates
+end
+
+function convolve(rain::Vector{Float64},
+                  uh::Vector{Float64}, step::Int)
+    s = 0.0
+    for j in 1:min(length(uh), step)
+        s += rain[step - j + 1] * uh[j]
+    end
+    return s
+end
+
+function get_rdii_flow(r::RDII, dt::Float64, step::Int)
+    totalQ = 0.0
+    for u in r.uh
+        ordinates = get_uh_ordinates(u, dt)
+        q = convolve(r.rainfall, ordinates, step)
+        totalQ += u.R * r.area * q
+    end
+    return totalQ
+end`,
+    javascript: `// rdii.js — Rainfall-Dependent I&I
+// SWMM5 Engine in JavaScript — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+class UnitHydro {
+    constructor(R, Tp, K) {
+        this.R = R;       // fraction of rainfall volume
+        this.Tp = Tp;     // time to peak (hours)
+        this.K = K;       // recession limb ratio
+    }
+
+    getOrdinates(dt) {
+        const tBase = 2.0 * this.Tp * (1.0 + this.K);
+        const peak = 2.0 / tBase;
+        const n = Math.floor(tBase / dt) + 1;
+        const ordinates = [];
+
+        for (let i = 0; i < n; i++) {
+            const t = i * dt;
+            if (t <= this.Tp) {
+                ordinates.push(peak * t / this.Tp);
+            } else {
+                const val = peak * (tBase - t)
+                            / (tBase - this.Tp);
+                ordinates.push(Math.max(0.0, val));
+            }
+        }
+        return ordinates;
+    }
+}
+
+function convolve(rain, uh, step) {
+    let sum = 0.0;
+    for (let j = 0; j < uh.length && j <= step; j++) {
+        sum += rain[step - j] * uh[j];
+    }
+    return sum;
+}
+
+class RDIIModel {
+    constructor(unitHydros, area, rainfall) {
+        this.uh = unitHydros;
+        this.area = area;
+        this.rainfall = rainfall;
+    }
+
+    getFlow(dt, step) {
+        let totalQ = 0.0;
+        for (const u of this.uh) {
+            const ordinates = u.getOrdinates(dt);
+            const q = convolve(this.rainfall,
+                                ordinates, step);
+            totalQ += u.R * this.area * q;
+        }
+        return totalQ;
+    }
+}
+
+export { UnitHydro, RDIIModel };`,
+    go: `// rdii.go — Rainfall-Dependent I&I
+// SWMM5 Engine in Go — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+package swmm
+
+import "math"
+
+type UnitHydro struct {
+    R  float64 // fraction of rainfall volume
+    Tp float64 // time to peak (hours)
+    K  float64 // recession limb ratio
+}
+
+type RDII struct {
+    UH       [3]UnitHydro
+    Area     float64
+    Rainfall []float64
+}
+
+func (u *UnitHydro) GetOrdinates(dt float64) []float64 {
+    tBase := 2.0 * u.Tp * (1.0 + u.K)
+    peak := 2.0 / tBase
+    n := int(math.Floor(tBase/dt)) + 1
+    ordinates := make([]float64, n)
+
+    for i := 0; i < n; i++ {
+        t := float64(i) * dt
+        if t <= u.Tp {
+            ordinates[i] = peak * t / u.Tp
+        } else {
+            val := peak * (tBase - t) / (tBase - u.Tp)
+            ordinates[i] = math.Max(0.0, val)
+        }
+    }
+    return ordinates
+}
+
+func Convolve(rain, uh []float64, step int) float64 {
+    sum := 0.0
+    for j := 0; j < len(uh) && j <= step; j++ {
+        sum += rain[step-j] * uh[j]
+    }
+    return sum
+}
+
+func (r *RDII) GetFlow(dt float64, step int) float64 {
+    totalQ := 0.0
+    for i := 0; i < 3; i++ {
+        ordinates := r.UH[i].GetOrdinates(dt)
+        q := Convolve(r.Rainfall, ordinates, step)
+        totalQ += r.UH[i].R * r.Area * q
+    }
+    return totalQ
+}`,
+    zig: `// rdii.zig — Rainfall-Dependent I&I
+// SWMM5 Engine in Zig — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+const std = @import("std");
+const math = std.math;
+
+const UnitHydro = struct {
+    R: f64,    // fraction of rainfall volume
+    Tp: f64,   // time to peak (hours)
+    K: f64,    // recession limb ratio
+
+    pub fn getOrdinates(self: UnitHydro, dt: f64,
+                         buf: []f64) usize {
+        const t_base = 2.0 * self.Tp * (1.0 + self.K);
+        const peak = 2.0 / t_base;
+        const n = @as(usize, @intFromFloat(
+            @floor(t_base / dt))) + 1;
+
+        for (0..n) |i| {
+            const t = @as(f64, @floatFromInt(i)) * dt;
+            if (t <= self.Tp) {
+                buf[i] = peak * t / self.Tp;
+            } else {
+                const val = peak * (t_base - t)
+                            / (t_base - self.Tp);
+                buf[i] = @max(0.0, val);
+            }
+        }
+        return n;
+    }
+};
+
+fn convolve(rain: []const f64, uh: []const f64,
+            step: usize) f64 {
+    var sum: f64 = 0.0;
+    const limit = @min(uh.len, step + 1);
+    for (0..limit) |j| {
+        sum += rain[step - j] * uh[j];
+    }
+    return sum;
+}
+
+const RDIIModel = struct {
+    uh: [3]UnitHydro,
+    area: f64,
+    rainfall: []const f64,
+
+    pub fn getFlow(self: RDIIModel, dt: f64,
+                    step: usize) f64 {
+        var total_q: f64 = 0.0;
+        var buf: [500]f64 = undefined;
+
+        for (self.uh) |u| {
+            const n = u.getOrdinates(dt, &buf);
+            const q = convolve(self.rainfall,
+                                buf[0..n], step);
+            total_q += u.R * self.area * q;
+        }
+        return total_q;
+    }
+};`,
+    cpp: `// rdii.cpp — Rainfall-Dependent I&I
+// SWMM5 Engine in C++ — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+#include <vector>
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+struct UnitHydro {
+    double R;    // fraction of rainfall volume
+    double Tp;   // time to peak (hours)
+    double K;    // recession limb ratio
+
+    std::vector<double> getOrdinates(double dt) const {
+        double tBase = 2.0 * Tp * (1.0 + K);
+        double peak = 2.0 / tBase;
+        int n = static_cast<int>(tBase / dt) + 1;
+        std::vector<double> ordinates(n);
+
+        for (int i = 0; i < n; i++) {
+            double t = i * dt;
+            if (t <= Tp)
+                ordinates[i] = peak * t / Tp;
+            else
+                ordinates[i] = std::max(0.0,
+                    peak * (tBase - t) / (tBase - Tp));
+        }
+        return ordinates;
+    }
+};
+
+double convolve(const std::vector<double>& rain,
+                const std::vector<double>& uh, int step) {
+    double sum = 0.0;
+    for (size_t j = 0; j < uh.size()
+         && j <= static_cast<size_t>(step); j++) {
+        sum += rain[step - j] * uh[j];
+    }
+    return sum;
+}
+
+struct RDIIModel {
+    UnitHydro uh[3];
+    double area;
+    std::vector<double> rainfall;
+
+    double getFlow(double dt, int step) const {
+        double totalQ = 0.0;
+        for (int i = 0; i < 3; i++) {
+            auto ordinates = uh[i].getOrdinates(dt);
+            double q = convolve(rainfall,
+                                 ordinates, step);
+            totalQ += uh[i].R * area * q;
+        }
+        return totalQ;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// RDII.cs — Rainfall-Dependent I&I
+// SWMM5 Engine in C# — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+using System;
+using System.Collections.Generic;
+
+namespace Swmm
+{
+    public class UnitHydro
+    {
+        public double R { get; set; }
+        public double Tp { get; set; }
+        public double K { get; set; }
+
+        public UnitHydro(double r, double tp, double k)
+        {
+            R = r; Tp = tp; K = k;
+        }
+
+        public List<double> GetOrdinates(double dt)
+        {
+            double tBase = 2.0 * Tp * (1.0 + K);
+            double peak = 2.0 / tBase;
+            int n = (int)(tBase / dt) + 1;
+            var ordinates = new List<double>(n);
+
+            for (int i = 0; i < n; i++)
+            {
+                double t = i * dt;
+                if (t <= Tp)
+                    ordinates.Add(peak * t / Tp);
+                else
+                    ordinates.Add(Math.Max(0.0,
+                        peak * (tBase - t)
+                        / (tBase - Tp)));
+            }
+            return ordinates;
+        }
+    }
+
+    public class RDIIModel
+    {
+        public UnitHydro[] UH { get; set; }
+        public double Area { get; set; }
+        public double[] Rainfall { get; set; }
+
+        public static double Convolve(double[] rain,
+            List<double> uh, int step)
+        {
+            double sum = 0.0;
+            for (int j = 0; j < uh.Count
+                 && j <= step; j++)
+                sum += rain[step - j] * uh[j];
+            return sum;
+        }
+
+        public double GetFlow(double dt, int step)
+        {
+            double totalQ = 0.0;
+            foreach (var u in UH)
+            {
+                var ordinates = u.GetOrdinates(dt);
+                double q = Convolve(Rainfall,
+                                     ordinates, step);
+                totalQ += u.R * Area * q;
+            }
+            return totalQ;
+        }
+    }
+}`,
+    matlab: `% rdii.m — Rainfall-Dependent I&I
+% SWMM5 Engine in MATLAB — Unit Hydrograph RDII Model
+% Models RDII into sewers using three triangular
+% unit hydrographs (short/medium/long term)
+
+function ordinates = get_uh_ordinates(uh, dt)
+    t_base = 2.0 * uh.Tp * (1.0 + uh.K);
+    peak = 2.0 / t_base;
+    n = floor(t_base / dt) + 1;
+    ordinates = zeros(1, n);
+
+    for i = 1:n
+        t = (i - 1) * dt;
+        if t <= uh.Tp
+            ordinates(i) = peak * t / uh.Tp;
+        else
+            ordinates(i) = max(0.0, ...
+                peak * (t_base - t) / (t_base - uh.Tp));
+        end
+    end
+end
+
+function s = convolve_uh(rain, uh, step)
+    s = 0.0;
+    for j = 1:min(length(uh), step)
+        s = s + rain(step - j + 1) * uh(j);
+    end
+end
+
+function totalQ = get_rdii_flow(rdii, dt, step)
+    totalQ = 0.0;
+    for i = 1:3
+        ordinates = get_uh_ordinates(rdii.uh(i), dt);
+        q = convolve_uh(rdii.rainfall, ordinates, step);
+        totalQ = totalQ + rdii.uh(i).R * rdii.area * q;
+    end
+end
+
+function uh = create_unit_hydro(R, Tp, K)
+    uh.R = R;
+    uh.Tp = Tp;
+    uh.K = K;
+end
+
+function rdii = create_rdii(uh_array, area, rainfall)
+    rdii.uh = uh_array;
+    rdii.area = area;
+    rdii.rainfall = rainfall;
+end`,
+    r: `# rdii.R — Rainfall-Dependent I&I
+# SWMM5 Engine in R — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+create_unit_hydro <- function(R, Tp, K) {
+    list(R = R, Tp = Tp, K = K)
+}
+
+create_rdii <- function(uh_list, area, rainfall) {
+    list(uh = uh_list, area = area,
+         rainfall = rainfall)
+}
+
+get_uh_ordinates <- function(uh, dt) {
+    t_base <- 2.0 * uh$Tp * (1.0 + uh$K)
+    peak <- 2.0 / t_base
+    n <- floor(t_base / dt) + 1
+    ordinates <- numeric(n)
+
+    for (i in seq_len(n)) {
+        t <- (i - 1) * dt
+        if (t <= uh$Tp) {
+            ordinates[i] <- peak * t / uh$Tp
+        } else {
+            ordinates[i] <- max(0.0,
+                peak * (t_base - t) / (t_base - uh$Tp))
+        }
+    }
+    ordinates
+}
+
+convolve_uh <- function(rain, uh, step) {
+    s <- 0.0
+    for (j in seq_len(min(length(uh), step))) {
+        s <- s + rain[step - j + 1] * uh[j]
+    }
+    s
+}
+
+get_rdii_flow <- function(rdii, dt, step) {
+    totalQ <- 0.0
+    for (u in rdii$uh) {
+        ordinates <- get_uh_ordinates(u, dt)
+        q <- convolve_uh(rdii$rainfall, ordinates, step)
+        totalQ <- totalQ + u$R * rdii$area * q
+    }
+    totalQ
+}`,
+    delphi: `{ rdii.pas — Rainfall-Dependent I&I }
+{ SWMM5 Engine in Delphi — Unit Hydrograph RDII Model }
+{ Models RDII into sewers using three triangular }
+{ unit hydrographs (short/medium/long term) }
+
+unit RDII;
+
+interface
+
+uses Math, SysUtils;
+
+type
+  TUnitHydro = record
+    R: Double;     // fraction of rainfall volume
+    Tp: Double;    // time to peak (hours)
+    K: Double;     // recession limb ratio
+  end;
+
+  TOrdinates = array of Double;
+
+  TRDIIModel = class
+  private
+    FUH: array[0..2] of TUnitHydro;
+    FArea: Double;
+    FRainfall: array of Double;
+  public
+    constructor Create(UH0, UH1, UH2: TUnitHydro;
+                       AArea: Double;
+                       ARainfall: array of Double);
+    function GetUHOrdinates(const UH: TUnitHydro;
+                             Dt: Double): TOrdinates;
+    function Convolve(const Rain, UH: TOrdinates;
+                       Step: Integer): Double;
+    function GetFlow(Dt: Double;
+                      Step: Integer): Double;
+  end;
+
+implementation
+
+constructor TRDIIModel.Create(UH0, UH1, UH2: TUnitHydro;
+                               AArea: Double;
+                               ARainfall: array of Double);
+begin
+  FUH[0] := UH0; FUH[1] := UH1; FUH[2] := UH2;
+  FArea := AArea;
+  SetLength(FRainfall, Length(ARainfall));
+  Move(ARainfall[0], FRainfall[0],
+       Length(ARainfall) * SizeOf(Double));
+end;
+
+function TRDIIModel.GetUHOrdinates(
+    const UH: TUnitHydro; Dt: Double): TOrdinates;
+var
+  TBase, Peak, T: Double;
+  N, I: Integer;
+begin
+  TBase := 2.0 * UH.Tp * (1.0 + UH.K);
+  Peak := 2.0 / TBase;
+  N := Trunc(TBase / Dt) + 1;
+  SetLength(Result, N);
+
+  for I := 0 to N - 1 do begin
+    T := I * Dt;
+    if T <= UH.Tp then
+      Result[I] := Peak * T / UH.Tp
+    else
+      Result[I] := Max(0.0,
+          Peak * (TBase - T) / (TBase - UH.Tp));
+  end;
+end;
+
+function TRDIIModel.Convolve(const Rain, UH: TOrdinates;
+                               Step: Integer): Double;
+var J: Integer;
+begin
+  Result := 0.0;
+  for J := 0 to Min(Length(UH), Step + 1) - 1 do
+    Result := Result + Rain[Step - J] * UH[J];
+end;
+
+function TRDIIModel.GetFlow(Dt: Double;
+                              Step: Integer): Double;
+var
+  I: Integer;
+  Ordinates: TOrdinates;
+  Q: Double;
+begin
+  Result := 0.0;
+  for I := 0 to 2 do begin
+    Ordinates := GetUHOrdinates(FUH[I], Dt);
+    Q := Convolve(FRainfall, Ordinates, Step);
+    Result := Result + FUH[I].R * FArea * Q;
+  end;
+end;
+
+end.`,
+    typescript: `// rdii.ts — Rainfall-Dependent I&I
+// SWMM5 Engine in TypeScript — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+interface UnitHydroParams {
+    R: number;    // fraction of rainfall volume
+    Tp: number;   // time to peak (hours)
+    K: number;    // recession limb ratio
+}
+
+class UnitHydro {
+    readonly R: number;
+    readonly Tp: number;
+    readonly K: number;
+
+    constructor(params: UnitHydroParams) {
+        this.R = params.R;
+        this.Tp = params.Tp;
+        this.K = params.K;
+    }
+
+    getOrdinates(dt: number): number[] {
+        const tBase: number = 2.0 * this.Tp
+                              * (1.0 + this.K);
+        const peak: number = 2.0 / tBase;
+        const n: number = Math.floor(tBase / dt) + 1;
+        const ordinates: number[] = [];
+
+        for (let i = 0; i < n; i++) {
+            const t: number = i * dt;
+            if (t <= this.Tp) {
+                ordinates.push(peak * t / this.Tp);
+            } else {
+                const val = peak * (tBase - t)
+                            / (tBase - this.Tp);
+                ordinates.push(Math.max(0.0, val));
+            }
+        }
+        return ordinates;
+    }
+}
+
+function convolve(rain: number[], uh: number[],
+                  step: number): number {
+    let sum: number = 0.0;
+    for (let j = 0; j < uh.length && j <= step; j++) {
+        sum += rain[step - j] * uh[j];
+    }
+    return sum;
+}
+
+class RDIIModel {
+    readonly uh: UnitHydro[];
+    readonly area: number;
+    readonly rainfall: number[];
+
+    constructor(uh: UnitHydro[], area: number,
+                rainfall: number[]) {
+        this.uh = uh;
+        this.area = area;
+        this.rainfall = rainfall;
+    }
+
+    getFlow(dt: number, step: number): number {
+        let totalQ: number = 0.0;
+        for (const u of this.uh) {
+            const ordinates = u.getOrdinates(dt);
+            const q = convolve(this.rainfall,
+                                ordinates, step);
+            totalQ += u.R * this.area * q;
+        }
+        return totalQ;
+    }
+}
+
+export { UnitHydro, RDIIModel };`,
+    cuda: `// rdii.cu — Rainfall-Dependent I&I
+// SWMM5 Engine in CUDA — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+#include <math.h>
+
+struct UnitHydro {
+    float R;    // fraction of rainfall volume
+    float Tp;   // time to peak (hours)
+    float K;    // recession limb ratio
+};
+
+struct RDIINode {
+    UnitHydro uh[3];
+    float area;
+};
+
+__device__ float getUHOrdinate(const UnitHydro* uh,
+                                float t) {
+    float tBase = 2.0f * uh->Tp * (1.0f + uh->K);
+    float peak = 2.0f / tBase;
+
+    if (t <= uh->Tp)
+        return peak * t / uh->Tp;
+    else {
+        float val = peak * (tBase - t)
+                    / (tBase - uh->Tp);
+        return fmaxf(0.0f, val);
+    }
+}
+
+__device__ float convolveStep(const float* rain,
+    const UnitHydro* uh, float dt, int step) {
+    float tBase = 2.0f * uh->Tp * (1.0f + uh->K);
+    int nUH = (int)(tBase / dt) + 1;
+    float sum = 0.0f;
+
+    for (int j = 0; j < nUH && j <= step; j++) {
+        float t = j * dt;
+        float ord = getUHOrdinate(uh, t);
+        sum += rain[step - j] * ord;
+    }
+    return sum;
+}
+
+__global__ void computeRDII(RDIINode* nodes,
+    float* rain, float dt, int step,
+    float* outflow, int nNodes) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nNodes) return;
+
+    RDIINode node = nodes[idx];
+    float totalQ = 0.0f;
+
+    for (int i = 0; i < 3; i++) {
+        float q = convolveStep(rain, &node.uh[i],
+                                dt, step);
+        totalQ += node.uh[i].R * node.area * q;
+    }
+    outflow[idx] = totalQ;
+}`,
+    wasm: `;; rdii.wat — Rainfall-Dependent I&I
+;; SWMM5 Engine in WebAssembly — Unit Hydrograph RDII Model
+;; Models RDII into sewers using three triangular
+;; unit hydrographs (short/medium/long term)
+
+(module
+  (memory (export "memory") 1)
+
+  ;; UH ordinate: triangle shape
+  ;; params: t, Tp, K
+  (func $uhOrdinate
+    (param $t f64) (param $Tp f64) (param $K f64)
+    (result f64)
+    (local $tBase f64) (local $peak f64)
+
+    (local.set $tBase
+      (f64.mul (f64.mul (f64.const 2.0) (local.get $Tp))
+               (f64.add (f64.const 1.0) (local.get $K))))
+    (local.set $peak
+      (f64.div (f64.const 2.0) (local.get $tBase)))
+
+    (if (result f64)
+      (f64.le (local.get $t) (local.get $Tp))
+      (then
+        (f64.div
+          (f64.mul (local.get $peak) (local.get $t))
+          (local.get $Tp)))
+      (else
+        (f64.max (f64.const 0.0)
+          (f64.div
+            (f64.mul (local.get $peak)
+              (f64.sub (local.get $tBase) (local.get $t)))
+            (f64.sub (local.get $tBase)
+                     (local.get $Tp)))))))
+
+  ;; Convolve rainfall with UH at given step
+  ;; rain at offset 0, nRain values
+  (func $convolve
+    (param $rainOff i32) (param $Tp f64)
+    (param $K f64) (param $dt f64) (param $step i32)
+    (result f64)
+    (local $sum f64) (local $j i32)
+    (local $t f64) (local $tBase f64) (local $nUH i32)
+
+    (local.set $tBase
+      (f64.mul (f64.mul (f64.const 2.0) (local.get $Tp))
+               (f64.add (f64.const 1.0) (local.get $K))))
+    (local.set $nUH
+      (i32.add (i32.trunc_f64_s
+        (f64.floor (f64.div (local.get $tBase)
+                            (local.get $dt)))) (i32.const 1)))
+    (local.set $sum (f64.const 0.0))
+    (local.set $j (i32.const 0))
+
+    (block $break (loop $loop
+      (br_if $break (i32.or
+        (i32.ge_s (local.get $j) (local.get $nUH))
+        (i32.gt_s (local.get $j) (local.get $step))))
+
+      (local.set $t
+        (f64.mul (f64.convert_i32_s (local.get $j))
+                 (local.get $dt)))
+      (local.set $sum (f64.add (local.get $sum)
+        (f64.mul
+          (f64.load (i32.add (local.get $rainOff)
+            (i32.mul (i32.sub (local.get $step)
+                              (local.get $j))
+                     (i32.const 8))))
+          (call $uhOrdinate (local.get $t)
+            (local.get $Tp) (local.get $K)))))
+
+      (local.set $j
+        (i32.add (local.get $j) (i32.const 1)))
+      (br $loop)))
+    (local.get $sum))
+)`,
+    mojo: `# rdii.mojo — Rainfall-Dependent I&I
+# SWMM5 Engine in Mojo — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+from math import floor, max
+
+struct UnitHydro:
+    var R: Float64
+    var Tp: Float64
+    var K: Float64
+
+    fn __init__(inout self, R: Float64, Tp: Float64,
+                K: Float64):
+        self.R = R
+        self.Tp = Tp
+        self.K = K
+
+    fn t_base(self) -> Float64:
+        return 2.0 * self.Tp * (1.0 + self.K)
+
+    fn peak(self) -> Float64:
+        return 2.0 / self.t_base()
+
+    fn ordinate(self, t: Float64) -> Float64:
+        let tb = self.t_base()
+        let pk = self.peak()
+        if t <= self.Tp:
+            return pk * t / self.Tp
+        else:
+            return max(0.0,
+                pk * (tb - t) / (tb - self.Tp))
+
+fn convolve(rain: DynamicVector[Float64],
+            uh: UnitHydro, dt: Float64,
+            step: Int) -> Float64:
+    let tb = uh.t_base()
+    let n_uh = int(floor(tb / dt)) + 1
+    var s: Float64 = 0.0
+    for j in range(min(n_uh, step + 1)):
+        let t = Float64(j) * dt
+        s += rain[step - j] * uh.ordinate(t)
+    return s
+
+struct RDIIModel:
+    var uh0: UnitHydro
+    var uh1: UnitHydro
+    var uh2: UnitHydro
+    var area: Float64
+    var rainfall: DynamicVector[Float64]
+
+    fn __init__(inout self, uh0: UnitHydro,
+                uh1: UnitHydro, uh2: UnitHydro,
+                area: Float64,
+                rainfall: DynamicVector[Float64]):
+        self.uh0 = uh0
+        self.uh1 = uh1
+        self.uh2 = uh2
+        self.area = area
+        self.rainfall = rainfall
+
+    fn get_flow(self, dt: Float64, step: Int) -> Float64:
+        var total_q: Float64 = 0.0
+        total_q += self.uh0.R * self.area * convolve(
+            self.rainfall, self.uh0, dt, step)
+        total_q += self.uh1.R * self.area * convolve(
+            self.rainfall, self.uh1, dt, step)
+        total_q += self.uh2.R * self.area * convolve(
+            self.rainfall, self.uh2, dt, step)
+        return total_q`,
+    java: `// RDII.java — Rainfall-Dependent I&I
+// SWMM5 Engine in Java — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+package swmm;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class RDII {
+    public static class UnitHydro {
+        public final double R;
+        public final double Tp;
+        public final double K;
+
+        public UnitHydro(double R, double Tp, double K) {
+            this.R = R;
+            this.Tp = Tp;
+            this.K = K;
+        }
+
+        public List<Double> getOrdinates(double dt) {
+            double tBase = 2.0 * Tp * (1.0 + K);
+            double peak = 2.0 / tBase;
+            int n = (int)(tBase / dt) + 1;
+            List<Double> ordinates = new ArrayList<>();
+
+            for (int i = 0; i < n; i++) {
+                double t = i * dt;
+                if (t <= Tp)
+                    ordinates.add(peak * t / Tp);
+                else
+                    ordinates.add(Math.max(0.0,
+                        peak * (tBase - t)
+                        / (tBase - Tp)));
+            }
+            return ordinates;
+        }
+    }
+
+    private final UnitHydro[] uh;
+    private final double area;
+    private final double[] rainfall;
+
+    public RDII(UnitHydro[] uh, double area,
+                double[] rainfall) {
+        this.uh = uh;
+        this.area = area;
+        this.rainfall = rainfall;
+    }
+
+    public static double convolve(double[] rain,
+            List<Double> uh, int step) {
+        double sum = 0.0;
+        for (int j = 0; j < uh.size()
+             && j <= step; j++)
+            sum += rain[step - j] * uh.get(j);
+        return sum;
+    }
+
+    public double getFlow(double dt, int step) {
+        double totalQ = 0.0;
+        for (UnitHydro u : uh) {
+            List<Double> ordinates = u.getOrdinates(dt);
+            double q = convolve(rainfall,
+                                 ordinates, step);
+            totalQ += u.R * area * q;
+        }
+        return totalQ;
+    }
+}`,
+    nim: `# rdii.nim — Rainfall-Dependent I&I
+# SWMM5 Engine in Nim — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+import math
+
+type
+  UnitHydro = object
+    R: float64
+    Tp: float64
+    K: float64
+
+  RDIIModel = object
+    uh: array[3, UnitHydro]
+    area: float64
+    rainfall: seq[float64]
+
+proc tBase(u: UnitHydro): float64 =
+  result = 2.0 * u.Tp * (1.0 + u.K)
+
+proc getOrdinates(u: UnitHydro,
+                   dt: float64): seq[float64] =
+  let tb = u.tBase()
+  let peak = 2.0 / tb
+  let n = int(floor(tb / dt)) + 1
+  result = newSeq[float64](n)
+
+  for i in 0..<n:
+    let t = float64(i) * dt
+    if t <= u.Tp:
+      result[i] = peak * t / u.Tp
+    else:
+      result[i] = max(0.0,
+          peak * (tb - t) / (tb - u.Tp))
+
+proc convolve(rain: seq[float64],
+              uh: seq[float64],
+              step: int): float64 =
+  result = 0.0
+  for j in 0..<min(uh.len, step + 1):
+    result += rain[step - j] * uh[j]
+
+proc getFlow(r: RDIIModel, dt: float64,
+              step: int): float64 =
+  result = 0.0
+  for i in 0..2:
+    let ordinates = r.uh[i].getOrdinates(dt)
+    let q = convolve(r.rainfall, ordinates, step)
+    result += r.uh[i].R * r.area * q`,
+    ada: `-- rdii.adb — Rainfall-Dependent I&I
+-- SWMM5 Engine in Ada — Unit Hydrograph RDII Model
+-- Models RDII into sewers using three triangular
+-- unit hydrographs (short/medium/long term)
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body RDII is
+
+   type Unit_Hydro is record
+      R  : Float := 0.0;
+      Tp : Float := 1.0;
+      K  : Float := 1.0;
+   end record;
+
+   type UH_Array is array (1 .. 3) of Unit_Hydro;
+   type Float_Array is array (Positive range <>) of Float;
+
+   type RDII_Model is record
+      UH       : UH_Array;
+      Area     : Float;
+      Rainfall : access Float_Array;
+   end record;
+
+   function T_Base (U : Unit_Hydro) return Float is
+   begin
+      return 2.0 * U.Tp * (1.0 + U.K);
+   end T_Base;
+
+   function UH_Ordinate (U : Unit_Hydro;
+                          T : Float) return Float is
+      TB   : Float := T_Base (U);
+      Peak : Float := 2.0 / TB;
+   begin
+      if T <= U.Tp then
+         return Peak * T / U.Tp;
+      else
+         return Float'Max (0.0,
+            Peak * (TB - T) / (TB - U.Tp));
+      end if;
+   end UH_Ordinate;
+
+   function Convolve (Rain : Float_Array;
+                       U    : Unit_Hydro;
+                       Dt   : Float;
+                       Step : Positive) return Float is
+      TB  : Float := T_Base (U);
+      NUH : Positive := Positive (Float'Floor (TB / Dt)) + 1;
+      S   : Float := 0.0;
+   begin
+      for J in 1 .. Positive'Min (NUH, Step) loop
+         S := S + Rain (Step - J + 1)
+              * UH_Ordinate (U, Float (J - 1) * Dt);
+      end loop;
+      return S;
+   end Convolve;
+
+   function Get_Flow (Model : RDII_Model;
+                       Dt    : Float;
+                       Step  : Positive) return Float is
+      Total_Q : Float := 0.0;
+   begin
+      for I in 1 .. 3 loop
+         Total_Q := Total_Q + Model.UH (I).R * Model.Area
+            * Convolve (Model.Rainfall.all,
+                         Model.UH (I), Dt, Step);
+      end loop;
+      return Total_Q;
+   end Get_Flow;
+
+end RDII;`,
+    chapel: `// rdii.chpl — Rainfall-Dependent I&I
+// SWMM5 Engine in Chapel — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+record UnitHydro {
+    var R: real;    // fraction of rainfall volume
+    var Tp: real;   // time to peak (hours)
+    var K: real;    // recession limb ratio
+
+    proc tBase(): real {
+        return 2.0 * this.Tp * (1.0 + this.K);
+    }
+
+    proc peak(): real {
+        return 2.0 / this.tBase();
+    }
+
+    proc ordinate(t: real): real {
+        const tb = this.tBase();
+        const pk = this.peak();
+        if t <= this.Tp then
+            return pk * t / this.Tp;
+        else
+            return max(0.0,
+                pk * (tb - t) / (tb - this.Tp));
+    }
+}
+
+proc convolve(rain: [] real, uh: UnitHydro,
+              dt: real, step: int): real {
+    const tb = uh.tBase();
+    const nUH = (tb / dt): int + 1;
+    var s: real = 0.0;
+
+    for j in 0..#min(nUH, step + 1) {
+        const t = j: real * dt;
+        s += rain[step - j] * uh.ordinate(t);
+    }
+    return s;
+}
+
+record RDIIModel {
+    var uh: [0..2] UnitHydro;
+    var area: real;
+    var rainfall: [0..-1] real;
+
+    proc getFlow(dt: real, step: int): real {
+        var totalQ: real = 0.0;
+        for i in 0..2 {
+            const q = convolve(this.rainfall,
+                                this.uh[i], dt, step);
+            totalQ += this.uh[i].R * this.area * q;
+        }
+        return totalQ;
+    }
+}`,
+    swift: `// rdii.swift — Rainfall-Dependent I&I
+// SWMM5 Engine in Swift — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+import Foundation
+
+struct UnitHydro {
+    let R: Double     // fraction of rainfall volume
+    let Tp: Double    // time to peak (hours)
+    let K: Double     // recession limb ratio
+
+    var tBase: Double { 2.0 * Tp * (1.0 + K) }
+    var peak: Double { 2.0 / tBase }
+
+    func ordinate(t: Double) -> Double {
+        if t <= Tp {
+            return peak * t / Tp
+        } else {
+            return max(0.0,
+                peak * (tBase - t) / (tBase - Tp))
+        }
+    }
+
+    func getOrdinates(dt: Double) -> [Double] {
+        let n = Int(tBase / dt) + 1
+        return (0..<n).map { i in
+            ordinate(t: Double(i) * dt)
+        }
+    }
+}
+
+func convolve(rain: [Double], uh: [Double],
+              step: Int) -> Double {
+    var sum = 0.0
+    for j in 0..<min(uh.count, step + 1) {
+        sum += rain[step - j] * uh[j]
+    }
+    return sum
+}
+
+struct RDIIModel {
+    let uh: [UnitHydro]
+    let area: Double
+    let rainfall: [Double]
+
+    func getFlow(dt: Double, step: Int) -> Double {
+        var totalQ = 0.0
+        for u in uh {
+            let ordinates = u.getOrdinates(dt: dt)
+            let q = convolve(rain: rainfall,
+                              uh: ordinates, step: step)
+            totalQ += u.R * area * q
+        }
+        return totalQ
+    }
+}`,
+    kotlin: `// RDII.kt — Rainfall-Dependent I&I
+// SWMM5 Engine in Kotlin — Unit Hydrograph RDII Model
+// Models RDII into sewers using three triangular
+// unit hydrographs (short/medium/long term)
+
+package swmm
+
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
+
+data class UnitHydro(
+    val R: Double,    // fraction of rainfall volume
+    val Tp: Double,   // time to peak (hours)
+    val K: Double     // recession limb ratio
+) {
+    val tBase: Double get() = 2.0 * Tp * (1.0 + K)
+    val peak: Double get() = 2.0 / tBase
+
+    fun ordinate(t: Double): Double {
+        return if (t <= Tp) {
+            peak * t / Tp
+        } else {
+            max(0.0,
+                peak * (tBase - t) / (tBase - Tp))
+        }
+    }
+
+    fun getOrdinates(dt: Double): List<Double> {
+        val n = (floor(tBase / dt).toInt()) + 1
+        return (0 until n).map { i ->
+            ordinate(i.toDouble() * dt)
+        }
+    }
+}
+
+fun convolve(rain: DoubleArray, uh: List<Double>,
+             step: Int): Double {
+    var sum = 0.0
+    for (j in 0 until min(uh.size, step + 1)) {
+        sum += rain[step - j] * uh[j]
+    }
+    return sum
+}
+
+class RDIIModel(
+    val uh: Array<UnitHydro>,
+    val area: Double,
+    val rainfall: DoubleArray
+) {
+    fun getFlow(dt: Double, step: Int): Double {
+        var totalQ = 0.0
+        for (u in uh) {
+            val ordinates = u.getOrdinates(dt)
+            val q = convolve(rainfall, ordinates, step)
+            totalQ += u.R * area * q
+        }
+        return totalQ
+    }
+}`,
+  },
+  "treatmnt.c — Water Quality Treatment": {
+    category: "Water Quality",
+    difficulty: "intermediate",
+    tags: ["treatment", "BMP", "pollutant", "removal", "concentration", "effluent", "first-order"],
+    description: "Applies water quality treatment at nodes (e.g., BMPs, treatment plants). Supports removal equations as functions of concentration and flow — either a constant removal percentage, first-order decay based on detention time, or a custom R = f(C,Q) expression. Computes effluent concentration from influent concentration and the removal function.",
+    equations: "C_out = C_in · (1 - R) (removal); R = 1 - exp(-k·dt) (first-order); C_out = f(C_in, Q) (custom)",
+    inputs: "Influent pollutant concentrations, treatment function type and parameters, node volume, flow rate",
+    outputs: "Effluent pollutant concentrations, mass removed",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// treatmnt.c — Water Quality Treatment
+// EPA SWMM5 Engine — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+#include <math.h>
+
+typedef enum {
+    REMOVAL_PCT,
+    FIRST_ORDER,
+    CUSTOM
+} TTreatType;
+
+typedef struct {
+    TTreatType type;
+    double param;      // removal fraction or decay rate
+    double customCoeff; // for custom: C_out = coeff * C^a * Q^b
+    double expC;
+    double expQ;
+} TTreatment;
+
+double treat_getRemoval(TTreatment* t, double Cin,
+                         double Q, double dt)
+{
+    double R;
+    switch (t->type) {
+        case REMOVAL_PCT:
+            R = t->param;
+            break;
+        case FIRST_ORDER:
+            R = 1.0 - exp(-t->param * dt);
+            break;
+        case CUSTOM:
+            if (Cin <= 0.0) return 0.0;
+            {
+                double Cout = t->customCoeff
+                    * pow(Cin, t->expC)
+                    * pow(Q > 0.0 ? Q : 1.0, t->expQ);
+                R = 1.0 - Cout / Cin;
+                if (R < 0.0) R = 0.0;
+                if (R > 1.0) R = 1.0;
+            }
+            break;
+        default:
+            R = 0.0;
+    }
+    return R;
+}
+
+double treat_getEffluent(TTreatment* t, double Cin,
+                          double Q, double dt)
+{
+    double R = treat_getRemoval(t, Cin, Q, dt);
+    return Cin * (1.0 - R);
+}
+
+double treat_getMassRemoved(TTreatment* t, double Cin,
+                             double Q, double dt,
+                             double volume)
+{
+    double R = treat_getRemoval(t, Cin, Q, dt);
+    return Cin * R * volume;
+}`,
+    rust: `// treatmnt.rs — Water Quality Treatment
+// SWMM5 Engine in Rust — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+pub enum TreatType {
+    RemovalPct,
+    FirstOrder,
+    Custom,
+}
+
+pub struct Treatment {
+    pub treat_type: TreatType,
+    pub param: f64,
+    pub custom_coeff: f64,
+    pub exp_c: f64,
+    pub exp_q: f64,
+}
+
+impl Treatment {
+    pub fn get_removal(&self, c_in: f64, q: f64,
+                        dt: f64) -> f64 {
+        let r = match self.treat_type {
+            TreatType::RemovalPct => self.param,
+            TreatType::FirstOrder => {
+                1.0 - (-self.param * dt).exp()
+            }
+            TreatType::Custom => {
+                if c_in <= 0.0 { return 0.0; }
+                let q_val = if q > 0.0 { q } else { 1.0 };
+                let c_out = self.custom_coeff
+                    * c_in.powf(self.exp_c)
+                    * q_val.powf(self.exp_q);
+                (1.0 - c_out / c_in).clamp(0.0, 1.0)
+            }
+        };
+        r
+    }
+
+    pub fn get_effluent(&self, c_in: f64, q: f64,
+                         dt: f64) -> f64 {
+        c_in * (1.0 - self.get_removal(c_in, q, dt))
+    }
+
+    pub fn get_mass_removed(&self, c_in: f64, q: f64,
+                             dt: f64, volume: f64) -> f64 {
+        c_in * self.get_removal(c_in, q, dt) * volume
+    }
+}`,
+    python: `# treatmnt.py — Water Quality Treatment
+# SWMM5 Engine in Python — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+import math
+from dataclasses import dataclass
+from enum import Enum
+
+class TreatType(Enum):
+    REMOVAL_PCT = 0
+    FIRST_ORDER = 1
+    CUSTOM = 2
+
+@dataclass
+class Treatment:
+    treat_type: TreatType
+    param: float
+    custom_coeff: float = 0.0
+    exp_c: float = 1.0
+    exp_q: float = 0.0
+
+    def get_removal(self, c_in: float, Q: float,
+                     dt: float) -> float:
+        if self.treat_type == TreatType.REMOVAL_PCT:
+            return self.param
+        elif self.treat_type == TreatType.FIRST_ORDER:
+            return 1.0 - math.exp(-self.param * dt)
+        elif self.treat_type == TreatType.CUSTOM:
+            if c_in <= 0.0:
+                return 0.0
+            q_val = Q if Q > 0.0 else 1.0
+            c_out = (self.custom_coeff
+                     * c_in ** self.exp_c
+                     * q_val ** self.exp_q)
+            R = 1.0 - c_out / c_in
+            return max(0.0, min(R, 1.0))
+        return 0.0
+
+    def get_effluent(self, c_in: float, Q: float,
+                      dt: float) -> float:
+        return c_in * (1.0 - self.get_removal(c_in, Q, dt))
+
+    def get_mass_removed(self, c_in: float, Q: float,
+                          dt: float,
+                          volume: float) -> float:
+        return c_in * self.get_removal(c_in, Q, dt) * volume`,
+    fortran: `! treatmnt.f90 — Water Quality Treatment
+! SWMM5 Engine in Fortran — Pollutant Treatment Model
+! Applies removal at nodes using constant removal,
+! first-order decay, or custom R = f(C,Q)
+
+module treatment_module
+    implicit none
+
+    integer, parameter :: REMOVAL_PCT = 0
+    integer, parameter :: FIRST_ORDER = 1
+    integer, parameter :: CUSTOM_TYPE = 2
+
+    type :: Treatment
+        integer  :: treat_type
+        real(8)  :: param
+        real(8)  :: custom_coeff
+        real(8)  :: exp_c
+        real(8)  :: exp_q
+    end type Treatment
+
+contains
+
+    function get_removal(t, c_in, Q, dt) result(R)
+        type(Treatment), intent(in) :: t
+        real(8), intent(in) :: c_in, Q, dt
+        real(8) :: R, c_out, q_val
+
+        select case (t%treat_type)
+        case (REMOVAL_PCT)
+            R = t%param
+        case (FIRST_ORDER)
+            R = 1.0d0 - exp(-t%param * dt)
+        case (CUSTOM_TYPE)
+            if (c_in <= 0.0d0) then
+                R = 0.0d0
+                return
+            end if
+            q_val = Q
+            if (q_val <= 0.0d0) q_val = 1.0d0
+            c_out = t%custom_coeff &
+                    * c_in**t%exp_c * q_val**t%exp_q
+            R = 1.0d0 - c_out / c_in
+            R = max(0.0d0, min(R, 1.0d0))
+        case default
+            R = 0.0d0
+        end select
+    end function
+
+    function get_effluent(t, c_in, Q, dt) result(c_out)
+        type(Treatment), intent(in) :: t
+        real(8), intent(in) :: c_in, Q, dt
+        real(8) :: c_out
+
+        c_out = c_in * (1.0d0 - get_removal(t, c_in, Q, dt))
+    end function
+
+    function get_mass_removed(t, c_in, Q, dt, &
+                               volume) result(mass)
+        type(Treatment), intent(in) :: t
+        real(8), intent(in) :: c_in, Q, dt, volume
+        real(8) :: mass
+
+        mass = c_in * get_removal(t, c_in, Q, dt) * volume
+    end function
+
+end module treatment_module`,
+    julia: `# treatmnt.jl — Water Quality Treatment
+# SWMM5 Engine in Julia — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+@enum TreatType RemovalPct FirstOrder CustomTreat
+
+mutable struct Treatment
+    treat_type::TreatType
+    param::Float64
+    custom_coeff::Float64
+    exp_c::Float64
+    exp_q::Float64
+end
+
+function get_removal(t::Treatment, c_in::Float64,
+                      Q::Float64, dt::Float64)::Float64
+    if t.treat_type == RemovalPct
+        return t.param
+    elseif t.treat_type == FirstOrder
+        return 1.0 - exp(-t.param * dt)
+    elseif t.treat_type == CustomTreat
+        c_in ≤ 0.0 && return 0.0
+        q_val = Q > 0.0 ? Q : 1.0
+        c_out = t.custom_coeff * c_in^t.exp_c *
+                q_val^t.exp_q
+        R = 1.0 - c_out / c_in
+        return clamp(R, 0.0, 1.0)
+    end
+    return 0.0
+end
+
+function get_effluent(t::Treatment, c_in::Float64,
+                       Q::Float64, dt::Float64)::Float64
+    return c_in * (1.0 - get_removal(t, c_in, Q, dt))
+end
+
+function get_mass_removed(t::Treatment, c_in::Float64,
+                           Q::Float64, dt::Float64,
+                           volume::Float64)::Float64
+    return c_in * get_removal(t, c_in, Q, dt) * volume
+end`,
+    javascript: `// treatmnt.js — Water Quality Treatment
+// SWMM5 Engine in JavaScript — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+const TreatType = Object.freeze({
+    REMOVAL_PCT: 0,
+    FIRST_ORDER: 1,
+    CUSTOM: 2,
+});
+
+class Treatment {
+    constructor(type, param, customCoeff = 0,
+                expC = 1, expQ = 0) {
+        this.type = type;
+        this.param = param;
+        this.customCoeff = customCoeff;
+        this.expC = expC;
+        this.expQ = expQ;
+    }
+
+    getRemoval(cIn, Q, dt) {
+        switch (this.type) {
+            case TreatType.REMOVAL_PCT:
+                return this.param;
+            case TreatType.FIRST_ORDER:
+                return 1.0 - Math.exp(-this.param * dt);
+            case TreatType.CUSTOM: {
+                if (cIn <= 0.0) return 0.0;
+                const qVal = Q > 0.0 ? Q : 1.0;
+                const cOut = this.customCoeff
+                    * Math.pow(cIn, this.expC)
+                    * Math.pow(qVal, this.expQ);
+                const R = 1.0 - cOut / cIn;
+                return Math.max(0.0, Math.min(R, 1.0));
+            }
+            default:
+                return 0.0;
+        }
+    }
+
+    getEffluent(cIn, Q, dt) {
+        return cIn * (1.0 - this.getRemoval(cIn, Q, dt));
+    }
+
+    getMassRemoved(cIn, Q, dt, volume) {
+        return cIn * this.getRemoval(cIn, Q, dt) * volume;
+    }
+}
+
+export { Treatment, TreatType };`,
+    go: `// treatmnt.go — Water Quality Treatment
+// SWMM5 Engine in Go — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+package swmm
+
+import "math"
+
+type TreatType int
+
+const (
+    RemovalPct TreatType = iota
+    FirstOrder
+    CustomTreat
+)
+
+type Treatment struct {
+    Type        TreatType
+    Param       float64
+    CustomCoeff float64
+    ExpC        float64
+    ExpQ        float64
+}
+
+func (t *Treatment) GetRemoval(cIn, Q,
+                                dt float64) float64 {
+    switch t.Type {
+    case RemovalPct:
+        return t.Param
+    case FirstOrder:
+        return 1.0 - math.Exp(-t.Param*dt)
+    case CustomTreat:
+        if cIn <= 0.0 {
+            return 0.0
+        }
+        qVal := Q
+        if qVal <= 0.0 {
+            qVal = 1.0
+        }
+        cOut := t.CustomCoeff *
+            math.Pow(cIn, t.ExpC) *
+            math.Pow(qVal, t.ExpQ)
+        R := 1.0 - cOut/cIn
+        return math.Max(0.0, math.Min(R, 1.0))
+    }
+    return 0.0
+}
+
+func (t *Treatment) GetEffluent(cIn, Q,
+                                 dt float64) float64 {
+    return cIn * (1.0 - t.GetRemoval(cIn, Q, dt))
+}
+
+func (t *Treatment) GetMassRemoved(cIn, Q, dt,
+                                    volume float64) float64 {
+    return cIn * t.GetRemoval(cIn, Q, dt) * volume
+}`,
+    zig: `// treatmnt.zig — Water Quality Treatment
+// SWMM5 Engine in Zig — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+const std = @import("std");
+const math = std.math;
+
+const TreatType = enum {
+    removal_pct,
+    first_order,
+    custom,
+};
+
+const Treatment = struct {
+    treat_type: TreatType,
+    param: f64,
+    custom_coeff: f64,
+    exp_c: f64,
+    exp_q: f64,
+
+    pub fn getRemoval(self: Treatment, c_in: f64,
+                       q: f64, dt: f64) f64 {
+        return switch (self.treat_type) {
+            .removal_pct => self.param,
+            .first_order => 1.0 - @exp(-self.param * dt),
+            .custom => blk: {
+                if (c_in <= 0.0) break :blk 0.0;
+                const q_val = if (q > 0.0) q else 1.0;
+                const c_out = self.custom_coeff
+                    * math.pow(f64, c_in, self.exp_c)
+                    * math.pow(f64, q_val, self.exp_q);
+                const r = 1.0 - c_out / c_in;
+                break :blk math.clamp(r, 0.0, 1.0);
+            },
+        };
+    }
+
+    pub fn getEffluent(self: Treatment, c_in: f64,
+                        q: f64, dt: f64) f64 {
+        return c_in * (1.0 - self.getRemoval(c_in, q, dt));
+    }
+
+    pub fn getMassRemoved(self: Treatment, c_in: f64,
+                           q: f64, dt: f64,
+                           volume: f64) f64 {
+        return c_in * self.getRemoval(c_in, q, dt) * volume;
+    }
+};`,
+    cpp: `// treatmnt.cpp — Water Quality Treatment
+// SWMM5 Engine in C++ — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+enum class TreatType { RemovalPct, FirstOrder, Custom };
+
+struct Treatment {
+    TreatType type;
+    double param;
+    double customCoeff = 0.0;
+    double expC = 1.0;
+    double expQ = 0.0;
+
+    double getRemoval(double cIn, double Q,
+                       double dt) const {
+        switch (type) {
+        case TreatType::RemovalPct:
+            return param;
+        case TreatType::FirstOrder:
+            return 1.0 - std::exp(-param * dt);
+        case TreatType::Custom: {
+            if (cIn <= 0.0) return 0.0;
+            double qVal = Q > 0.0 ? Q : 1.0;
+            double cOut = customCoeff
+                * std::pow(cIn, expC)
+                * std::pow(qVal, expQ);
+            double R = 1.0 - cOut / cIn;
+            return std::clamp(R, 0.0, 1.0);
+        }
+        default:
+            return 0.0;
+        }
+    }
+
+    double getEffluent(double cIn, double Q,
+                        double dt) const {
+        return cIn * (1.0 - getRemoval(cIn, Q, dt));
+    }
+
+    double getMassRemoved(double cIn, double Q,
+                           double dt,
+                           double volume) const {
+        return cIn * getRemoval(cIn, Q, dt) * volume;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Treatment.cs — Water Quality Treatment
+// SWMM5 Engine in C# — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+using System;
+
+namespace Swmm
+{
+    public enum TreatType
+    {
+        RemovalPct,
+        FirstOrder,
+        Custom
+    }
+
+    public class Treatment
+    {
+        public TreatType Type { get; set; }
+        public double Param { get; set; }
+        public double CustomCoeff { get; set; }
+        public double ExpC { get; set; }
+        public double ExpQ { get; set; }
+
+        public Treatment(TreatType type, double param,
+            double customCoeff = 0, double expC = 1,
+            double expQ = 0)
+        {
+            Type = type; Param = param;
+            CustomCoeff = customCoeff;
+            ExpC = expC; ExpQ = expQ;
+        }
+
+        public double GetRemoval(double cIn, double Q,
+                                  double dt)
+        {
+            switch (Type)
+            {
+                case TreatType.RemovalPct:
+                    return Param;
+                case TreatType.FirstOrder:
+                    return 1.0 - Math.Exp(-Param * dt);
+                case TreatType.Custom:
+                    if (cIn <= 0.0) return 0.0;
+                    double qVal = Q > 0 ? Q : 1.0;
+                    double cOut = CustomCoeff
+                        * Math.Pow(cIn, ExpC)
+                        * Math.Pow(qVal, ExpQ);
+                    double R = 1.0 - cOut / cIn;
+                    return Math.Clamp(R, 0.0, 1.0);
+                default:
+                    return 0.0;
+            }
+        }
+
+        public double GetEffluent(double cIn, double Q,
+                                   double dt)
+        {
+            return cIn * (1.0 - GetRemoval(cIn, Q, dt));
+        }
+
+        public double GetMassRemoved(double cIn, double Q,
+                                      double dt,
+                                      double volume)
+        {
+            return cIn * GetRemoval(cIn, Q, dt) * volume;
+        }
+    }
+}`,
+    matlab: `% treatmnt.m — Water Quality Treatment
+% SWMM5 Engine in MATLAB — Pollutant Treatment Model
+% Applies removal at nodes using constant removal,
+% first-order decay, or custom R = f(C,Q)
+
+function t = create_treatment(type, param, ...
+                               custom_coeff, exp_c, exp_q)
+    t.type = type;           % 0=removal, 1=first-order, 2=custom
+    t.param = param;
+    if nargin >= 3
+        t.custom_coeff = custom_coeff;
+    else
+        t.custom_coeff = 0.0;
+    end
+    if nargin >= 4, t.exp_c = exp_c;
+    else, t.exp_c = 1.0; end
+    if nargin >= 5, t.exp_q = exp_q;
+    else, t.exp_q = 0.0; end
+end
+
+function R = get_removal(t, c_in, Q, dt)
+    switch t.type
+        case 0  % REMOVAL_PCT
+            R = t.param;
+        case 1  % FIRST_ORDER
+            R = 1.0 - exp(-t.param * dt);
+        case 2  % CUSTOM
+            if c_in <= 0.0
+                R = 0.0;
+                return;
+            end
+            q_val = max(Q, 1.0);
+            c_out = t.custom_coeff ...
+                    * c_in^t.exp_c * q_val^t.exp_q;
+            R = 1.0 - c_out / c_in;
+            R = max(0.0, min(R, 1.0));
+        otherwise
+            R = 0.0;
+    end
+end
+
+function c_out = get_effluent(t, c_in, Q, dt)
+    R = get_removal(t, c_in, Q, dt);
+    c_out = c_in * (1.0 - R);
+end
+
+function mass = get_mass_removed(t, c_in, Q, dt, volume)
+    R = get_removal(t, c_in, Q, dt);
+    mass = c_in * R * volume;
+end`,
+    r: `# treatmnt.R — Water Quality Treatment
+# SWMM5 Engine in R — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+create_treatment <- function(type, param,
+                              custom_coeff = 0,
+                              exp_c = 1, exp_q = 0) {
+    list(type = type, param = param,
+         custom_coeff = custom_coeff,
+         exp_c = exp_c, exp_q = exp_q)
+}
+
+get_removal <- function(t, c_in, Q, dt) {
+    if (t$type == "removal_pct") {
+        return(t$param)
+    } else if (t$type == "first_order") {
+        return(1.0 - exp(-t$param * dt))
+    } else if (t$type == "custom") {
+        if (c_in <= 0.0) return(0.0)
+        q_val <- ifelse(Q > 0.0, Q, 1.0)
+        c_out <- t$custom_coeff *
+                 c_in^t$exp_c * q_val^t$exp_q
+        R <- 1.0 - c_out / c_in
+        return(max(0.0, min(R, 1.0)))
+    }
+    0.0
+}
+
+get_effluent <- function(t, c_in, Q, dt) {
+    R <- get_removal(t, c_in, Q, dt)
+    c_in * (1.0 - R)
+}
+
+get_mass_removed <- function(t, c_in, Q, dt, volume) {
+    R <- get_removal(t, c_in, Q, dt)
+    c_in * R * volume
+}`,
+    delphi: `{ treatmnt.pas — Water Quality Treatment }
+{ SWMM5 Engine in Delphi — Pollutant Treatment Model }
+{ Applies removal at nodes using constant removal, }
+{ first-order decay, or custom R = f(C,Q) }
+
+unit Treatment;
+
+interface
+
+uses Math, SysUtils;
+
+type
+  TTreatType = (ttRemovalPct, ttFirstOrder, ttCustom);
+
+  TTreatment = class
+  private
+    FType: TTreatType;
+    FParam: Double;
+    FCustomCoeff: Double;
+    FExpC: Double;
+    FExpQ: Double;
+  public
+    constructor Create(AType: TTreatType; AParam: Double;
+                       ACustomCoeff: Double = 0.0;
+                       AExpC: Double = 1.0;
+                       AExpQ: Double = 0.0);
+    function GetRemoval(CIn, Q, Dt: Double): Double;
+    function GetEffluent(CIn, Q, Dt: Double): Double;
+    function GetMassRemoved(CIn, Q, Dt,
+                             Volume: Double): Double;
+  end;
+
+implementation
+
+constructor TTreatment.Create(AType: TTreatType;
+    AParam, ACustomCoeff, AExpC, AExpQ: Double);
+begin
+  FType := AType;
+  FParam := AParam;
+  FCustomCoeff := ACustomCoeff;
+  FExpC := AExpC;
+  FExpQ := AExpQ;
+end;
+
+function TTreatment.GetRemoval(CIn, Q, Dt: Double): Double;
+var COut, QVal: Double;
+begin
+  case FType of
+    ttRemovalPct:
+      Result := FParam;
+    ttFirstOrder:
+      Result := 1.0 - Exp(-FParam * Dt);
+    ttCustom: begin
+      if CIn <= 0.0 then Exit(0.0);
+      QVal := Q;
+      if QVal <= 0.0 then QVal := 1.0;
+      COut := FCustomCoeff * Power(CIn, FExpC)
+              * Power(QVal, FExpQ);
+      Result := 1.0 - COut / CIn;
+      Result := Max(0.0, Min(Result, 1.0));
+    end;
+  else
+    Result := 0.0;
+  end;
+end;
+
+function TTreatment.GetEffluent(CIn, Q,
+                                 Dt: Double): Double;
+begin
+  Result := CIn * (1.0 - GetRemoval(CIn, Q, Dt));
+end;
+
+function TTreatment.GetMassRemoved(CIn, Q, Dt,
+                                    Volume: Double): Double;
+begin
+  Result := CIn * GetRemoval(CIn, Q, Dt) * Volume;
+end;
+
+end.`,
+    typescript: `// treatmnt.ts — Water Quality Treatment
+// SWMM5 Engine in TypeScript — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+enum TreatType {
+    RemovalPct = 0,
+    FirstOrder = 1,
+    Custom = 2,
+}
+
+interface TreatmentParams {
+    type: TreatType;
+    param: number;
+    customCoeff?: number;
+    expC?: number;
+    expQ?: number;
+}
+
+class Treatment {
+    readonly type: TreatType;
+    readonly param: number;
+    readonly customCoeff: number;
+    readonly expC: number;
+    readonly expQ: number;
+
+    constructor(p: TreatmentParams) {
+        this.type = p.type;
+        this.param = p.param;
+        this.customCoeff = p.customCoeff ?? 0.0;
+        this.expC = p.expC ?? 1.0;
+        this.expQ = p.expQ ?? 0.0;
+    }
+
+    getRemoval(cIn: number, Q: number,
+                dt: number): number {
+        switch (this.type) {
+            case TreatType.RemovalPct:
+                return this.param;
+            case TreatType.FirstOrder:
+                return 1.0 - Math.exp(-this.param * dt);
+            case TreatType.Custom: {
+                if (cIn <= 0.0) return 0.0;
+                const qVal = Q > 0 ? Q : 1.0;
+                const cOut = this.customCoeff
+                    * Math.pow(cIn, this.expC)
+                    * Math.pow(qVal, this.expQ);
+                const R = 1.0 - cOut / cIn;
+                return Math.max(0.0, Math.min(R, 1.0));
+            }
+            default:
+                return 0.0;
+        }
+    }
+
+    getEffluent(cIn: number, Q: number,
+                 dt: number): number {
+        return cIn * (1.0 - this.getRemoval(cIn, Q, dt));
+    }
+
+    getMassRemoved(cIn: number, Q: number,
+                    dt: number, volume: number): number {
+        return cIn * this.getRemoval(cIn, Q, dt) * volume;
+    }
+}
+
+export { Treatment, TreatType };`,
+    cuda: `// treatmnt.cu — Water Quality Treatment
+// SWMM5 Engine in CUDA — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+#include <math.h>
+
+#define TREAT_REMOVAL_PCT 0
+#define TREAT_FIRST_ORDER 1
+#define TREAT_CUSTOM      2
+
+struct Treatment {
+    int type;
+    float param;
+    float customCoeff;
+    float expC;
+    float expQ;
+};
+
+__device__ float getRemoval(const Treatment* t,
+                             float cIn, float Q,
+                             float dt) {
+    float R;
+    switch (t->type) {
+        case TREAT_REMOVAL_PCT:
+            R = t->param;
+            break;
+        case TREAT_FIRST_ORDER:
+            R = 1.0f - expf(-t->param * dt);
+            break;
+        case TREAT_CUSTOM: {
+            if (cIn <= 0.0f) return 0.0f;
+            float qVal = Q > 0.0f ? Q : 1.0f;
+            float cOut = t->customCoeff
+                * powf(cIn, t->expC)
+                * powf(qVal, t->expQ);
+            R = 1.0f - cOut / cIn;
+            R = fmaxf(0.0f, fminf(R, 1.0f));
+            break;
+        }
+        default:
+            R = 0.0f;
+    }
+    return R;
+}
+
+__global__ void applyTreatment(Treatment* treats,
+    float* cIn, float* Q, float dt,
+    float* cOut, int n) {
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    float R = getRemoval(&treats[idx], cIn[idx],
+                          Q[idx], dt);
+    cOut[idx] = cIn[idx] * (1.0f - R);
+}`,
+    wasm: `;; treatmnt.wat — Water Quality Treatment
+;; SWMM5 Engine in WebAssembly — Pollutant Treatment Model
+;; Applies removal at nodes using constant removal,
+;; first-order decay, or custom R = f(C,Q)
+
+(module
+  (import "math" "exp" (func $exp (param f64) (result f64)))
+  (import "math" "pow" (func $pow (param f64 f64) (result f64)))
+
+  ;; Get removal fraction
+  ;; type: 0=removal_pct, 1=first_order, 2=custom
+  (func $getRemoval
+    (param $type i32) (param $param f64)
+    (param $cIn f64) (param $Q f64) (param $dt f64)
+    (param $customCoeff f64) (param $expC f64)
+    (param $expQ f64)
+    (result f64)
+    (local $R f64) (local $cOut f64) (local $qVal f64)
+
+    (if (i32.eq (local.get $type) (i32.const 0))
+      (then (return (local.get $param))))
+
+    (if (i32.eq (local.get $type) (i32.const 1))
+      (then (return
+        (f64.sub (f64.const 1.0)
+          (call $exp
+            (f64.neg (f64.mul (local.get $param)
+                              (local.get $dt))))))))
+
+    (if (f64.le (local.get $cIn) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+
+    (local.set $qVal
+      (if (result f64) (f64.gt (local.get $Q) (f64.const 0.0))
+        (then (local.get $Q))
+        (else (f64.const 1.0))))
+
+    (local.set $cOut
+      (f64.mul (local.get $customCoeff)
+        (f64.mul (call $pow (local.get $cIn) (local.get $expC))
+                 (call $pow (local.get $qVal)
+                            (local.get $expQ)))))
+
+    (local.set $R
+      (f64.sub (f64.const 1.0)
+        (f64.div (local.get $cOut) (local.get $cIn))))
+
+    (f64.max (f64.const 0.0)
+      (f64.min (local.get $R) (f64.const 1.0))))
+
+  ;; Get effluent concentration
+  (func $getEffluent
+    (param $type i32) (param $param f64)
+    (param $cIn f64) (param $Q f64) (param $dt f64)
+    (param $cc f64) (param $ec f64) (param $eq f64)
+    (result f64)
+    (f64.mul (local.get $cIn)
+      (f64.sub (f64.const 1.0)
+        (call $getRemoval (local.get $type) (local.get $param)
+          (local.get $cIn) (local.get $Q) (local.get $dt)
+          (local.get $cc) (local.get $ec) (local.get $eq)))))
+)`,
+    mojo: `# treatmnt.mojo — Water Quality Treatment
+# SWMM5 Engine in Mojo — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+from math import exp, pow, max, min
+
+alias REMOVAL_PCT = 0
+alias FIRST_ORDER = 1
+alias CUSTOM = 2
+
+struct Treatment:
+    var treat_type: Int
+    var param: Float64
+    var custom_coeff: Float64
+    var exp_c: Float64
+    var exp_q: Float64
+
+    fn __init__(inout self, treat_type: Int,
+                param: Float64,
+                custom_coeff: Float64 = 0.0,
+                exp_c: Float64 = 1.0,
+                exp_q: Float64 = 0.0):
+        self.treat_type = treat_type
+        self.param = param
+        self.custom_coeff = custom_coeff
+        self.exp_c = exp_c
+        self.exp_q = exp_q
+
+    fn get_removal(self, c_in: Float64, Q: Float64,
+                    dt: Float64) -> Float64:
+        if self.treat_type == REMOVAL_PCT:
+            return self.param
+        elif self.treat_type == FIRST_ORDER:
+            return 1.0 - exp(-self.param * dt)
+        elif self.treat_type == CUSTOM:
+            if c_in <= 0.0:
+                return 0.0
+            let q_val = Q if Q > 0.0 else 1.0
+            let c_out = self.custom_coeff * pow(
+                c_in, self.exp_c) * pow(q_val, self.exp_q)
+            let R = 1.0 - c_out / c_in
+            return max(0.0, min(R, 1.0))
+        return 0.0
+
+    fn get_effluent(self, c_in: Float64, Q: Float64,
+                     dt: Float64) -> Float64:
+        return c_in * (1.0 - self.get_removal(c_in, Q, dt))
+
+    fn get_mass_removed(self, c_in: Float64, Q: Float64,
+                         dt: Float64,
+                         volume: Float64) -> Float64:
+        return c_in * self.get_removal(c_in, Q, dt) * volume`,
+    java: `// Treatment.java — Water Quality Treatment
+// SWMM5 Engine in Java — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+package swmm;
+
+public class Treatment {
+
+    public enum TreatType {
+        REMOVAL_PCT, FIRST_ORDER, CUSTOM
+    }
+
+    private final TreatType type;
+    private final double param;
+    private final double customCoeff;
+    private final double expC;
+    private final double expQ;
+
+    public Treatment(TreatType type, double param,
+                     double customCoeff, double expC,
+                     double expQ) {
+        this.type = type;
+        this.param = param;
+        this.customCoeff = customCoeff;
+        this.expC = expC;
+        this.expQ = expQ;
+    }
+
+    public Treatment(TreatType type, double param) {
+        this(type, param, 0.0, 1.0, 0.0);
+    }
+
+    public double getRemoval(double cIn, double Q,
+                              double dt) {
+        switch (type) {
+            case REMOVAL_PCT:
+                return param;
+            case FIRST_ORDER:
+                return 1.0 - Math.exp(-param * dt);
+            case CUSTOM: {
+                if (cIn <= 0.0) return 0.0;
+                double qVal = Q > 0 ? Q : 1.0;
+                double cOut = customCoeff
+                    * Math.pow(cIn, expC)
+                    * Math.pow(qVal, expQ);
+                double R = 1.0 - cOut / cIn;
+                return Math.max(0.0, Math.min(R, 1.0));
+            }
+            default:
+                return 0.0;
+        }
+    }
+
+    public double getEffluent(double cIn, double Q,
+                               double dt) {
+        return cIn * (1.0 - getRemoval(cIn, Q, dt));
+    }
+
+    public double getMassRemoved(double cIn, double Q,
+                                  double dt,
+                                  double volume) {
+        return cIn * getRemoval(cIn, Q, dt) * volume;
+    }
+}`,
+    nim: `# treatmnt.nim — Water Quality Treatment
+# SWMM5 Engine in Nim — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+import math
+
+type
+  TreatType = enum
+    ttRemovalPct, ttFirstOrder, ttCustom
+
+  Treatment = object
+    treatType: TreatType
+    param: float64
+    customCoeff: float64
+    expC: float64
+    expQ: float64
+
+proc getRemoval(t: Treatment, cIn, Q,
+                 dt: float64): float64 =
+  case t.treatType
+  of ttRemovalPct:
+    result = t.param
+  of ttFirstOrder:
+    result = 1.0 - exp(-t.param * dt)
+  of ttCustom:
+    if cIn <= 0.0:
+      result = 0.0
+      return
+    let qVal = if Q > 0.0: Q else: 1.0
+    let cOut = t.customCoeff *
+               pow(cIn, t.expC) *
+               pow(qVal, t.expQ)
+    result = 1.0 - cOut / cIn
+    result = max(0.0, min(result, 1.0))
+
+proc getEffluent(t: Treatment, cIn, Q,
+                  dt: float64): float64 =
+  result = cIn * (1.0 - getRemoval(t, cIn, Q, dt))
+
+proc getMassRemoved(t: Treatment, cIn, Q, dt,
+                     volume: float64): float64 =
+  result = cIn * getRemoval(t, cIn, Q, dt) * volume`,
+    ada: `-- treatmnt.adb — Water Quality Treatment
+-- SWMM5 Engine in Ada — Pollutant Treatment Model
+-- Applies removal at nodes using constant removal,
+-- first-order decay, or custom R = f(C,Q)
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Treatment_Pkg is
+
+   type Treat_Type is (Removal_Pct, First_Order, Custom);
+
+   type Treatment is record
+      T_Type       : Treat_Type := Removal_Pct;
+      Param        : Float := 0.0;
+      Custom_Coeff : Float := 0.0;
+      Exp_C        : Float := 1.0;
+      Exp_Q        : Float := 0.0;
+   end record;
+
+   function Get_Removal (T    : Treatment;
+                          C_In : Float;
+                          Q    : Float;
+                          Dt   : Float) return Float is
+      R, C_Out, Q_Val : Float;
+   begin
+      case T.T_Type is
+         when Removal_Pct =>
+            return T.Param;
+         when First_Order =>
+            return 1.0 - Exp (-T.Param * Dt);
+         when Custom =>
+            if C_In <= 0.0 then return 0.0; end if;
+            Q_Val := (if Q > 0.0 then Q else 1.0);
+            C_Out := T.Custom_Coeff
+               * C_In ** T.Exp_C
+               * Q_Val ** T.Exp_Q;
+            R := 1.0 - C_Out / C_In;
+            return Float'Max (0.0, Float'Min (R, 1.0));
+      end case;
+   end Get_Removal;
+
+   function Get_Effluent (T    : Treatment;
+                           C_In : Float;
+                           Q    : Float;
+                           Dt   : Float) return Float is
+   begin
+      return C_In * (1.0 - Get_Removal (T, C_In, Q, Dt));
+   end Get_Effluent;
+
+   function Get_Mass_Removed (T      : Treatment;
+                               C_In   : Float;
+                               Q      : Float;
+                               Dt     : Float;
+                               Volume : Float) return Float is
+   begin
+      return C_In * Get_Removal (T, C_In, Q, Dt) * Volume;
+   end Get_Mass_Removed;
+
+end Treatment_Pkg;`,
+    chapel: `// treatmnt.chpl — Water Quality Treatment
+// SWMM5 Engine in Chapel — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+enum TreatType { RemovalPct, FirstOrder, Custom }
+
+record Treatment {
+    var treatType: TreatType;
+    var param: real;
+    var customCoeff: real = 0.0;
+    var expC: real = 1.0;
+    var expQ: real = 0.0;
+
+    proc getRemoval(cIn: real, Q: real,
+                     dt: real): real {
+        select treatType {
+            when TreatType.RemovalPct do
+                return param;
+            when TreatType.FirstOrder do
+                return 1.0 - exp(-param * dt);
+            when TreatType.Custom {
+                if cIn <= 0.0 then return 0.0;
+                const qVal = if Q > 0.0 then Q else 1.0;
+                const cOut = customCoeff
+                    * cIn ** expC * qVal ** expQ;
+                var R = 1.0 - cOut / cIn;
+                return max(0.0, min(R, 1.0));
+            }
+        }
+        return 0.0;
+    }
+
+    proc getEffluent(cIn: real, Q: real,
+                      dt: real): real {
+        return cIn * (1.0 - getRemoval(cIn, Q, dt));
+    }
+
+    proc getMassRemoved(cIn: real, Q: real,
+                         dt: real, volume: real): real {
+        return cIn * getRemoval(cIn, Q, dt) * volume;
+    }
+}`,
+    swift: `// treatmnt.swift — Water Quality Treatment
+// SWMM5 Engine in Swift — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+import Foundation
+
+enum TreatType {
+    case removalPct
+    case firstOrder
+    case custom
+}
+
+struct Treatment {
+    let type: TreatType
+    let param: Double
+    let customCoeff: Double
+    let expC: Double
+    let expQ: Double
+
+    init(type: TreatType, param: Double,
+         customCoeff: Double = 0.0,
+         expC: Double = 1.0, expQ: Double = 0.0) {
+        self.type = type
+        self.param = param
+        self.customCoeff = customCoeff
+        self.expC = expC
+        self.expQ = expQ
+    }
+
+    func getRemoval(cIn: Double, Q: Double,
+                     dt: Double) -> Double {
+        switch type {
+        case .removalPct:
+            return param
+        case .firstOrder:
+            return 1.0 - exp(-param * dt)
+        case .custom:
+            guard cIn > 0.0 else { return 0.0 }
+            let qVal = Q > 0.0 ? Q : 1.0
+            let cOut = customCoeff
+                * pow(cIn, expC) * pow(qVal, expQ)
+            let R = 1.0 - cOut / cIn
+            return max(0.0, min(R, 1.0))
+        }
+    }
+
+    func getEffluent(cIn: Double, Q: Double,
+                      dt: Double) -> Double {
+        return cIn * (1.0 - getRemoval(cIn: cIn,
+                                        Q: Q, dt: dt))
+    }
+
+    func getMassRemoved(cIn: Double, Q: Double,
+                         dt: Double,
+                         volume: Double) -> Double {
+        return cIn * getRemoval(cIn: cIn, Q: Q,
+                                 dt: dt) * volume
+    }
+}`,
+    kotlin: `// Treatment.kt — Water Quality Treatment
+// SWMM5 Engine in Kotlin — Pollutant Treatment Model
+// Applies removal at nodes using constant removal,
+// first-order decay, or custom R = f(C,Q)
+
+package swmm
+
+import kotlin.math.exp
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+
+enum class TreatType {
+    REMOVAL_PCT, FIRST_ORDER, CUSTOM
+}
+
+data class Treatment(
+    val type: TreatType,
+    val param: Double,
+    val customCoeff: Double = 0.0,
+    val expC: Double = 1.0,
+    val expQ: Double = 0.0
+) {
+    fun getRemoval(cIn: Double, Q: Double,
+                    dt: Double): Double {
+        return when (type) {
+            TreatType.REMOVAL_PCT -> param
+            TreatType.FIRST_ORDER ->
+                1.0 - exp(-param * dt)
+            TreatType.CUSTOM -> {
+                if (cIn <= 0.0) return 0.0
+                val qVal = if (Q > 0.0) Q else 1.0
+                val cOut = customCoeff *
+                    cIn.pow(expC) * qVal.pow(expQ)
+                val R = 1.0 - cOut / cIn
+                max(0.0, min(R, 1.0))
+            }
+        }
+    }
+
+    fun getEffluent(cIn: Double, Q: Double,
+                     dt: Double): Double {
+        return cIn * (1.0 - getRemoval(cIn, Q, dt))
+    }
+
+    fun getMassRemoved(cIn: Double, Q: Double,
+                        dt: Double,
+                        volume: Double): Double {
+        return cIn * getRemoval(cIn, Q, dt) * volume
+    }
+}`,
+  },
+
+  "snow.c — Snowpack/Snowmelt": {
+    category: "Hydrology",
+    difficulty: "advanced",
+    tags: ["snow", "snowpack", "snowmelt", "degree-day", "temperature", "cold climate", "accumulation", "SWE"],
+    description: "Models snow accumulation and melt on three surface types: plowable (roads), impervious (roofs/parking), and pervious (grass/soil). Uses a degree-day method where melt rate is proportional to temperature above a base melt temperature. Tracks snow water equivalent (SWE), cold content (heat deficit), and liquid water holding capacity.",
+    equations: "M = Cm · (T - T_base) (degree-day melt); SWE_new = SWE_old + P_snow - M (mass balance); Cold_content = SWE · c_ice · (T_base - T_snow)",
+    inputs: "Temperature, precipitation, melt coefficient (Cm), base melt temperature, initial snowpack",
+    outputs: "Snowmelt rate (to runoff), snow depth/SWE, snow coverage fraction",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// snow.c — Snowpack/Snowmelt Simulation
+// EPA SWMM5 Engine — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+#include <math.h>
+
+#define C_ICE     0.5    // heat capacity of ice (cal/g/°C)
+#define LIQ_CAP   0.05   // liquid water holding capacity
+#define RAIN_TEMP 1.0    // rain/snow threshold (°C)
+
+typedef struct {
+    double swe;          // snow water equivalent (mm)
+    double coldContent;  // heat deficit (mm·°C)
+    double liquidWater;  // liquid water in pack (mm)
+    double coverage;     // areal coverage fraction
+    double meltCoeff;    // degree-day melt coeff (mm/°C/day)
+    double baseMeltTemp; // base melt temperature (°C)
+} TSnowpack;
+
+void snow_accumulate(TSnowpack* sp, double precip,
+                     double temperature)
+{
+    if (temperature <= RAIN_TEMP) {
+        sp->swe += precip;
+        sp->coldContent += precip * C_ICE
+                          * (sp->baseMeltTemp - temperature);
+    } else {
+        sp->liquidWater += precip;
+    }
+}
+
+void snow_updateColdContent(TSnowpack* sp,
+                            double temperature)
+{
+    if (temperature < sp->baseMeltTemp) {
+        sp->coldContent += sp->swe * C_ICE
+            * (sp->baseMeltTemp - temperature) * 0.1;
+        if (sp->coldContent > sp->swe * C_ICE
+            * sp->baseMeltTemp)
+            sp->coldContent = sp->swe * C_ICE
+                              * sp->baseMeltTemp;
+    }
+}
+
+double snow_getMelt(TSnowpack* sp, double temperature)
+{
+    double melt, available;
+
+    if (temperature <= sp->baseMeltTemp || sp->swe <= 0.0)
+        return 0.0;
+
+    melt = sp->meltCoeff
+           * (temperature - sp->baseMeltTemp);
+
+    if (sp->coldContent > 0.0) {
+        if (melt <= sp->coldContent) {
+            sp->coldContent -= melt;
+            return 0.0;
+        }
+        melt -= sp->coldContent;
+        sp->coldContent = 0.0;
+    }
+
+    available = sp->swe + sp->liquidWater;
+    if (melt > available) melt = available;
+
+    sp->swe -= melt;
+    if (sp->swe < 0.0) sp->swe = 0.0;
+
+    return melt;
+}
+
+double snow_getCoverage(TSnowpack* sp, double sweMax)
+{
+    if (sweMax <= 0.0) return 0.0;
+    sp->coverage = sp->swe / sweMax;
+    if (sp->coverage > 1.0) sp->coverage = 1.0;
+    return sp->coverage;
+}`,
+    rust: `// snow.rs — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Rust — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+const C_ICE: f64 = 0.5;
+const LIQ_CAP: f64 = 0.05;
+const RAIN_TEMP: f64 = 1.0;
+
+pub struct Snowpack {
+    pub swe: f64,
+    pub cold_content: f64,
+    pub liquid_water: f64,
+    pub coverage: f64,
+    pub melt_coeff: f64,
+    pub base_melt_temp: f64,
+}
+
+impl Snowpack {
+    pub fn accumulate(&mut self, precip: f64, temp: f64) {
+        if temp <= RAIN_TEMP {
+            self.swe += precip;
+            self.cold_content += precip * C_ICE
+                * (self.base_melt_temp - temp);
+        } else {
+            self.liquid_water += precip;
+        }
+    }
+
+    pub fn update_cold_content(&mut self, temp: f64) {
+        if temp < self.base_melt_temp {
+            self.cold_content += self.swe * C_ICE
+                * (self.base_melt_temp - temp) * 0.1;
+            let max_cc = self.swe * C_ICE
+                         * self.base_melt_temp;
+            if self.cold_content > max_cc {
+                self.cold_content = max_cc;
+            }
+        }
+    }
+
+    pub fn get_melt(&mut self, temp: f64) -> f64 {
+        if temp <= self.base_melt_temp || self.swe <= 0.0 {
+            return 0.0;
+        }
+
+        let mut melt = self.melt_coeff
+                       * (temp - self.base_melt_temp);
+
+        if self.cold_content > 0.0 {
+            if melt <= self.cold_content {
+                self.cold_content -= melt;
+                return 0.0;
+            }
+            melt -= self.cold_content;
+            self.cold_content = 0.0;
+        }
+
+        let available = self.swe + self.liquid_water;
+        if melt > available { melt = available; }
+
+        self.swe -= melt;
+        if self.swe < 0.0 { self.swe = 0.0; }
+
+        melt
+    }
+
+    pub fn get_coverage(&mut self, swe_max: f64) -> f64 {
+        if swe_max <= 0.0 { return 0.0; }
+        self.coverage = (self.swe / swe_max).min(1.0);
+        self.coverage
+    }
+}`,
+    python: `# snow.py — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in Python — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+from dataclasses import dataclass
+
+C_ICE = 0.5
+LIQ_CAP = 0.05
+RAIN_TEMP = 1.0
+
+@dataclass
+class Snowpack:
+    swe: float = 0.0
+    cold_content: float = 0.0
+    liquid_water: float = 0.0
+    coverage: float = 0.0
+    melt_coeff: float = 2.0
+    base_melt_temp: float = 0.0
+
+    def accumulate(self, precip: float, temp: float):
+        if temp <= RAIN_TEMP:
+            self.swe += precip
+            self.cold_content += (precip * C_ICE
+                * (self.base_melt_temp - temp))
+        else:
+            self.liquid_water += precip
+
+    def update_cold_content(self, temp: float):
+        if temp < self.base_melt_temp:
+            self.cold_content += (self.swe * C_ICE
+                * (self.base_melt_temp - temp) * 0.1)
+            max_cc = (self.swe * C_ICE
+                      * self.base_melt_temp)
+            if self.cold_content > max_cc:
+                self.cold_content = max_cc
+
+    def get_melt(self, temp: float) -> float:
+        if temp <= self.base_melt_temp or self.swe <= 0.0:
+            return 0.0
+
+        melt = (self.melt_coeff
+                * (temp - self.base_melt_temp))
+
+        if self.cold_content > 0.0:
+            if melt <= self.cold_content:
+                self.cold_content -= melt
+                return 0.0
+            melt -= self.cold_content
+            self.cold_content = 0.0
+
+        available = self.swe + self.liquid_water
+        if melt > available:
+            melt = available
+
+        self.swe -= melt
+        if self.swe < 0.0:
+            self.swe = 0.0
+
+        return melt
+
+    def get_coverage(self, swe_max: float) -> float:
+        if swe_max <= 0.0:
+            return 0.0
+        self.coverage = min(self.swe / swe_max, 1.0)
+        return self.coverage`,
+    fortran: `! snow.f90 — Snowpack/Snowmelt Simulation
+! SWMM5 Engine in Fortran — Degree-Day Snowmelt Model
+! Models accumulation, cold content, and melt
+! for plowable, impervious, and pervious surfaces
+
+module snow_module
+    implicit none
+    real(8), parameter :: C_ICE = 0.5d0
+    real(8), parameter :: LIQ_CAP = 0.05d0
+    real(8), parameter :: RAIN_TEMP = 1.0d0
+
+    type :: Snowpack
+        real(8) :: swe = 0.0d0
+        real(8) :: cold_content = 0.0d0
+        real(8) :: liquid_water = 0.0d0
+        real(8) :: coverage = 0.0d0
+        real(8) :: melt_coeff = 2.0d0
+        real(8) :: base_melt_temp = 0.0d0
+    end type Snowpack
+
+contains
+
+    subroutine accumulate(sp, precip, temperature)
+        type(Snowpack), intent(inout) :: sp
+        real(8), intent(in) :: precip, temperature
+
+        if (temperature <= RAIN_TEMP) then
+            sp%swe = sp%swe + precip
+            sp%cold_content = sp%cold_content &
+                + precip * C_ICE &
+                * (sp%base_melt_temp - temperature)
+        else
+            sp%liquid_water = sp%liquid_water + precip
+        end if
+    end subroutine accumulate
+
+    subroutine update_cold_content(sp, temperature)
+        type(Snowpack), intent(inout) :: sp
+        real(8), intent(in) :: temperature
+        real(8) :: max_cc
+
+        if (temperature < sp%base_melt_temp) then
+            sp%cold_content = sp%cold_content &
+                + sp%swe * C_ICE &
+                * (sp%base_melt_temp - temperature) * 0.1d0
+            max_cc = sp%swe * C_ICE * sp%base_melt_temp
+            if (sp%cold_content > max_cc) &
+                sp%cold_content = max_cc
+        end if
+    end subroutine update_cold_content
+
+    function get_melt(sp, temperature) result(melt)
+        type(Snowpack), intent(inout) :: sp
+        real(8), intent(in) :: temperature
+        real(8) :: melt, available
+
+        if (temperature <= sp%base_melt_temp &
+            .or. sp%swe <= 0.0d0) then
+            melt = 0.0d0
+            return
+        end if
+
+        melt = sp%melt_coeff &
+               * (temperature - sp%base_melt_temp)
+
+        if (sp%cold_content > 0.0d0) then
+            if (melt <= sp%cold_content) then
+                sp%cold_content = sp%cold_content - melt
+                melt = 0.0d0
+                return
+            end if
+            melt = melt - sp%cold_content
+            sp%cold_content = 0.0d0
+        end if
+
+        available = sp%swe + sp%liquid_water
+        if (melt > available) melt = available
+        sp%swe = sp%swe - melt
+        if (sp%swe < 0.0d0) sp%swe = 0.0d0
+    end function get_melt
+
+    function get_coverage(sp, swe_max) result(cov)
+        type(Snowpack), intent(inout) :: sp
+        real(8), intent(in) :: swe_max
+        real(8) :: cov
+
+        if (swe_max <= 0.0d0) then
+            cov = 0.0d0
+            return
+        end if
+        sp%coverage = min(sp%swe / swe_max, 1.0d0)
+        cov = sp%coverage
+    end function get_coverage
+
+end module snow_module`,
+    julia: `# snow.jl — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in Julia — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+const C_ICE = 0.5
+const LIQ_CAP = 0.05
+const RAIN_TEMP = 1.0
+
+mutable struct Snowpack
+    swe::Float64
+    cold_content::Float64
+    liquid_water::Float64
+    coverage::Float64
+    melt_coeff::Float64
+    base_melt_temp::Float64
+end
+
+function accumulate!(sp::Snowpack, precip::Float64,
+                     temp::Float64)
+    if temp ≤ RAIN_TEMP
+        sp.swe += precip
+        sp.cold_content += precip * C_ICE *
+            (sp.base_melt_temp - temp)
+    else
+        sp.liquid_water += precip
+    end
+end
+
+function update_cold_content!(sp::Snowpack, temp::Float64)
+    if temp < sp.base_melt_temp
+        sp.cold_content += sp.swe * C_ICE *
+            (sp.base_melt_temp - temp) * 0.1
+        max_cc = sp.swe * C_ICE * sp.base_melt_temp
+        if sp.cold_content > max_cc
+            sp.cold_content = max_cc
+        end
+    end
+end
+
+function get_melt!(sp::Snowpack, temp::Float64)::Float64
+    if temp ≤ sp.base_melt_temp || sp.swe ≤ 0.0
+        return 0.0
+    end
+
+    melt = sp.melt_coeff * (temp - sp.base_melt_temp)
+
+    if sp.cold_content > 0.0
+        if melt ≤ sp.cold_content
+            sp.cold_content -= melt
+            return 0.0
+        end
+        melt -= sp.cold_content
+        sp.cold_content = 0.0
+    end
+
+    available = sp.swe + sp.liquid_water
+    if melt > available
+        melt = available
+    end
+
+    sp.swe -= melt
+    if sp.swe < 0.0
+        sp.swe = 0.0
+    end
+
+    return melt
+end
+
+function get_coverage!(sp::Snowpack,
+                       swe_max::Float64)::Float64
+    swe_max ≤ 0.0 && return 0.0
+    sp.coverage = min(sp.swe / swe_max, 1.0)
+    return sp.coverage
+end`,
+    javascript: `// snow.js — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in JavaScript — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+const C_ICE = 0.5;
+const LIQ_CAP = 0.05;
+const RAIN_TEMP = 1.0;
+
+class Snowpack {
+    constructor(meltCoeff = 2.0, baseMeltTemp = 0.0) {
+        this.swe = 0.0;
+        this.coldContent = 0.0;
+        this.liquidWater = 0.0;
+        this.coverage = 0.0;
+        this.meltCoeff = meltCoeff;
+        this.baseMeltTemp = baseMeltTemp;
+    }
+
+    accumulate(precip, temp) {
+        if (temp <= RAIN_TEMP) {
+            this.swe += precip;
+            this.coldContent += precip * C_ICE
+                * (this.baseMeltTemp - temp);
+        } else {
+            this.liquidWater += precip;
+        }
+    }
+
+    updateColdContent(temp) {
+        if (temp < this.baseMeltTemp) {
+            this.coldContent += this.swe * C_ICE
+                * (this.baseMeltTemp - temp) * 0.1;
+            const maxCC = this.swe * C_ICE
+                          * this.baseMeltTemp;
+            if (this.coldContent > maxCC)
+                this.coldContent = maxCC;
+        }
+    }
+
+    getMelt(temp) {
+        if (temp <= this.baseMeltTemp || this.swe <= 0.0)
+            return 0.0;
+
+        let melt = this.meltCoeff
+                   * (temp - this.baseMeltTemp);
+
+        if (this.coldContent > 0.0) {
+            if (melt <= this.coldContent) {
+                this.coldContent -= melt;
+                return 0.0;
+            }
+            melt -= this.coldContent;
+            this.coldContent = 0.0;
+        }
+
+        const available = this.swe + this.liquidWater;
+        if (melt > available) melt = available;
+
+        this.swe -= melt;
+        if (this.swe < 0.0) this.swe = 0.0;
+
+        return melt;
+    }
+
+    getCoverage(sweMax) {
+        if (sweMax <= 0.0) return 0.0;
+        this.coverage = Math.min(this.swe / sweMax, 1.0);
+        return this.coverage;
+    }
+}
+
+export { Snowpack, C_ICE, RAIN_TEMP };`,
+    go: `// snow.go — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Go — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+package swmm
+
+import "math"
+
+const (
+    CIce     = 0.5
+    LiqCap   = 0.05
+    RainTemp = 1.0
+)
+
+type Snowpack struct {
+    SWE          float64
+    ColdContent  float64
+    LiquidWater  float64
+    Coverage     float64
+    MeltCoeff    float64
+    BaseMeltTemp float64
+}
+
+func (sp *Snowpack) Accumulate(precip, temp float64) {
+    if temp <= RainTemp {
+        sp.SWE += precip
+        sp.ColdContent += precip * CIce *
+            (sp.BaseMeltTemp - temp)
+    } else {
+        sp.LiquidWater += precip
+    }
+}
+
+func (sp *Snowpack) UpdateColdContent(temp float64) {
+    if temp < sp.BaseMeltTemp {
+        sp.ColdContent += sp.SWE * CIce *
+            (sp.BaseMeltTemp - temp) * 0.1
+        maxCC := sp.SWE * CIce * sp.BaseMeltTemp
+        if sp.ColdContent > maxCC {
+            sp.ColdContent = maxCC
+        }
+    }
+}
+
+func (sp *Snowpack) GetMelt(temp float64) float64 {
+    if temp <= sp.BaseMeltTemp || sp.SWE <= 0.0 {
+        return 0.0
+    }
+
+    melt := sp.MeltCoeff * (temp - sp.BaseMeltTemp)
+
+    if sp.ColdContent > 0.0 {
+        if melt <= sp.ColdContent {
+            sp.ColdContent -= melt
+            return 0.0
+        }
+        melt -= sp.ColdContent
+        sp.ColdContent = 0.0
+    }
+
+    available := sp.SWE + sp.LiquidWater
+    if melt > available {
+        melt = available
+    }
+
+    sp.SWE -= melt
+    sp.SWE = math.Max(sp.SWE, 0.0)
+
+    return melt
+}
+
+func (sp *Snowpack) GetCoverage(sweMax float64) float64 {
+    if sweMax <= 0.0 {
+        return 0.0
+    }
+    sp.Coverage = math.Min(sp.SWE/sweMax, 1.0)
+    return sp.Coverage
+}`,
+    zig: `// snow.zig — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Zig — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+const std = @import("std");
+const math = std.math;
+
+const C_ICE: f64 = 0.5;
+const LIQ_CAP: f64 = 0.05;
+const RAIN_TEMP: f64 = 1.0;
+
+const Snowpack = struct {
+    swe: f64 = 0.0,
+    cold_content: f64 = 0.0,
+    liquid_water: f64 = 0.0,
+    coverage: f64 = 0.0,
+    melt_coeff: f64 = 2.0,
+    base_melt_temp: f64 = 0.0,
+
+    pub fn accumulate(self: *Snowpack, precip: f64,
+                      temp: f64) void {
+        if (temp <= RAIN_TEMP) {
+            self.swe += precip;
+            self.cold_content += precip * C_ICE *
+                (self.base_melt_temp - temp);
+        } else {
+            self.liquid_water += precip;
+        }
+    }
+
+    pub fn updateColdContent(self: *Snowpack,
+                             temp: f64) void {
+        if (temp < self.base_melt_temp) {
+            self.cold_content += self.swe * C_ICE *
+                (self.base_melt_temp - temp) * 0.1;
+            const max_cc = self.swe * C_ICE *
+                self.base_melt_temp;
+            if (self.cold_content > max_cc)
+                self.cold_content = max_cc;
+        }
+    }
+
+    pub fn getMelt(self: *Snowpack, temp: f64) f64 {
+        if (temp <= self.base_melt_temp or
+            self.swe <= 0.0) return 0.0;
+
+        var melt = self.melt_coeff *
+            (temp - self.base_melt_temp);
+
+        if (self.cold_content > 0.0) {
+            if (melt <= self.cold_content) {
+                self.cold_content -= melt;
+                return 0.0;
+            }
+            melt -= self.cold_content;
+            self.cold_content = 0.0;
+        }
+
+        const available = self.swe + self.liquid_water;
+        if (melt > available) melt = available;
+
+        self.swe -= melt;
+        if (self.swe < 0.0) self.swe = 0.0;
+
+        return melt;
+    }
+
+    pub fn getCoverage(self: *Snowpack,
+                       swe_max: f64) f64 {
+        if (swe_max <= 0.0) return 0.0;
+        self.coverage = @min(self.swe / swe_max, 1.0);
+        return self.coverage;
+    }
+};`,
+    cpp: `// snow.cpp — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in C++ — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+#include <cmath>
+#include <algorithm>
+
+namespace swmm {
+
+constexpr double C_ICE = 0.5;
+constexpr double LIQ_CAP = 0.05;
+constexpr double RAIN_TEMP = 1.0;
+
+struct Snowpack {
+    double swe = 0.0;
+    double coldContent = 0.0;
+    double liquidWater = 0.0;
+    double coverage = 0.0;
+    double meltCoeff = 2.0;
+    double baseMeltTemp = 0.0;
+
+    void accumulate(double precip, double temp) {
+        if (temp <= RAIN_TEMP) {
+            swe += precip;
+            coldContent += precip * C_ICE
+                * (baseMeltTemp - temp);
+        } else {
+            liquidWater += precip;
+        }
+    }
+
+    void updateColdContent(double temp) {
+        if (temp < baseMeltTemp) {
+            coldContent += swe * C_ICE
+                * (baseMeltTemp - temp) * 0.1;
+            double maxCC = swe * C_ICE * baseMeltTemp;
+            if (coldContent > maxCC)
+                coldContent = maxCC;
+        }
+    }
+
+    double getMelt(double temp) {
+        if (temp <= baseMeltTemp || swe <= 0.0)
+            return 0.0;
+
+        double melt = meltCoeff
+                      * (temp - baseMeltTemp);
+
+        if (coldContent > 0.0) {
+            if (melt <= coldContent) {
+                coldContent -= melt;
+                return 0.0;
+            }
+            melt -= coldContent;
+            coldContent = 0.0;
+        }
+
+        double available = swe + liquidWater;
+        if (melt > available) melt = available;
+
+        swe -= melt;
+        if (swe < 0.0) swe = 0.0;
+
+        return melt;
+    }
+
+    double getCoverage(double sweMax) {
+        if (sweMax <= 0.0) return 0.0;
+        coverage = std::min(swe / sweMax, 1.0);
+        return coverage;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Snow.cs — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in C# — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+using System;
+
+namespace Swmm
+{
+    public class Snowpack
+    {
+        private const double CIce = 0.5;
+        private const double LiqCap = 0.05;
+        private const double RainTemp = 1.0;
+
+        public double SWE { get; set; }
+        public double ColdContent { get; set; }
+        public double LiquidWater { get; set; }
+        public double Coverage { get; set; }
+        public double MeltCoeff { get; set; }
+        public double BaseMeltTemp { get; set; }
+
+        public Snowpack(double meltCoeff = 2.0,
+                        double baseMeltTemp = 0.0)
+        {
+            MeltCoeff = meltCoeff;
+            BaseMeltTemp = baseMeltTemp;
+        }
+
+        public void Accumulate(double precip,
+                               double temp)
+        {
+            if (temp <= RainTemp)
+            {
+                SWE += precip;
+                ColdContent += precip * CIce
+                    * (BaseMeltTemp - temp);
+            }
+            else
+            {
+                LiquidWater += precip;
+            }
+        }
+
+        public void UpdateColdContent(double temp)
+        {
+            if (temp < BaseMeltTemp)
+            {
+                ColdContent += SWE * CIce
+                    * (BaseMeltTemp - temp) * 0.1;
+                double maxCC = SWE * CIce
+                               * BaseMeltTemp;
+                if (ColdContent > maxCC)
+                    ColdContent = maxCC;
+            }
+        }
+
+        public double GetMelt(double temp)
+        {
+            if (temp <= BaseMeltTemp || SWE <= 0.0)
+                return 0.0;
+
+            double melt = MeltCoeff
+                          * (temp - BaseMeltTemp);
+
+            if (ColdContent > 0.0)
+            {
+                if (melt <= ColdContent)
+                {
+                    ColdContent -= melt;
+                    return 0.0;
+                }
+                melt -= ColdContent;
+                ColdContent = 0.0;
+            }
+
+            double available = SWE + LiquidWater;
+            if (melt > available) melt = available;
+
+            SWE -= melt;
+            if (SWE < 0.0) SWE = 0.0;
+
+            return melt;
+        }
+
+        public double GetCoverage(double sweMax)
+        {
+            if (sweMax <= 0.0) return 0.0;
+            Coverage = Math.Min(SWE / sweMax, 1.0);
+            return Coverage;
+        }
+    }
+}`,
+    matlab: `% snow.m — Snowpack/Snowmelt Simulation
+% SWMM5 Engine in MATLAB — Degree-Day Snowmelt Model
+% Models accumulation, cold content, and melt
+% for plowable, impervious, and pervious surfaces
+
+function sp = create_snowpack(melt_coeff, base_temp)
+    sp.swe = 0.0;
+    sp.cold_content = 0.0;
+    sp.liquid_water = 0.0;
+    sp.coverage = 0.0;
+    sp.melt_coeff = melt_coeff;
+    sp.base_melt_temp = base_temp;
+end
+
+function sp = accumulate(sp, precip, temperature)
+    C_ICE = 0.5;
+    RAIN_TEMP = 1.0;
+    if temperature <= RAIN_TEMP
+        sp.swe = sp.swe + precip;
+        sp.cold_content = sp.cold_content ...
+            + precip * C_ICE ...
+            * (sp.base_melt_temp - temperature);
+    else
+        sp.liquid_water = sp.liquid_water + precip;
+    end
+end
+
+function sp = update_cold_content(sp, temperature)
+    C_ICE = 0.5;
+    if temperature < sp.base_melt_temp
+        sp.cold_content = sp.cold_content ...
+            + sp.swe * C_ICE ...
+            * (sp.base_melt_temp - temperature) * 0.1;
+        max_cc = sp.swe * C_ICE * sp.base_melt_temp;
+        if sp.cold_content > max_cc
+            sp.cold_content = max_cc;
+        end
+    end
+end
+
+function [sp, melt] = get_melt(sp, temperature)
+    if temperature <= sp.base_melt_temp || sp.swe <= 0.0
+        melt = 0.0;
+        return;
+    end
+
+    melt = sp.melt_coeff ...
+           * (temperature - sp.base_melt_temp);
+
+    if sp.cold_content > 0.0
+        if melt <= sp.cold_content
+            sp.cold_content = sp.cold_content - melt;
+            melt = 0.0;
+            return;
+        end
+        melt = melt - sp.cold_content;
+        sp.cold_content = 0.0;
+    end
+
+    available = sp.swe + sp.liquid_water;
+    if melt > available
+        melt = available;
+    end
+
+    sp.swe = sp.swe - melt;
+    if sp.swe < 0.0
+        sp.swe = 0.0;
+    end
+end
+
+function [sp, cov] = get_coverage(sp, swe_max)
+    if swe_max <= 0.0
+        cov = 0.0;
+        return;
+    end
+    sp.coverage = min(sp.swe / swe_max, 1.0);
+    cov = sp.coverage;
+end`,
+    r: `# snow.R — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in R — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+C_ICE <- 0.5
+LIQ_CAP <- 0.05
+RAIN_TEMP <- 1.0
+
+create_snowpack <- function(melt_coeff = 2.0,
+                             base_melt_temp = 0.0) {
+    list(
+        swe = 0.0,
+        cold_content = 0.0,
+        liquid_water = 0.0,
+        coverage = 0.0,
+        melt_coeff = melt_coeff,
+        base_melt_temp = base_melt_temp
+    )
+}
+
+accumulate <- function(sp, precip, temp) {
+    if (temp <= RAIN_TEMP) {
+        sp$swe <- sp$swe + precip
+        sp$cold_content <- sp$cold_content +
+            precip * C_ICE *
+            (sp$base_melt_temp - temp)
+    } else {
+        sp$liquid_water <- sp$liquid_water + precip
+    }
+    sp
+}
+
+update_cold_content <- function(sp, temp) {
+    if (temp < sp$base_melt_temp) {
+        sp$cold_content <- sp$cold_content +
+            sp$swe * C_ICE *
+            (sp$base_melt_temp - temp) * 0.1
+        max_cc <- sp$swe * C_ICE * sp$base_melt_temp
+        if (sp$cold_content > max_cc)
+            sp$cold_content <- max_cc
+    }
+    sp
+}
+
+get_melt <- function(sp, temp) {
+    if (temp <= sp$base_melt_temp || sp$swe <= 0.0)
+        return(list(sp = sp, melt = 0.0))
+
+    melt <- sp$melt_coeff *
+            (temp - sp$base_melt_temp)
+
+    if (sp$cold_content > 0.0) {
+        if (melt <= sp$cold_content) {
+            sp$cold_content <- sp$cold_content - melt
+            return(list(sp = sp, melt = 0.0))
+        }
+        melt <- melt - sp$cold_content
+        sp$cold_content <- 0.0
+    }
+
+    available <- sp$swe + sp$liquid_water
+    if (melt > available) melt <- available
+
+    sp$swe <- sp$swe - melt
+    if (sp$swe < 0.0) sp$swe <- 0.0
+
+    list(sp = sp, melt = melt)
+}
+
+get_coverage <- function(sp, swe_max) {
+    if (swe_max <= 0.0) return(list(sp = sp, cov = 0.0))
+    sp$coverage <- min(sp$swe / swe_max, 1.0)
+    list(sp = sp, cov = sp$coverage)
+}`,
+    delphi: `{ snow.pas — Snowpack/Snowmelt Simulation }
+{ SWMM5 Engine in Delphi — Degree-Day Snowmelt Model }
+{ Models accumulation, cold content, and melt }
+{ for plowable, impervious, and pervious surfaces }
+
+unit Snow;
+
+interface
+
+const
+  C_ICE    = 0.5;
+  LIQ_CAP  = 0.05;
+  RAIN_TEMP = 1.0;
+
+type
+  TSnowpack = class
+  private
+    FSWE: Double;
+    FColdContent: Double;
+    FLiquidWater: Double;
+    FCoverage: Double;
+    FMeltCoeff: Double;
+    FBaseMeltTemp: Double;
+  public
+    constructor Create(AMeltCoeff, ABaseMeltTemp: Double);
+    procedure Accumulate(Precip, Temp: Double);
+    procedure UpdateColdContent(Temp: Double);
+    function GetMelt(Temp: Double): Double;
+    function GetCoverage(SWEMax: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TSnowpack.Create(AMeltCoeff,
+                              ABaseMeltTemp: Double);
+begin
+  FMeltCoeff    := AMeltCoeff;
+  FBaseMeltTemp := ABaseMeltTemp;
+  FSWE          := 0.0;
+  FColdContent  := 0.0;
+  FLiquidWater  := 0.0;
+  FCoverage     := 0.0;
+end;
+
+procedure TSnowpack.Accumulate(Precip, Temp: Double);
+begin
+  if Temp <= RAIN_TEMP then
+  begin
+    FSWE := FSWE + Precip;
+    FColdContent := FColdContent + Precip * C_ICE
+                    * (FBaseMeltTemp - Temp);
+  end
+  else
+    FLiquidWater := FLiquidWater + Precip;
+end;
+
+procedure TSnowpack.UpdateColdContent(Temp: Double);
+var
+  MaxCC: Double;
+begin
+  if Temp < FBaseMeltTemp then
+  begin
+    FColdContent := FColdContent + FSWE * C_ICE
+        * (FBaseMeltTemp - Temp) * 0.1;
+    MaxCC := FSWE * C_ICE * FBaseMeltTemp;
+    if FColdContent > MaxCC then
+      FColdContent := MaxCC;
+  end;
+end;
+
+function TSnowpack.GetMelt(Temp: Double): Double;
+var
+  Available: Double;
+begin
+  if (Temp <= FBaseMeltTemp) or (FSWE <= 0.0) then
+    Exit(0.0);
+
+  Result := FMeltCoeff * (Temp - FBaseMeltTemp);
+
+  if FColdContent > 0.0 then
+  begin
+    if Result <= FColdContent then
+    begin
+      FColdContent := FColdContent - Result;
+      Exit(0.0);
+    end;
+    Result := Result - FColdContent;
+    FColdContent := 0.0;
+  end;
+
+  Available := FSWE + FLiquidWater;
+  if Result > Available then
+    Result := Available;
+
+  FSWE := FSWE - Result;
+  if FSWE < 0.0 then FSWE := 0.0;
+end;
+
+function TSnowpack.GetCoverage(SWEMax: Double): Double;
+begin
+  if SWEMax <= 0.0 then Exit(0.0);
+  FCoverage := Min(FSWE / SWEMax, 1.0);
+  Result := FCoverage;
+end;
+
+end.`,
+    typescript: `// snow.ts — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in TypeScript — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+const C_ICE: number = 0.5;
+const LIQ_CAP: number = 0.05;
+const RAIN_TEMP: number = 1.0;
+
+interface SnowpackParams {
+    meltCoeff: number;
+    baseMeltTemp: number;
+}
+
+class Snowpack {
+    swe: number = 0.0;
+    coldContent: number = 0.0;
+    liquidWater: number = 0.0;
+    coverage: number = 0.0;
+    readonly meltCoeff: number;
+    readonly baseMeltTemp: number;
+
+    constructor(params: SnowpackParams) {
+        this.meltCoeff = params.meltCoeff;
+        this.baseMeltTemp = params.baseMeltTemp;
+    }
+
+    accumulate(precip: number, temp: number): void {
+        if (temp <= RAIN_TEMP) {
+            this.swe += precip;
+            this.coldContent += precip * C_ICE
+                * (this.baseMeltTemp - temp);
+        } else {
+            this.liquidWater += precip;
+        }
+    }
+
+    updateColdContent(temp: number): void {
+        if (temp < this.baseMeltTemp) {
+            this.coldContent += this.swe * C_ICE
+                * (this.baseMeltTemp - temp) * 0.1;
+            const maxCC = this.swe * C_ICE
+                          * this.baseMeltTemp;
+            if (this.coldContent > maxCC)
+                this.coldContent = maxCC;
+        }
+    }
+
+    getMelt(temp: number): number {
+        if (temp <= this.baseMeltTemp || this.swe <= 0.0)
+            return 0.0;
+
+        let melt: number = this.meltCoeff
+            * (temp - this.baseMeltTemp);
+
+        if (this.coldContent > 0.0) {
+            if (melt <= this.coldContent) {
+                this.coldContent -= melt;
+                return 0.0;
+            }
+            melt -= this.coldContent;
+            this.coldContent = 0.0;
+        }
+
+        const available: number = this.swe
+                                  + this.liquidWater;
+        if (melt > available) melt = available;
+
+        this.swe -= melt;
+        if (this.swe < 0.0) this.swe = 0.0;
+
+        return melt;
+    }
+
+    getCoverage(sweMax: number): number {
+        if (sweMax <= 0.0) return 0.0;
+        this.coverage = Math.min(this.swe / sweMax, 1.0);
+        return this.coverage;
+    }
+}
+
+export { Snowpack, C_ICE, RAIN_TEMP };`,
+    cuda: `// snow.cu — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in CUDA — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+#include <math.h>
+
+#define C_ICE     0.5f
+#define LIQ_CAP   0.05f
+#define RAIN_TEMP 1.0f
+
+struct Snowpack {
+    float swe;
+    float coldContent;
+    float liquidWater;
+    float coverage;
+    float meltCoeff;
+    float baseMeltTemp;
+};
+
+__device__ void snow_accumulate(Snowpack* sp,
+    float precip, float temp)
+{
+    if (temp <= RAIN_TEMP) {
+        sp->swe += precip;
+        sp->coldContent += precip * C_ICE
+            * (sp->baseMeltTemp - temp);
+    } else {
+        sp->liquidWater += precip;
+    }
+}
+
+__device__ float snow_getMelt(Snowpack* sp, float temp)
+{
+    if (temp <= sp->baseMeltTemp || sp->swe <= 0.0f)
+        return 0.0f;
+
+    float melt = sp->meltCoeff
+                 * (temp - sp->baseMeltTemp);
+
+    if (sp->coldContent > 0.0f) {
+        if (melt <= sp->coldContent) {
+            sp->coldContent -= melt;
+            return 0.0f;
+        }
+        melt -= sp->coldContent;
+        sp->coldContent = 0.0f;
+    }
+
+    float available = sp->swe + sp->liquidWater;
+    if (melt > available) melt = available;
+
+    sp->swe -= melt;
+    if (sp->swe < 0.0f) sp->swe = 0.0f;
+
+    return melt;
+}
+
+__global__ void snowmeltKernel(Snowpack* packs,
+    float* precip, float* temps, float* meltOut, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    snow_accumulate(&packs[idx], precip[idx], temps[idx]);
+    meltOut[idx] = snow_getMelt(&packs[idx], temps[idx]);
+}`,
+    wasm: `;; snow.wat — Snowpack/Snowmelt Simulation
+;; SWMM5 Engine in WebAssembly — Degree-Day Snowmelt
+;; Models accumulation, cold content, and melt
+
+(module
+  (memory (export "memory") 1)
+
+  ;; Snowpack layout: swe(0) cold_content(8)
+  ;; liquid_water(16) coverage(24)
+  ;; melt_coeff(32) base_melt_temp(40)
+
+  (func $accumulate
+    (param $base i32) (param $precip f64)
+    (param $temp f64)
+    (if (f64.le (local.get $temp) (f64.const 1.0))
+      (then
+        (f64.store (local.get $base)
+          (f64.add (f64.load (local.get $base))
+                   (local.get $precip)))
+        (f64.store offset=8 (local.get $base)
+          (f64.add
+            (f64.load offset=8 (local.get $base))
+            (f64.mul (local.get $precip)
+              (f64.mul (f64.const 0.5)
+                (f64.sub
+                  (f64.load offset=40 (local.get $base))
+                  (local.get $temp)))))))
+      (else
+        (f64.store offset=16 (local.get $base)
+          (f64.add
+            (f64.load offset=16 (local.get $base))
+            (local.get $precip))))))
+
+  (func $getMelt (export "getMelt")
+    (param $base i32) (param $temp f64)
+    (result f64)
+    (local $melt f64)
+    (local $swe f64)
+    (local $bmt f64)
+    (local.set $swe (f64.load (local.get $base)))
+    (local.set $bmt
+      (f64.load offset=40 (local.get $base)))
+    (if (i32.or
+          (f64.le (local.get $temp) (local.get $bmt))
+          (f64.le (local.get $swe) (f64.const 0.0)))
+      (then (return (f64.const 0.0))))
+    (local.set $melt
+      (f64.mul
+        (f64.load offset=32 (local.get $base))
+        (f64.sub (local.get $temp) (local.get $bmt))))
+    (if (f64.gt (local.get $melt) (local.get $swe))
+      (then (local.set $melt (local.get $swe))))
+    (f64.store (local.get $base)
+      (f64.sub (local.get $swe) (local.get $melt)))
+    (local.get $melt))
+)`,
+    mojo: `# snow.mojo — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in Mojo — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+alias C_ICE: Float64 = 0.5
+alias LIQ_CAP: Float64 = 0.05
+alias RAIN_TEMP: Float64 = 1.0
+
+struct Snowpack:
+    var swe: Float64
+    var cold_content: Float64
+    var liquid_water: Float64
+    var coverage: Float64
+    var melt_coeff: Float64
+    var base_melt_temp: Float64
+
+    fn __init__(inout self, melt_coeff: Float64,
+                base_melt_temp: Float64):
+        self.swe = 0.0
+        self.cold_content = 0.0
+        self.liquid_water = 0.0
+        self.coverage = 0.0
+        self.melt_coeff = melt_coeff
+        self.base_melt_temp = base_melt_temp
+
+    fn accumulate(inout self, precip: Float64,
+                  temp: Float64):
+        if temp <= RAIN_TEMP:
+            self.swe += precip
+            self.cold_content += precip * C_ICE * (
+                self.base_melt_temp - temp)
+        else:
+            self.liquid_water += precip
+
+    fn update_cold_content(inout self, temp: Float64):
+        if temp < self.base_melt_temp:
+            self.cold_content += self.swe * C_ICE * (
+                self.base_melt_temp - temp) * 0.1
+            let max_cc = self.swe * C_ICE * (
+                self.base_melt_temp)
+            if self.cold_content > max_cc:
+                self.cold_content = max_cc
+
+    fn get_melt(inout self, temp: Float64) -> Float64:
+        if temp <= self.base_melt_temp or self.swe <= 0.0:
+            return 0.0
+
+        var melt = self.melt_coeff * (
+            temp - self.base_melt_temp)
+
+        if self.cold_content > 0.0:
+            if melt <= self.cold_content:
+                self.cold_content -= melt
+                return 0.0
+            melt -= self.cold_content
+            self.cold_content = 0.0
+
+        let available = self.swe + self.liquid_water
+        if melt > available:
+            melt = available
+
+        self.swe -= melt
+        if self.swe < 0.0:
+            self.swe = 0.0
+
+        return melt
+
+    fn get_coverage(inout self,
+                    swe_max: Float64) -> Float64:
+        if swe_max <= 0.0:
+            return 0.0
+        self.coverage = min(self.swe / swe_max, 1.0)
+        return self.coverage`,
+    java: `// Snow.java — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Java — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+package swmm;
+
+public class Snowpack {
+    private static final double C_ICE = 0.5;
+    private static final double LIQ_CAP = 0.05;
+    private static final double RAIN_TEMP = 1.0;
+
+    private double swe;
+    private double coldContent;
+    private double liquidWater;
+    private double coverage;
+    private final double meltCoeff;
+    private final double baseMeltTemp;
+
+    public Snowpack(double meltCoeff,
+                    double baseMeltTemp) {
+        this.meltCoeff = meltCoeff;
+        this.baseMeltTemp = baseMeltTemp;
+    }
+
+    public void accumulate(double precip, double temp) {
+        if (temp <= RAIN_TEMP) {
+            swe += precip;
+            coldContent += precip * C_ICE
+                * (baseMeltTemp - temp);
+        } else {
+            liquidWater += precip;
+        }
+    }
+
+    public void updateColdContent(double temp) {
+        if (temp < baseMeltTemp) {
+            coldContent += swe * C_ICE
+                * (baseMeltTemp - temp) * 0.1;
+            double maxCC = swe * C_ICE * baseMeltTemp;
+            if (coldContent > maxCC)
+                coldContent = maxCC;
+        }
+    }
+
+    public double getMelt(double temp) {
+        if (temp <= baseMeltTemp || swe <= 0.0)
+            return 0.0;
+
+        double melt = meltCoeff
+                      * (temp - baseMeltTemp);
+
+        if (coldContent > 0.0) {
+            if (melt <= coldContent) {
+                coldContent -= melt;
+                return 0.0;
+            }
+            melt -= coldContent;
+            coldContent = 0.0;
+        }
+
+        double available = swe + liquidWater;
+        if (melt > available) melt = available;
+
+        swe -= melt;
+        if (swe < 0.0) swe = 0.0;
+
+        return melt;
+    }
+
+    public double getCoverage(double sweMax) {
+        if (sweMax <= 0.0) return 0.0;
+        coverage = Math.min(swe / sweMax, 1.0);
+        return coverage;
+    }
+
+    public double getSWE() { return swe; }
+}`,
+    nim: `# snow.nim — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in Nim — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+const
+  cIce = 0.5
+  liqCap = 0.05
+  rainTemp = 1.0
+
+type
+  Snowpack = object
+    swe: float
+    coldContent: float
+    liquidWater: float
+    coverage: float
+    meltCoeff: float
+    baseMeltTemp: float
+
+proc newSnowpack(meltCoeff, baseMeltTemp: float):
+    Snowpack =
+  result = Snowpack(
+    swe: 0.0, coldContent: 0.0,
+    liquidWater: 0.0, coverage: 0.0,
+    meltCoeff: meltCoeff,
+    baseMeltTemp: baseMeltTemp
+  )
+
+proc accumulate(sp: var Snowpack, precip,
+                temp: float) =
+  if temp <= rainTemp:
+    sp.swe += precip
+    sp.coldContent += precip * cIce *
+      (sp.baseMeltTemp - temp)
+  else:
+    sp.liquidWater += precip
+
+proc updateColdContent(sp: var Snowpack,
+                       temp: float) =
+  if temp < sp.baseMeltTemp:
+    sp.coldContent += sp.swe * cIce *
+      (sp.baseMeltTemp - temp) * 0.1
+    let maxCC = sp.swe * cIce * sp.baseMeltTemp
+    if sp.coldContent > maxCC:
+      sp.coldContent = maxCC
+
+proc getMelt(sp: var Snowpack, temp: float): float =
+  if temp <= sp.baseMeltTemp or sp.swe <= 0.0:
+    return 0.0
+
+  result = sp.meltCoeff * (temp - sp.baseMeltTemp)
+
+  if sp.coldContent > 0.0:
+    if result <= sp.coldContent:
+      sp.coldContent -= result
+      return 0.0
+    result -= sp.coldContent
+    sp.coldContent = 0.0
+
+  let available = sp.swe + sp.liquidWater
+  if result > available:
+    result = available
+
+  sp.swe -= result
+  if sp.swe < 0.0: sp.swe = 0.0
+
+proc getCoverage(sp: var Snowpack,
+                 sweMax: float): float =
+  if sweMax <= 0.0: return 0.0
+  sp.coverage = min(sp.swe / sweMax, 1.0)
+  result = sp.coverage`,
+    ada: `-- snow.adb — Snowpack/Snowmelt Simulation
+-- SWMM5 Engine in Ada — Degree-Day Snowmelt Model
+-- Models accumulation, cold content, and melt
+-- for plowable, impervious, and pervious surfaces
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body Snow is
+
+   C_Ice     : constant Float := 0.5;
+   Liq_Cap   : constant Float := 0.05;
+   Rain_Temp : constant Float := 1.0;
+
+   type Snowpack is record
+      SWE            : Float := 0.0;
+      Cold_Content   : Float := 0.0;
+      Liquid_Water   : Float := 0.0;
+      Coverage       : Float := 0.0;
+      Melt_Coeff     : Float := 2.0;
+      Base_Melt_Temp : Float := 0.0;
+   end record;
+
+   procedure Accumulate
+     (SP : in out Snowpack; Precip, Temp : Float) is
+   begin
+      if Temp <= Rain_Temp then
+         SP.SWE := SP.SWE + Precip;
+         SP.Cold_Content := SP.Cold_Content
+            + Precip * C_Ice
+            * (SP.Base_Melt_Temp - Temp);
+      else
+         SP.Liquid_Water := SP.Liquid_Water + Precip;
+      end if;
+   end Accumulate;
+
+   procedure Update_Cold_Content
+     (SP : in out Snowpack; Temp : Float) is
+      Max_CC : Float;
+   begin
+      if Temp < SP.Base_Melt_Temp then
+         SP.Cold_Content := SP.Cold_Content
+            + SP.SWE * C_Ice
+            * (SP.Base_Melt_Temp - Temp) * 0.1;
+         Max_CC := SP.SWE * C_Ice
+                   * SP.Base_Melt_Temp;
+         if SP.Cold_Content > Max_CC then
+            SP.Cold_Content := Max_CC;
+         end if;
+      end if;
+   end Update_Cold_Content;
+
+   function Get_Melt
+     (SP : in out Snowpack; Temp : Float)
+      return Float is
+      Melt      : Float;
+      Available : Float;
+   begin
+      if Temp <= SP.Base_Melt_Temp
+         or else SP.SWE <= 0.0 then
+         return 0.0;
+      end if;
+
+      Melt := SP.Melt_Coeff
+              * (Temp - SP.Base_Melt_Temp);
+
+      if SP.Cold_Content > 0.0 then
+         if Melt <= SP.Cold_Content then
+            SP.Cold_Content := SP.Cold_Content - Melt;
+            return 0.0;
+         end if;
+         Melt := Melt - SP.Cold_Content;
+         SP.Cold_Content := 0.0;
+      end if;
+
+      Available := SP.SWE + SP.Liquid_Water;
+      if Melt > Available then
+         Melt := Available;
+      end if;
+
+      SP.SWE := SP.SWE - Melt;
+      if SP.SWE < 0.0 then SP.SWE := 0.0; end if;
+
+      return Melt;
+   end Get_Melt;
+
+   function Get_Coverage
+     (SP : in out Snowpack; SWE_Max : Float)
+      return Float is
+   begin
+      if SWE_Max <= 0.0 then return 0.0; end if;
+      SP.Coverage := Float'Min(SP.SWE / SWE_Max, 1.0);
+      return SP.Coverage;
+   end Get_Coverage;
+
+end Snow;`,
+    chapel: `// snow.chpl — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Chapel — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+const C_ICE: real = 0.5;
+const LIQ_CAP: real = 0.05;
+const RAIN_TEMP: real = 1.0;
+
+record Snowpack {
+    var swe: real = 0.0;
+    var coldContent: real = 0.0;
+    var liquidWater: real = 0.0;
+    var coverage: real = 0.0;
+    var meltCoeff: real = 2.0;
+    var baseMeltTemp: real = 0.0;
+
+    proc ref accumulate(precip: real, temp: real) {
+        if temp <= RAIN_TEMP {
+            swe += precip;
+            coldContent += precip * C_ICE
+                * (baseMeltTemp - temp);
+        } else {
+            liquidWater += precip;
+        }
+    }
+
+    proc ref updateColdContent(temp: real) {
+        if temp < baseMeltTemp {
+            coldContent += swe * C_ICE
+                * (baseMeltTemp - temp) * 0.1;
+            const maxCC = swe * C_ICE * baseMeltTemp;
+            if coldContent > maxCC then
+                coldContent = maxCC;
+        }
+    }
+
+    proc ref getMelt(temp: real): real {
+        if temp <= baseMeltTemp || swe <= 0.0 then
+            return 0.0;
+
+        var melt = meltCoeff * (temp - baseMeltTemp);
+
+        if coldContent > 0.0 {
+            if melt <= coldContent {
+                coldContent -= melt;
+                return 0.0;
+            }
+            melt -= coldContent;
+            coldContent = 0.0;
+        }
+
+        const available = swe + liquidWater;
+        if melt > available then melt = available;
+
+        swe -= melt;
+        if swe < 0.0 then swe = 0.0;
+
+        return melt;
+    }
+
+    proc ref getCoverage(sweMax: real): real {
+        if sweMax <= 0.0 then return 0.0;
+        coverage = min(swe / sweMax, 1.0);
+        return coverage;
+    }
+}`,
+    swift: `// snow.swift — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Swift — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+import Foundation
+
+let cIce: Double = 0.5
+let liqCap: Double = 0.05
+let rainTemp: Double = 1.0
+
+struct Snowpack {
+    var swe: Double = 0.0
+    var coldContent: Double = 0.0
+    var liquidWater: Double = 0.0
+    var coverage: Double = 0.0
+    let meltCoeff: Double
+    let baseMeltTemp: Double
+
+    mutating func accumulate(precip: Double,
+                             temp: Double) {
+        if temp <= rainTemp {
+            swe += precip
+            coldContent += precip * cIce
+                * (baseMeltTemp - temp)
+        } else {
+            liquidWater += precip
+        }
+    }
+
+    mutating func updateColdContent(temp: Double) {
+        if temp < baseMeltTemp {
+            coldContent += swe * cIce
+                * (baseMeltTemp - temp) * 0.1
+            let maxCC = swe * cIce * baseMeltTemp
+            if coldContent > maxCC {
+                coldContent = maxCC
+            }
+        }
+    }
+
+    mutating func getMelt(temp: Double) -> Double {
+        guard temp > baseMeltTemp, swe > 0.0 else {
+            return 0.0
+        }
+
+        var melt = meltCoeff * (temp - baseMeltTemp)
+
+        if coldContent > 0.0 {
+            if melt <= coldContent {
+                coldContent -= melt
+                return 0.0
+            }
+            melt -= coldContent
+            coldContent = 0.0
+        }
+
+        let available = swe + liquidWater
+        if melt > available { melt = available }
+
+        swe -= melt
+        if swe < 0.0 { swe = 0.0 }
+
+        return melt
+    }
+
+    mutating func getCoverage(sweMax: Double) -> Double {
+        guard sweMax > 0.0 else { return 0.0 }
+        coverage = min(swe / sweMax, 1.0)
+        return coverage
+    }
+}`,
+    kotlin: `// Snow.kt — Snowpack/Snowmelt Simulation
+// SWMM5 Engine in Kotlin — Degree-Day Snowmelt Model
+// Models accumulation, cold content, and melt
+// for plowable, impervious, and pervious surfaces
+
+package swmm
+
+import kotlin.math.min
+import kotlin.math.max
+
+private const val C_ICE = 0.5
+private const val LIQ_CAP = 0.05
+private const val RAIN_TEMP = 1.0
+
+data class Snowpack(
+    var swe: Double = 0.0,
+    var coldContent: Double = 0.0,
+    var liquidWater: Double = 0.0,
+    var coverage: Double = 0.0,
+    val meltCoeff: Double = 2.0,
+    val baseMeltTemp: Double = 0.0
+) {
+    fun accumulate(precip: Double, temp: Double) {
+        if (temp <= RAIN_TEMP) {
+            swe += precip
+            coldContent += precip * C_ICE *
+                (baseMeltTemp - temp)
+        } else {
+            liquidWater += precip
+        }
+    }
+
+    fun updateColdContent(temp: Double) {
+        if (temp < baseMeltTemp) {
+            coldContent += swe * C_ICE *
+                (baseMeltTemp - temp) * 0.1
+            val maxCC = swe * C_ICE * baseMeltTemp
+            if (coldContent > maxCC)
+                coldContent = maxCC
+        }
+    }
+
+    fun getMelt(temp: Double): Double {
+        if (temp <= baseMeltTemp || swe <= 0.0)
+            return 0.0
+
+        var melt = meltCoeff * (temp - baseMeltTemp)
+
+        if (coldContent > 0.0) {
+            if (melt <= coldContent) {
+                coldContent -= melt
+                return 0.0
+            }
+            melt -= coldContent
+            coldContent = 0.0
+        }
+
+        val available = swe + liquidWater
+        if (melt > available) melt = available
+
+        swe -= melt
+        if (swe < 0.0) swe = 0.0
+
+        return melt
+    }
+
+    fun getCoverage(sweMax: Double): Double {
+        if (sweMax <= 0.0) return 0.0
+        coverage = min(swe / sweMax, 1.0)
+        return coverage
+    }
+}`,
+  },
+  "dwflow.c — Steady/Normal Flow Initialization": {
+    category: "Hydraulics",
+    difficulty: "intermediate",
+    tags: ["steady flow", "normal depth", "initialization", "Manning", "friction slope", "uniform flow", "design flow"],
+    description: "Computes steady-state (normal/uniform) flow conditions used to initialize the dynamic wave solver and for design calculations. Given a conduit's geometry, slope, and roughness, finds the normal depth where friction slope equals bed slope using bisection. Also computes critical depth for Froude number checks.",
+    equations: "Q = (1/n)·A·R^(2/3)·S^(1/2) (Manning's); Solve: f(y) = Q_manning(y) - Q_target = 0 (bisection); Fr = V/√(g·A/T) (Froude number)",
+    inputs: "Target flow rate, conduit geometry (shape, diameter), bed slope, Manning's n",
+    outputs: "Normal depth, flow area, velocity, Froude number",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// dwflow.c — Steady/Normal Flow Initialization
+// EPA SWMM5 Engine — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+#include <math.h>
+
+#define GRAVITY   32.2
+#define MAX_ITER  50
+#define TOLERANCE 1.0e-6
+
+typedef struct {
+    double diameter;   // pipe diameter (ft)
+    double slope;      // bed slope (ft/ft)
+    double roughness;  // Manning's n
+} TDWFlow;
+
+double dwflow_getArea(double diameter, double depth)
+{
+    double r, theta;
+    if (depth <= 0.0) return 0.0;
+    if (depth >= diameter) return 3.14159265 * diameter
+                                  * diameter / 4.0;
+    r = diameter / 2.0;
+    theta = 2.0 * acos((r - depth) / r);
+    return r * r * (theta - sin(theta)) / 2.0;
+}
+
+double dwflow_getHydRadius(double diameter, double depth)
+{
+    double r, theta, area, perim;
+    if (depth <= 0.0) return 0.0;
+    if (depth >= diameter)
+        return diameter / 4.0;
+    r = diameter / 2.0;
+    theta = 2.0 * acos((r - depth) / r);
+    area = r * r * (theta - sin(theta)) / 2.0;
+    perim = r * theta;
+    return (perim > 0.0) ? area / perim : 0.0;
+}
+
+double dwflow_manningQ(TDWFlow* dw, double depth)
+{
+    double area, hRad;
+    area = dwflow_getArea(dw->diameter, depth);
+    hRad = dwflow_getHydRadius(dw->diameter, depth);
+    if (area <= 0.0 || hRad <= 0.0) return 0.0;
+    return (1.486 / dw->roughness) * area
+           * pow(hRad, 2.0/3.0) * sqrt(dw->slope);
+}
+
+double dwflow_getNormalDepth(TDWFlow* dw, double qTarget)
+{
+    double lo, hi, mid, qMid;
+    int i;
+
+    if (qTarget <= 0.0 || dw->slope <= 0.0) return 0.0;
+
+    lo = 0.0;
+    hi = dw->diameter;
+    for (i = 0; i < MAX_ITER; i++) {
+        mid = (lo + hi) / 2.0;
+        qMid = dwflow_manningQ(dw, mid);
+        if (fabs(qMid - qTarget) < TOLERANCE)
+            return mid;
+        if (qMid < qTarget) lo = mid;
+        else                 hi = mid;
+    }
+    return (lo + hi) / 2.0;
+}
+
+double dwflow_getFroude(TDWFlow* dw, double depth)
+{
+    double area, topWidth, velocity, hDepth, Q;
+    if (depth <= 0.0 || depth >= dw->diameter)
+        return 0.0;
+    area = dwflow_getArea(dw->diameter, depth);
+    Q = dwflow_manningQ(dw, depth);
+    velocity = (area > 0.0) ? Q / area : 0.0;
+    topWidth = 2.0 * sqrt(depth * (dw->diameter - depth));
+    hDepth = (topWidth > 0.0) ? area / topWidth : 0.0;
+    return (hDepth > 0.0)
+           ? velocity / sqrt(GRAVITY * hDepth) : 0.0;
+}`,
+    rust: `// dwflow.rs — Steady/Normal Flow Initialization
+// SWMM5 Engine in Rust — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+use std::f64::consts::PI;
+
+const GRAVITY: f64 = 32.2;
+const MAX_ITER: usize = 50;
+const TOLERANCE: f64 = 1.0e-6;
+
+pub struct DWFlow {
+    pub diameter: f64,
+    pub slope: f64,
+    pub roughness: f64,
+}
+
+impl DWFlow {
+    pub fn get_area(diameter: f64, depth: f64) -> f64 {
+        if depth <= 0.0 { return 0.0; }
+        if depth >= diameter {
+            return PI * diameter * diameter / 4.0;
+        }
+        let r = diameter / 2.0;
+        let theta = 2.0 * ((r - depth) / r).acos();
+        r * r * (theta - theta.sin()) / 2.0
+    }
+
+    pub fn get_hyd_radius(diameter: f64,
+                          depth: f64) -> f64 {
+        if depth <= 0.0 { return 0.0; }
+        if depth >= diameter {
+            return diameter / 4.0;
+        }
+        let r = diameter / 2.0;
+        let theta = 2.0 * ((r - depth) / r).acos();
+        let area = r * r * (theta - theta.sin()) / 2.0;
+        let perim = r * theta;
+        if perim > 0.0 { area / perim } else { 0.0 }
+    }
+
+    pub fn manning_q(&self, depth: f64) -> f64 {
+        let area = Self::get_area(self.diameter, depth);
+        let h_rad = Self::get_hyd_radius(
+            self.diameter, depth);
+        if area <= 0.0 || h_rad <= 0.0 { return 0.0; }
+        (1.486 / self.roughness) * area
+            * h_rad.powf(2.0 / 3.0) * self.slope.sqrt()
+    }
+
+    pub fn get_normal_depth(&self,
+                            q_target: f64) -> f64 {
+        if q_target <= 0.0 || self.slope <= 0.0 {
+            return 0.0;
+        }
+
+        let mut lo = 0.0_f64;
+        let mut hi = self.diameter;
+
+        for _ in 0..MAX_ITER {
+            let mid = (lo + hi) / 2.0;
+            let q_mid = self.manning_q(mid);
+            if (q_mid - q_target).abs() < TOLERANCE {
+                return mid;
+            }
+            if q_mid < q_target { lo = mid; }
+            else { hi = mid; }
+        }
+        (lo + hi) / 2.0
+    }
+
+    pub fn get_froude(&self, depth: f64) -> f64 {
+        if depth <= 0.0 || depth >= self.diameter {
+            return 0.0;
+        }
+        let area = Self::get_area(self.diameter, depth);
+        let q = self.manning_q(depth);
+        let vel = if area > 0.0 { q / area } else { 0.0 };
+        let tw = 2.0
+            * (depth * (self.diameter - depth)).sqrt();
+        let h_dep = if tw > 0.0 { area / tw } else { 0.0 };
+        if h_dep > 0.0 {
+            vel / (GRAVITY * h_dep).sqrt()
+        } else { 0.0 }
+    }
+}`,
+    python: `# dwflow.py — Steady/Normal Flow Initialization
+# SWMM5 Engine in Python — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+import math
+from dataclasses import dataclass
+
+GRAVITY = 32.2
+MAX_ITER = 50
+TOLERANCE = 1.0e-6
+
+@dataclass
+class DWFlow:
+    diameter: float
+    slope: float
+    roughness: float
+
+    @staticmethod
+    def get_area(diameter: float, depth: float) -> float:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return math.pi * diameter ** 2 / 4.0
+        r = diameter / 2.0
+        theta = 2.0 * math.acos((r - depth) / r)
+        return r * r * (theta - math.sin(theta)) / 2.0
+
+    @staticmethod
+    def get_hyd_radius(diameter: float,
+                       depth: float) -> float:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return diameter / 4.0
+        r = diameter / 2.0
+        theta = 2.0 * math.acos((r - depth) / r)
+        area = r * r * (theta - math.sin(theta)) / 2.0
+        perim = r * theta
+        return area / perim if perim > 0.0 else 0.0
+
+    def manning_q(self, depth: float) -> float:
+        area = self.get_area(self.diameter, depth)
+        h_rad = self.get_hyd_radius(self.diameter, depth)
+        if area <= 0.0 or h_rad <= 0.0:
+            return 0.0
+        return ((1.486 / self.roughness) * area
+                * h_rad ** (2.0 / 3.0)
+                * math.sqrt(self.slope))
+
+    def get_normal_depth(self,
+                         q_target: float) -> float:
+        if q_target <= 0.0 or self.slope <= 0.0:
+            return 0.0
+        lo, hi = 0.0, self.diameter
+        for _ in range(MAX_ITER):
+            mid = (lo + hi) / 2.0
+            q_mid = self.manning_q(mid)
+            if abs(q_mid - q_target) < TOLERANCE:
+                return mid
+            if q_mid < q_target:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2.0
+
+    def get_froude(self, depth: float) -> float:
+        if depth <= 0.0 or depth >= self.diameter:
+            return 0.0
+        area = self.get_area(self.diameter, depth)
+        q = self.manning_q(depth)
+        vel = q / area if area > 0.0 else 0.0
+        tw = 2.0 * math.sqrt(
+            depth * (self.diameter - depth))
+        h_dep = area / tw if tw > 0.0 else 0.0
+        if h_dep > 0.0:
+            return vel / math.sqrt(GRAVITY * h_dep)
+        return 0.0`,
+    fortran: `! dwflow.f90 — Steady/Normal Flow Initialization
+! SWMM5 Engine in Fortran — Manning's Equation & Bisection
+! Computes normal depth and uniform flow for circular
+! conduits using bisection root-finding
+
+module dwflow_module
+    implicit none
+    real(8), parameter :: GRAVITY = 32.2d0
+    real(8), parameter :: PI = 3.14159265358979d0
+    integer, parameter :: MAX_ITER = 50
+    real(8), parameter :: TOLERANCE = 1.0d-6
+
+    type :: DWFlow
+        real(8) :: diameter
+        real(8) :: slope
+        real(8) :: roughness
+    end type DWFlow
+
+contains
+
+    function get_area(diameter, depth) result(area)
+        real(8), intent(in) :: diameter, depth
+        real(8) :: area, r, theta
+
+        if (depth <= 0.0d0) then
+            area = 0.0d0; return
+        end if
+        if (depth >= diameter) then
+            area = PI * diameter**2 / 4.0d0; return
+        end if
+        r = diameter / 2.0d0
+        theta = 2.0d0 * acos((r - depth) / r)
+        area = r**2 * (theta - sin(theta)) / 2.0d0
+    end function get_area
+
+    function get_hyd_radius(diameter, depth) result(hr)
+        real(8), intent(in) :: diameter, depth
+        real(8) :: hr, r, theta, area, perim
+
+        if (depth <= 0.0d0) then
+            hr = 0.0d0; return
+        end if
+        if (depth >= diameter) then
+            hr = diameter / 4.0d0; return
+        end if
+        r = diameter / 2.0d0
+        theta = 2.0d0 * acos((r - depth) / r)
+        area = r**2 * (theta - sin(theta)) / 2.0d0
+        perim = r * theta
+        if (perim > 0.0d0) then
+            hr = area / perim
+        else
+            hr = 0.0d0
+        end if
+    end function get_hyd_radius
+
+    function manning_q(dw, depth) result(Q)
+        type(DWFlow), intent(in) :: dw
+        real(8), intent(in) :: depth
+        real(8) :: Q, area, h_rad
+
+        area = get_area(dw%diameter, depth)
+        h_rad = get_hyd_radius(dw%diameter, depth)
+        if (area <= 0.0d0 .or. h_rad <= 0.0d0) then
+            Q = 0.0d0; return
+        end if
+        Q = (1.486d0 / dw%roughness) * area &
+            * h_rad**(2.0d0/3.0d0) * sqrt(dw%slope)
+    end function manning_q
+
+    function get_normal_depth(dw, q_target) result(yn)
+        type(DWFlow), intent(in) :: dw
+        real(8), intent(in) :: q_target
+        real(8) :: yn, lo, hi, mid, q_mid
+        integer :: i
+
+        if (q_target <= 0.0d0 .or. dw%slope <= 0.0d0) then
+            yn = 0.0d0; return
+        end if
+
+        lo = 0.0d0
+        hi = dw%diameter
+        do i = 1, MAX_ITER
+            mid = (lo + hi) / 2.0d0
+            q_mid = manning_q(dw, mid)
+            if (abs(q_mid - q_target) < TOLERANCE) then
+                yn = mid; return
+            end if
+            if (q_mid < q_target) then
+                lo = mid
+            else
+                hi = mid
+            end if
+        end do
+        yn = (lo + hi) / 2.0d0
+    end function get_normal_depth
+
+    function get_froude(dw, depth) result(fr)
+        type(DWFlow), intent(in) :: dw
+        real(8), intent(in) :: depth
+        real(8) :: fr, area, Q, vel, tw, h_dep
+
+        if (depth <= 0.0d0 .or. depth >= dw%diameter) then
+            fr = 0.0d0; return
+        end if
+        area = get_area(dw%diameter, depth)
+        Q = manning_q(dw, depth)
+        if (area > 0.0d0) then
+            vel = Q / area
+        else
+            vel = 0.0d0
+        end if
+        tw = 2.0d0 * sqrt(depth * (dw%diameter - depth))
+        if (tw > 0.0d0) then
+            h_dep = area / tw
+        else
+            h_dep = 0.0d0
+        end if
+        if (h_dep > 0.0d0) then
+            fr = vel / sqrt(GRAVITY * h_dep)
+        else
+            fr = 0.0d0
+        end if
+    end function get_froude
+
+end module dwflow_module`,
+    julia: `# dwflow.jl — Steady/Normal Flow Initialization
+# SWMM5 Engine in Julia — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+const GRAVITY = 32.2
+const MAX_ITER = 50
+const TOLERANCE = 1.0e-6
+
+struct DWFlow
+    diameter::Float64
+    slope::Float64
+    roughness::Float64
+end
+
+function get_area(diameter::Float64,
+                  depth::Float64)::Float64
+    depth ≤ 0.0 && return 0.0
+    depth ≥ diameter && return π * diameter^2 / 4.0
+    r = diameter / 2.0
+    θ = 2.0 * acos((r - depth) / r)
+    return r^2 * (θ - sin(θ)) / 2.0
+end
+
+function get_hyd_radius(diameter::Float64,
+                        depth::Float64)::Float64
+    depth ≤ 0.0 && return 0.0
+    depth ≥ diameter && return diameter / 4.0
+    r = diameter / 2.0
+    θ = 2.0 * acos((r - depth) / r)
+    area = r^2 * (θ - sin(θ)) / 2.0
+    perim = r * θ
+    return perim > 0.0 ? area / perim : 0.0
+end
+
+function manning_q(dw::DWFlow, depth::Float64)::Float64
+    area = get_area(dw.diameter, depth)
+    h_rad = get_hyd_radius(dw.diameter, depth)
+    (area ≤ 0.0 || h_rad ≤ 0.0) && return 0.0
+    return (1.486 / dw.roughness) * area *
+           h_rad^(2.0/3.0) * sqrt(dw.slope)
+end
+
+function get_normal_depth(dw::DWFlow,
+                          q_target::Float64)::Float64
+    (q_target ≤ 0.0 || dw.slope ≤ 0.0) && return 0.0
+
+    lo, hi = 0.0, dw.diameter
+    for _ in 1:MAX_ITER
+        mid = (lo + hi) / 2.0
+        q_mid = manning_q(dw, mid)
+        abs(q_mid - q_target) < TOLERANCE && return mid
+        if q_mid < q_target
+            lo = mid
+        else
+            hi = mid
+        end
+    end
+    return (lo + hi) / 2.0
+end
+
+function get_froude(dw::DWFlow,
+                    depth::Float64)::Float64
+    (depth ≤ 0.0 || depth ≥ dw.diameter) && return 0.0
+    area = get_area(dw.diameter, depth)
+    q = manning_q(dw, depth)
+    vel = area > 0.0 ? q / area : 0.0
+    tw = 2.0 * sqrt(depth * (dw.diameter - depth))
+    h_dep = tw > 0.0 ? area / tw : 0.0
+    return h_dep > 0.0 ? vel / sqrt(GRAVITY * h_dep) : 0.0
+end`,
+    javascript: `// dwflow.js — Steady/Normal Flow Initialization
+// SWMM5 Engine in JavaScript — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+const GRAVITY = 32.2;
+const MAX_ITER = 50;
+const TOLERANCE = 1.0e-6;
+
+class DWFlow {
+    constructor(diameter, slope, roughness) {
+        this.diameter = diameter;
+        this.slope = slope;
+        this.roughness = roughness;
+    }
+
+    static getArea(diameter, depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return Math.PI * diameter * diameter / 4.0;
+        const r = diameter / 2.0;
+        const theta = 2.0 * Math.acos((r - depth) / r);
+        return r * r * (theta - Math.sin(theta)) / 2.0;
+    }
+
+    static getHydRadius(diameter, depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return diameter / 4.0;
+        const r = diameter / 2.0;
+        const theta = 2.0 * Math.acos((r - depth) / r);
+        const area = r * r
+                     * (theta - Math.sin(theta)) / 2.0;
+        const perim = r * theta;
+        return perim > 0.0 ? area / perim : 0.0;
+    }
+
+    manningQ(depth) {
+        const area = DWFlow.getArea(
+            this.diameter, depth);
+        const hRad = DWFlow.getHydRadius(
+            this.diameter, depth);
+        if (area <= 0.0 || hRad <= 0.0) return 0.0;
+        return (1.486 / this.roughness) * area
+            * Math.pow(hRad, 2.0 / 3.0)
+            * Math.sqrt(this.slope);
+    }
+
+    getNormalDepth(qTarget) {
+        if (qTarget <= 0.0 || this.slope <= 0.0)
+            return 0.0;
+        let lo = 0.0, hi = this.diameter;
+        for (let i = 0; i < MAX_ITER; i++) {
+            const mid = (lo + hi) / 2.0;
+            const qMid = this.manningQ(mid);
+            if (Math.abs(qMid - qTarget) < TOLERANCE)
+                return mid;
+            if (qMid < qTarget) lo = mid;
+            else hi = mid;
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    getFroude(depth) {
+        if (depth <= 0.0 || depth >= this.diameter)
+            return 0.0;
+        const area = DWFlow.getArea(
+            this.diameter, depth);
+        const q = this.manningQ(depth);
+        const vel = area > 0.0 ? q / area : 0.0;
+        const tw = 2.0 * Math.sqrt(
+            depth * (this.diameter - depth));
+        const hDep = tw > 0.0 ? area / tw : 0.0;
+        return hDep > 0.0
+            ? vel / Math.sqrt(GRAVITY * hDep) : 0.0;
+    }
+}
+
+export { DWFlow, GRAVITY };`,
+    go: `// dwflow.go — Steady/Normal Flow Initialization
+// SWMM5 Engine in Go — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+package swmm
+
+import "math"
+
+const (
+    Gravity   = 32.2
+    MaxIter   = 50
+    Tolerance = 1.0e-6
+)
+
+type DWFlow struct {
+    Diameter  float64
+    Slope     float64
+    Roughness float64
+}
+
+func GetArea(diameter, depth float64) float64 {
+    if depth <= 0.0 {
+        return 0.0
+    }
+    if depth >= diameter {
+        return math.Pi * diameter * diameter / 4.0
+    }
+    r := diameter / 2.0
+    theta := 2.0 * math.Acos((r-depth)/r)
+    return r * r * (theta - math.Sin(theta)) / 2.0
+}
+
+func GetHydRadius(diameter, depth float64) float64 {
+    if depth <= 0.0 {
+        return 0.0
+    }
+    if depth >= diameter {
+        return diameter / 4.0
+    }
+    r := diameter / 2.0
+    theta := 2.0 * math.Acos((r-depth)/r)
+    area := r * r * (theta - math.Sin(theta)) / 2.0
+    perim := r * theta
+    if perim > 0.0 {
+        return area / perim
+    }
+    return 0.0
+}
+
+func (dw *DWFlow) ManningQ(depth float64) float64 {
+    area := GetArea(dw.Diameter, depth)
+    hRad := GetHydRadius(dw.Diameter, depth)
+    if area <= 0.0 || hRad <= 0.0 {
+        return 0.0
+    }
+    return (1.486 / dw.Roughness) * area *
+        math.Pow(hRad, 2.0/3.0) *
+        math.Sqrt(dw.Slope)
+}
+
+func (dw *DWFlow) GetNormalDepth(
+    qTarget float64) float64 {
+    if qTarget <= 0.0 || dw.Slope <= 0.0 {
+        return 0.0
+    }
+    lo, hi := 0.0, dw.Diameter
+    for i := 0; i < MaxIter; i++ {
+        mid := (lo + hi) / 2.0
+        qMid := dw.ManningQ(mid)
+        if math.Abs(qMid-qTarget) < Tolerance {
+            return mid
+        }
+        if qMid < qTarget {
+            lo = mid
+        } else {
+            hi = mid
+        }
+    }
+    return (lo + hi) / 2.0
+}
+
+func (dw *DWFlow) GetFroude(depth float64) float64 {
+    if depth <= 0.0 || depth >= dw.Diameter {
+        return 0.0
+    }
+    area := GetArea(dw.Diameter, depth)
+    q := dw.ManningQ(depth)
+    vel := 0.0
+    if area > 0.0 {
+        vel = q / area
+    }
+    tw := 2.0 * math.Sqrt(
+        depth*(dw.Diameter-depth))
+    hDep := 0.0
+    if tw > 0.0 {
+        hDep = area / tw
+    }
+    if hDep > 0.0 {
+        return vel / math.Sqrt(Gravity*hDep)
+    }
+    return 0.0
+}`,
+    zig: `// dwflow.zig — Steady/Normal Flow Initialization
+// SWMM5 Engine in Zig — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+const std = @import("std");
+const math = std.math;
+
+const GRAVITY: f64 = 32.2;
+const MAX_ITER: usize = 50;
+const TOLERANCE: f64 = 1.0e-6;
+const PI: f64 = 3.14159265358979;
+
+const DWFlow = struct {
+    diameter: f64,
+    slope: f64,
+    roughness: f64,
+
+    pub fn getArea(diameter: f64, depth: f64) f64 {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return PI * diameter * diameter / 4.0;
+        const r = diameter / 2.0;
+        const theta = 2.0 * math.acos((r - depth) / r);
+        return r * r * (theta - @sin(theta)) / 2.0;
+    }
+
+    pub fn getHydRadius(diameter: f64, depth: f64) f64 {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return diameter / 4.0;
+        const r = diameter / 2.0;
+        const theta = 2.0 * math.acos((r - depth) / r);
+        const area = r * r
+                     * (theta - @sin(theta)) / 2.0;
+        const perim = r * theta;
+        return if (perim > 0.0) area / perim else 0.0;
+    }
+
+    pub fn manningQ(self: DWFlow, depth: f64) f64 {
+        const area = getArea(self.diameter, depth);
+        const h_rad = getHydRadius(self.diameter, depth);
+        if (area <= 0.0 or h_rad <= 0.0) return 0.0;
+        return (1.486 / self.roughness) * area *
+            math.pow(f64, h_rad, 2.0 / 3.0) *
+            @sqrt(self.slope);
+    }
+
+    pub fn getNormalDepth(self: DWFlow,
+                          q_target: f64) f64 {
+        if (q_target <= 0.0 or self.slope <= 0.0)
+            return 0.0;
+        var lo: f64 = 0.0;
+        var hi: f64 = self.diameter;
+        var i: usize = 0;
+        while (i < MAX_ITER) : (i += 1) {
+            const mid = (lo + hi) / 2.0;
+            const q_mid = self.manningQ(mid);
+            if (@abs(q_mid - q_target) < TOLERANCE)
+                return mid;
+            if (q_mid < q_target) {
+                lo = mid;
+            } else {
+                hi = mid;
+            }
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    pub fn getFroude(self: DWFlow, depth: f64) f64 {
+        if (depth <= 0.0 or depth >= self.diameter)
+            return 0.0;
+        const area = getArea(self.diameter, depth);
+        const q = self.manningQ(depth);
+        const vel = if (area > 0.0) q / area else 0.0;
+        const tw = 2.0 * @sqrt(
+            depth * (self.diameter - depth));
+        const h_dep = if (tw > 0.0) area / tw else 0.0;
+        return if (h_dep > 0.0)
+            vel / @sqrt(GRAVITY * h_dep) else 0.0;
+    }
+};`,
+    cpp: `// dwflow.cpp — Steady/Normal Flow Initialization
+// SWMM5 Engine in C++ — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+#include <cmath>
+#include <numbers>
+
+namespace swmm {
+
+constexpr double GRAVITY = 32.2;
+constexpr int MAX_ITER = 50;
+constexpr double TOLERANCE = 1.0e-6;
+
+struct DWFlow {
+    double diameter;
+    double slope;
+    double roughness;
+
+    static double getArea(double diameter, double depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return std::numbers::pi * diameter
+                   * diameter / 4.0;
+        double r = diameter / 2.0;
+        double theta = 2.0 * std::acos((r - depth) / r);
+        return r * r * (theta - std::sin(theta)) / 2.0;
+    }
+
+    static double getHydRadius(double diameter,
+                                double depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return diameter / 4.0;
+        double r = diameter / 2.0;
+        double theta = 2.0 * std::acos((r - depth) / r);
+        double area = r * r
+                      * (theta - std::sin(theta)) / 2.0;
+        double perim = r * theta;
+        return perim > 0.0 ? area / perim : 0.0;
+    }
+
+    double manningQ(double depth) const {
+        double area = getArea(diameter, depth);
+        double hRad = getHydRadius(diameter, depth);
+        if (area <= 0.0 || hRad <= 0.0) return 0.0;
+        return (1.486 / roughness) * area
+            * std::pow(hRad, 2.0 / 3.0)
+            * std::sqrt(slope);
+    }
+
+    double getNormalDepth(double qTarget) const {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+        double lo = 0.0, hi = diameter;
+        for (int i = 0; i < MAX_ITER; ++i) {
+            double mid = (lo + hi) / 2.0;
+            double qMid = manningQ(mid);
+            if (std::abs(qMid - qTarget) < TOLERANCE)
+                return mid;
+            if (qMid < qTarget) lo = mid;
+            else hi = mid;
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    double getFroude(double depth) const {
+        if (depth <= 0.0 || depth >= diameter)
+            return 0.0;
+        double area = getArea(diameter, depth);
+        double q = manningQ(depth);
+        double vel = area > 0.0 ? q / area : 0.0;
+        double tw = 2.0 * std::sqrt(
+            depth * (diameter - depth));
+        double hDep = tw > 0.0 ? area / tw : 0.0;
+        return hDep > 0.0
+            ? vel / std::sqrt(GRAVITY * hDep) : 0.0;
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// DWFlow.cs — Steady/Normal Flow Initialization
+// SWMM5 Engine in C# — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+using System;
+
+namespace Swmm
+{
+    public class DWFlow
+    {
+        private const double Gravity = 32.2;
+        private const int MaxIter = 50;
+        private const double Tolerance = 1.0e-6;
+
+        public double Diameter { get; set; }
+        public double Slope { get; set; }
+        public double Roughness { get; set; }
+
+        public DWFlow(double diameter, double slope,
+                      double roughness)
+        {
+            Diameter = diameter;
+            Slope = slope;
+            Roughness = roughness;
+        }
+
+        public static double GetArea(double diameter,
+                                     double depth)
+        {
+            if (depth <= 0.0) return 0.0;
+            if (depth >= diameter)
+                return Math.PI * diameter * diameter / 4.0;
+            double r = diameter / 2.0;
+            double theta = 2.0
+                           * Math.Acos((r - depth) / r);
+            return r * r
+                   * (theta - Math.Sin(theta)) / 2.0;
+        }
+
+        public static double GetHydRadius(
+            double diameter, double depth)
+        {
+            if (depth <= 0.0) return 0.0;
+            if (depth >= diameter)
+                return diameter / 4.0;
+            double r = diameter / 2.0;
+            double theta = 2.0
+                           * Math.Acos((r - depth) / r);
+            double area = r * r
+                * (theta - Math.Sin(theta)) / 2.0;
+            double perim = r * theta;
+            return perim > 0.0 ? area / perim : 0.0;
+        }
+
+        public double ManningQ(double depth)
+        {
+            double area = GetArea(Diameter, depth);
+            double hRad = GetHydRadius(Diameter, depth);
+            if (area <= 0.0 || hRad <= 0.0) return 0.0;
+            return (1.486 / Roughness) * area
+                * Math.Pow(hRad, 2.0 / 3.0)
+                * Math.Sqrt(Slope);
+        }
+
+        public double GetNormalDepth(double qTarget)
+        {
+            if (qTarget <= 0.0 || Slope <= 0.0)
+                return 0.0;
+            double lo = 0.0, hi = Diameter;
+            for (int i = 0; i < MaxIter; i++)
+            {
+                double mid = (lo + hi) / 2.0;
+                double qMid = ManningQ(mid);
+                if (Math.Abs(qMid - qTarget) < Tolerance)
+                    return mid;
+                if (qMid < qTarget) lo = mid;
+                else hi = mid;
+            }
+            return (lo + hi) / 2.0;
+        }
+
+        public double GetFroude(double depth)
+        {
+            if (depth <= 0.0 || depth >= Diameter)
+                return 0.0;
+            double area = GetArea(Diameter, depth);
+            double q = ManningQ(depth);
+            double vel = area > 0.0 ? q / area : 0.0;
+            double tw = 2.0 * Math.Sqrt(
+                depth * (Diameter - depth));
+            double hDep = tw > 0.0 ? area / tw : 0.0;
+            return hDep > 0.0
+                ? vel / Math.Sqrt(Gravity * hDep) : 0.0;
+        }
+    }
+}`,
+    matlab: `% dwflow.m — Steady/Normal Flow Initialization
+% SWMM5 Engine in MATLAB — Manning's Equation & Bisection
+% Computes normal depth and uniform flow for circular
+% conduits using bisection root-finding
+
+function dw = create_dwflow(diameter, slope, roughness)
+    dw.diameter  = diameter;
+    dw.slope     = slope;
+    dw.roughness = roughness;
+end
+
+function area = get_area(diameter, depth)
+    if depth <= 0.0
+        area = 0.0; return;
+    end
+    if depth >= diameter
+        area = pi * diameter^2 / 4.0; return;
+    end
+    r = diameter / 2.0;
+    theta = 2.0 * acos((r - depth) / r);
+    area = r^2 * (theta - sin(theta)) / 2.0;
+end
+
+function hr = get_hyd_radius(diameter, depth)
+    if depth <= 0.0
+        hr = 0.0; return;
+    end
+    if depth >= diameter
+        hr = diameter / 4.0; return;
+    end
+    r = diameter / 2.0;
+    theta = 2.0 * acos((r - depth) / r);
+    area = r^2 * (theta - sin(theta)) / 2.0;
+    perim = r * theta;
+    if perim > 0.0
+        hr = area / perim;
+    else
+        hr = 0.0;
+    end
+end
+
+function Q = manning_q(dw, depth)
+    area = get_area(dw.diameter, depth);
+    h_rad = get_hyd_radius(dw.diameter, depth);
+    if area <= 0.0 || h_rad <= 0.0
+        Q = 0.0; return;
+    end
+    Q = (1.486 / dw.roughness) * area ...
+        * h_rad^(2.0/3.0) * sqrt(dw.slope);
+end
+
+function yn = get_normal_depth(dw, q_target)
+    TOLERANCE = 1.0e-6;
+    MAX_ITER = 50;
+    if q_target <= 0.0 || dw.slope <= 0.0
+        yn = 0.0; return;
+    end
+    lo = 0.0;
+    hi = dw.diameter;
+    for i = 1:MAX_ITER
+        mid = (lo + hi) / 2.0;
+        q_mid = manning_q(dw, mid);
+        if abs(q_mid - q_target) < TOLERANCE
+            yn = mid; return;
+        end
+        if q_mid < q_target
+            lo = mid;
+        else
+            hi = mid;
+        end
+    end
+    yn = (lo + hi) / 2.0;
+end
+
+function fr = get_froude(dw, depth)
+    GRAVITY = 32.2;
+    if depth <= 0.0 || depth >= dw.diameter
+        fr = 0.0; return;
+    end
+    area = get_area(dw.diameter, depth);
+    Q = manning_q(dw, depth);
+    if area > 0.0
+        vel = Q / area;
+    else
+        vel = 0.0;
+    end
+    tw = 2.0 * sqrt(depth * (dw.diameter - depth));
+    if tw > 0.0
+        h_dep = area / tw;
+    else
+        h_dep = 0.0;
+    end
+    if h_dep > 0.0
+        fr = vel / sqrt(GRAVITY * h_dep);
+    else
+        fr = 0.0;
+    end
+end`,
+    r: `# dwflow.R — Steady/Normal Flow Initialization
+# SWMM5 Engine in R — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+GRAVITY <- 32.2
+MAX_ITER <- 50
+TOLERANCE <- 1.0e-6
+
+create_dwflow <- function(diameter, slope, roughness) {
+    list(diameter = diameter, slope = slope,
+         roughness = roughness)
+}
+
+get_area <- function(diameter, depth) {
+    if (depth <= 0.0) return(0.0)
+    if (depth >= diameter)
+        return(pi * diameter^2 / 4.0)
+    r <- diameter / 2.0
+    theta <- 2.0 * acos((r - depth) / r)
+    r^2 * (theta - sin(theta)) / 2.0
+}
+
+get_hyd_radius <- function(diameter, depth) {
+    if (depth <= 0.0) return(0.0)
+    if (depth >= diameter) return(diameter / 4.0)
+    r <- diameter / 2.0
+    theta <- 2.0 * acos((r - depth) / r)
+    area <- r^2 * (theta - sin(theta)) / 2.0
+    perim <- r * theta
+    if (perim > 0.0) area / perim else 0.0
+}
+
+manning_q <- function(dw, depth) {
+    area <- get_area(dw$diameter, depth)
+    h_rad <- get_hyd_radius(dw$diameter, depth)
+    if (area <= 0.0 || h_rad <= 0.0) return(0.0)
+    (1.486 / dw$roughness) * area *
+        h_rad^(2.0 / 3.0) * sqrt(dw$slope)
+}
+
+get_normal_depth <- function(dw, q_target) {
+    if (q_target <= 0.0 || dw$slope <= 0.0)
+        return(0.0)
+    lo <- 0.0
+    hi <- dw$diameter
+    for (i in 1:MAX_ITER) {
+        mid <- (lo + hi) / 2.0
+        q_mid <- manning_q(dw, mid)
+        if (abs(q_mid - q_target) < TOLERANCE)
+            return(mid)
+        if (q_mid < q_target) lo <- mid
+        else hi <- mid
+    }
+    (lo + hi) / 2.0
+}
+
+get_froude <- function(dw, depth) {
+    if (depth <= 0.0 || depth >= dw$diameter)
+        return(0.0)
+    area <- get_area(dw$diameter, depth)
+    q <- manning_q(dw, depth)
+    vel <- if (area > 0.0) q / area else 0.0
+    tw <- 2.0 * sqrt(depth * (dw$diameter - depth))
+    h_dep <- if (tw > 0.0) area / tw else 0.0
+    if (h_dep > 0.0) vel / sqrt(GRAVITY * h_dep)
+    else 0.0
+}`,
+    delphi: `{ dwflow.pas — Steady/Normal Flow Initialization }
+{ SWMM5 Engine in Delphi — Manning's Equation & Bisection }
+{ Computes normal depth and uniform flow for circular }
+{ conduits using bisection root-finding }
+
+unit DWFlow;
+
+interface
+
+const
+  GRAVITY   = 32.2;
+  MAX_ITER  = 50;
+  TOLERANCE = 1.0E-6;
+
+type
+  TDWFlow = class
+  private
+    FDiameter: Double;
+    FSlope: Double;
+    FRoughness: Double;
+  public
+    constructor Create(ADiameter, ASlope,
+                       ARoughness: Double);
+    function GetArea(Depth: Double): Double;
+    function GetHydRadius(Depth: Double): Double;
+    function ManningQ(Depth: Double): Double;
+    function GetNormalDepth(QTarget: Double): Double;
+    function GetFroude(Depth: Double): Double;
+  end;
+
+implementation
+
+uses Math;
+
+constructor TDWFlow.Create(ADiameter, ASlope,
+                            ARoughness: Double);
+begin
+  FDiameter  := ADiameter;
+  FSlope     := ASlope;
+  FRoughness := ARoughness;
+end;
+
+function TDWFlow.GetArea(Depth: Double): Double;
+var
+  R, Theta: Double;
+begin
+  if Depth <= 0.0 then Exit(0.0);
+  if Depth >= FDiameter then
+    Exit(Pi * FDiameter * FDiameter / 4.0);
+  R := FDiameter / 2.0;
+  Theta := 2.0 * ArcCos((R - Depth) / R);
+  Result := R * R * (Theta - Sin(Theta)) / 2.0;
+end;
+
+function TDWFlow.GetHydRadius(Depth: Double): Double;
+var
+  R, Theta, Area, Perim: Double;
+begin
+  if Depth <= 0.0 then Exit(0.0);
+  if Depth >= FDiameter then
+    Exit(FDiameter / 4.0);
+  R := FDiameter / 2.0;
+  Theta := 2.0 * ArcCos((R - Depth) / R);
+  Area := R * R * (Theta - Sin(Theta)) / 2.0;
+  Perim := R * Theta;
+  if Perim > 0.0 then Result := Area / Perim
+  else Result := 0.0;
+end;
+
+function TDWFlow.ManningQ(Depth: Double): Double;
+var
+  Area, HRad: Double;
+begin
+  Area := GetArea(Depth);
+  HRad := GetHydRadius(Depth);
+  if (Area <= 0.0) or (HRad <= 0.0) then Exit(0.0);
+  Result := (1.486 / FRoughness) * Area
+            * Power(HRad, 2.0/3.0) * Sqrt(FSlope);
+end;
+
+function TDWFlow.GetNormalDepth(
+    QTarget: Double): Double;
+var
+  Lo, Hi, Mid, QMid: Double;
+  I: Integer;
+begin
+  if (QTarget <= 0.0) or (FSlope <= 0.0) then
+    Exit(0.0);
+  Lo := 0.0;
+  Hi := FDiameter;
+  for I := 1 to MAX_ITER do
+  begin
+    Mid := (Lo + Hi) / 2.0;
+    QMid := ManningQ(Mid);
+    if Abs(QMid - QTarget) < TOLERANCE then
+      Exit(Mid);
+    if QMid < QTarget then Lo := Mid
+    else Hi := Mid;
+  end;
+  Result := (Lo + Hi) / 2.0;
+end;
+
+function TDWFlow.GetFroude(Depth: Double): Double;
+var
+  Area, Q, Vel, TW, HDep: Double;
+begin
+  if (Depth <= 0.0) or (Depth >= FDiameter) then
+    Exit(0.0);
+  Area := GetArea(Depth);
+  Q := ManningQ(Depth);
+  if Area > 0.0 then Vel := Q / Area
+  else Vel := 0.0;
+  TW := 2.0 * Sqrt(Depth * (FDiameter - Depth));
+  if TW > 0.0 then HDep := Area / TW
+  else HDep := 0.0;
+  if HDep > 0.0 then
+    Result := Vel / Sqrt(GRAVITY * HDep)
+  else
+    Result := 0.0;
+end;
+
+end.`,
+    typescript: `// dwflow.ts — Steady/Normal Flow Initialization
+// SWMM5 Engine in TypeScript — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+const GRAVITY: number = 32.2;
+const MAX_ITER: number = 50;
+const TOLERANCE: number = 1.0e-6;
+
+interface DWFlowParams {
+    diameter: number;
+    slope: number;
+    roughness: number;
+}
+
+class DWFlow {
+    readonly diameter: number;
+    readonly slope: number;
+    readonly roughness: number;
+
+    constructor(params: DWFlowParams) {
+        this.diameter = params.diameter;
+        this.slope = params.slope;
+        this.roughness = params.roughness;
+    }
+
+    static getArea(diameter: number,
+                   depth: number): number {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return Math.PI * diameter * diameter / 4.0;
+        const r: number = diameter / 2.0;
+        const theta: number = 2.0
+            * Math.acos((r - depth) / r);
+        return r * r * (theta - Math.sin(theta)) / 2.0;
+    }
+
+    static getHydRadius(diameter: number,
+                        depth: number): number {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return diameter / 4.0;
+        const r: number = diameter / 2.0;
+        const theta: number = 2.0
+            * Math.acos((r - depth) / r);
+        const area: number = r * r
+            * (theta - Math.sin(theta)) / 2.0;
+        const perim: number = r * theta;
+        return perim > 0.0 ? area / perim : 0.0;
+    }
+
+    manningQ(depth: number): number {
+        const area = DWFlow.getArea(
+            this.diameter, depth);
+        const hRad = DWFlow.getHydRadius(
+            this.diameter, depth);
+        if (area <= 0.0 || hRad <= 0.0) return 0.0;
+        return (1.486 / this.roughness) * area
+            * Math.pow(hRad, 2.0 / 3.0)
+            * Math.sqrt(this.slope);
+    }
+
+    getNormalDepth(qTarget: number): number {
+        if (qTarget <= 0.0 || this.slope <= 0.0)
+            return 0.0;
+        let lo: number = 0.0;
+        let hi: number = this.diameter;
+        for (let i = 0; i < MAX_ITER; i++) {
+            const mid: number = (lo + hi) / 2.0;
+            const qMid: number = this.manningQ(mid);
+            if (Math.abs(qMid - qTarget) < TOLERANCE)
+                return mid;
+            if (qMid < qTarget) lo = mid;
+            else hi = mid;
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    getFroude(depth: number): number {
+        if (depth <= 0.0 || depth >= this.diameter)
+            return 0.0;
+        const area = DWFlow.getArea(
+            this.diameter, depth);
+        const q = this.manningQ(depth);
+        const vel = area > 0.0 ? q / area : 0.0;
+        const tw = 2.0 * Math.sqrt(
+            depth * (this.diameter - depth));
+        const hDep = tw > 0.0 ? area / tw : 0.0;
+        return hDep > 0.0
+            ? vel / Math.sqrt(GRAVITY * hDep) : 0.0;
+    }
+}
+
+export { DWFlow, GRAVITY };`,
+    cuda: `// dwflow.cu — Steady/Normal Flow Initialization
+// SWMM5 Engine in CUDA — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+#include <math.h>
+
+#define GRAVITY   32.2f
+#define MAX_ITER  50
+#define TOLERANCE 1.0e-6f
+#define PI_F      3.14159265f
+
+struct DWFlow {
+    float diameter;
+    float slope;
+    float roughness;
+};
+
+__device__ float dw_getArea(float diameter, float depth)
+{
+    if (depth <= 0.0f) return 0.0f;
+    if (depth >= diameter)
+        return PI_F * diameter * diameter / 4.0f;
+    float r = diameter / 2.0f;
+    float theta = 2.0f * acosf((r - depth) / r);
+    return r * r * (theta - sinf(theta)) / 2.0f;
+}
+
+__device__ float dw_getHydRadius(float diameter,
+                                  float depth)
+{
+    if (depth <= 0.0f) return 0.0f;
+    if (depth >= diameter) return diameter / 4.0f;
+    float r = diameter / 2.0f;
+    float theta = 2.0f * acosf((r - depth) / r);
+    float area = r * r
+                 * (theta - sinf(theta)) / 2.0f;
+    float perim = r * theta;
+    return (perim > 0.0f) ? area / perim : 0.0f;
+}
+
+__device__ float dw_manningQ(const DWFlow* dw,
+                              float depth)
+{
+    float area = dw_getArea(dw->diameter, depth);
+    float hRad = dw_getHydRadius(dw->diameter, depth);
+    if (area <= 0.0f || hRad <= 0.0f) return 0.0f;
+    return (1.486f / dw->roughness) * area
+           * powf(hRad, 2.0f/3.0f)
+           * sqrtf(dw->slope);
+}
+
+__global__ void normalDepthKernel(DWFlow* conduits,
+    float* qTargets, float* depths, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= n) return;
+
+    DWFlow dw = conduits[idx];
+    float qt = qTargets[idx];
+
+    if (qt <= 0.0f || dw.slope <= 0.0f) {
+        depths[idx] = 0.0f;
+        return;
+    }
+
+    float lo = 0.0f, hi = dw.diameter;
+    for (int i = 0; i < MAX_ITER; i++) {
+        float mid = (lo + hi) / 2.0f;
+        float qMid = dw_manningQ(&dw, mid);
+        if (fabsf(qMid - qt) < TOLERANCE) {
+            depths[idx] = mid;
+            return;
+        }
+        if (qMid < qt) lo = mid;
+        else hi = mid;
+    }
+    depths[idx] = (lo + hi) / 2.0f;
+}`,
+    wasm: `;; dwflow.wat — Steady/Normal Flow Initialization
+;; SWMM5 Engine in WebAssembly — Manning's Equation
+;; Computes normal depth for circular conduits
+
+(module
+  (import "Math" "acos" (func $acos (param f64) (result f64)))
+  (import "Math" "sin" (func $sin (param f64) (result f64)))
+  (import "Math" "sqrt" (func $sqrt (param f64) (result f64)))
+
+  (func $getArea (export "getArea")
+    (param $diameter f64) (param $depth f64)
+    (result f64)
+    (local $r f64) (local $theta f64)
+    (if (f64.le (local.get $depth) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (if (f64.ge (local.get $depth) (local.get $diameter))
+      (then (return
+        (f64.div
+          (f64.mul (f64.const 3.14159265)
+            (f64.mul (local.get $diameter)
+                     (local.get $diameter)))
+          (f64.const 4.0)))))
+    (local.set $r
+      (f64.div (local.get $diameter) (f64.const 2.0)))
+    (local.set $theta
+      (f64.mul (f64.const 2.0)
+        (call $acos
+          (f64.div
+            (f64.sub (local.get $r) (local.get $depth))
+            (local.get $r)))))
+    (f64.div
+      (f64.mul (f64.mul (local.get $r) (local.get $r))
+        (f64.sub (local.get $theta)
+                 (call $sin (local.get $theta))))
+      (f64.const 2.0)))
+
+  (func $manningQ (export "manningQ")
+    (param $roughness f64) (param $slope f64)
+    (param $diameter f64) (param $depth f64)
+    (result f64)
+    (local $area f64) (local $hrad f64)
+    (local.set $area
+      (call $getArea (local.get $diameter)
+                     (local.get $depth)))
+    (if (f64.le (local.get $area) (f64.const 0.0))
+      (then (return (f64.const 0.0))))
+    (f64.mul
+      (f64.div (f64.const 1.486) (local.get $roughness))
+      (f64.mul (local.get $area)
+        (call $sqrt (local.get $slope)))))
+)`,
+    mojo: `# dwflow.mojo — Steady/Normal Flow Initialization
+# SWMM5 Engine in Mojo — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+from math import sqrt, acos, sin, pow, pi, abs
+
+alias GRAVITY: Float64 = 32.2
+alias MAX_ITER: Int = 50
+alias TOLERANCE: Float64 = 1.0e-6
+
+struct DWFlow:
+    var diameter: Float64
+    var slope: Float64
+    var roughness: Float64
+
+    fn __init__(inout self, diameter: Float64,
+                slope: Float64, roughness: Float64):
+        self.diameter = diameter
+        self.slope = slope
+        self.roughness = roughness
+
+    @staticmethod
+    fn get_area(diameter: Float64,
+                depth: Float64) -> Float64:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return pi * diameter * diameter / 4.0
+        let r = diameter / 2.0
+        let theta = 2.0 * acos((r - depth) / r)
+        return r * r * (theta - sin(theta)) / 2.0
+
+    @staticmethod
+    fn get_hyd_radius(diameter: Float64,
+                      depth: Float64) -> Float64:
+        if depth <= 0.0:
+            return 0.0
+        if depth >= diameter:
+            return diameter / 4.0
+        let r = diameter / 2.0
+        let theta = 2.0 * acos((r - depth) / r)
+        let area = r * r * (theta - sin(theta)) / 2.0
+        let perim = r * theta
+        if perim > 0.0:
+            return area / perim
+        return 0.0
+
+    fn manning_q(self, depth: Float64) -> Float64:
+        let area = Self.get_area(self.diameter, depth)
+        let h_rad = Self.get_hyd_radius(
+            self.diameter, depth)
+        if area <= 0.0 or h_rad <= 0.0:
+            return 0.0
+        return (1.486 / self.roughness) * area * pow(
+            h_rad, 2.0 / 3.0) * sqrt(self.slope)
+
+    fn get_normal_depth(self,
+                        q_target: Float64) -> Float64:
+        if q_target <= 0.0 or self.slope <= 0.0:
+            return 0.0
+        var lo: Float64 = 0.0
+        var hi = self.diameter
+        for _ in range(MAX_ITER):
+            let mid = (lo + hi) / 2.0
+            let q_mid = self.manning_q(mid)
+            if abs(q_mid - q_target) < TOLERANCE:
+                return mid
+            if q_mid < q_target:
+                lo = mid
+            else:
+                hi = mid
+        return (lo + hi) / 2.0
+
+    fn get_froude(self, depth: Float64) -> Float64:
+        if depth <= 0.0 or depth >= self.diameter:
+            return 0.0
+        let area = Self.get_area(self.diameter, depth)
+        let q = self.manning_q(depth)
+        let vel = q / area if area > 0.0 else 0.0
+        let tw = 2.0 * sqrt(
+            depth * (self.diameter - depth))
+        let h_dep = area / tw if tw > 0.0 else 0.0
+        if h_dep > 0.0:
+            return vel / sqrt(GRAVITY * h_dep)
+        return 0.0`,
+    java: `// DWFlow.java — Steady/Normal Flow Initialization
+// SWMM5 Engine in Java — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+package swmm;
+
+public class DWFlow {
+    private static final double GRAVITY = 32.2;
+    private static final int MAX_ITER = 50;
+    private static final double TOLERANCE = 1.0e-6;
+
+    private final double diameter;
+    private final double slope;
+    private final double roughness;
+
+    public DWFlow(double diameter, double slope,
+                  double roughness) {
+        this.diameter = diameter;
+        this.slope = slope;
+        this.roughness = roughness;
+    }
+
+    public static double getArea(double diameter,
+                                 double depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter)
+            return Math.PI * diameter * diameter / 4.0;
+        double r = diameter / 2.0;
+        double theta = 2.0
+                       * Math.acos((r - depth) / r);
+        return r * r * (theta - Math.sin(theta)) / 2.0;
+    }
+
+    public static double getHydRadius(double diameter,
+                                      double depth) {
+        if (depth <= 0.0) return 0.0;
+        if (depth >= diameter) return diameter / 4.0;
+        double r = diameter / 2.0;
+        double theta = 2.0
+                       * Math.acos((r - depth) / r);
+        double area = r * r
+                      * (theta - Math.sin(theta)) / 2.0;
+        double perim = r * theta;
+        return perim > 0.0 ? area / perim : 0.0;
+    }
+
+    public double manningQ(double depth) {
+        double area = getArea(diameter, depth);
+        double hRad = getHydRadius(diameter, depth);
+        if (area <= 0.0 || hRad <= 0.0) return 0.0;
+        return (1.486 / roughness) * area
+            * Math.pow(hRad, 2.0 / 3.0)
+            * Math.sqrt(slope);
+    }
+
+    public double getNormalDepth(double qTarget) {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0;
+        double lo = 0.0, hi = diameter;
+        for (int i = 0; i < MAX_ITER; i++) {
+            double mid = (lo + hi) / 2.0;
+            double qMid = manningQ(mid);
+            if (Math.abs(qMid - qTarget) < TOLERANCE)
+                return mid;
+            if (qMid < qTarget) lo = mid;
+            else hi = mid;
+        }
+        return (lo + hi) / 2.0;
+    }
+
+    public double getFroude(double depth) {
+        if (depth <= 0.0 || depth >= diameter)
+            return 0.0;
+        double area = getArea(diameter, depth);
+        double q = manningQ(depth);
+        double vel = area > 0.0 ? q / area : 0.0;
+        double tw = 2.0 * Math.sqrt(
+            depth * (diameter - depth));
+        double hDep = tw > 0.0 ? area / tw : 0.0;
+        return hDep > 0.0
+            ? vel / Math.sqrt(GRAVITY * hDep) : 0.0;
+    }
+}`,
+    nim: `# dwflow.nim — Steady/Normal Flow Initialization
+# SWMM5 Engine in Nim — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+import math
+
+const
+  gravity = 32.2
+  maxIter = 50
+  tolerance = 1.0e-6
+
+type
+  DWFlow = object
+    diameter: float
+    slope: float
+    roughness: float
+
+proc newDWFlow(diameter, slope,
+               roughness: float): DWFlow =
+  result = DWFlow(diameter: diameter,
+                  slope: slope,
+                  roughness: roughness)
+
+proc getArea(diameter, depth: float): float =
+  if depth <= 0.0: return 0.0
+  if depth >= diameter:
+    return PI * diameter * diameter / 4.0
+  let r = diameter / 2.0
+  let theta = 2.0 * arccos((r - depth) / r)
+  result = r * r * (theta - sin(theta)) / 2.0
+
+proc getHydRadius(diameter, depth: float): float =
+  if depth <= 0.0: return 0.0
+  if depth >= diameter: return diameter / 4.0
+  let r = diameter / 2.0
+  let theta = 2.0 * arccos((r - depth) / r)
+  let area = r * r * (theta - sin(theta)) / 2.0
+  let perim = r * theta
+  if perim > 0.0: result = area / perim
+  else: result = 0.0
+
+proc manningQ(dw: DWFlow, depth: float): float =
+  let area = getArea(dw.diameter, depth)
+  let hRad = getHydRadius(dw.diameter, depth)
+  if area <= 0.0 or hRad <= 0.0: return 0.0
+  result = (1.486 / dw.roughness) * area *
+    pow(hRad, 2.0 / 3.0) * sqrt(dw.slope)
+
+proc getNormalDepth(dw: DWFlow,
+                    qTarget: float): float =
+  if qTarget <= 0.0 or dw.slope <= 0.0: return 0.0
+  var lo = 0.0
+  var hi = dw.diameter
+  for i in 0..<maxIter:
+    let mid = (lo + hi) / 2.0
+    let qMid = manningQ(dw, mid)
+    if abs(qMid - qTarget) < tolerance:
+      return mid
+    if qMid < qTarget: lo = mid
+    else: hi = mid
+  result = (lo + hi) / 2.0
+
+proc getFroude(dw: DWFlow, depth: float): float =
+  if depth <= 0.0 or depth >= dw.diameter:
+    return 0.0
+  let area = getArea(dw.diameter, depth)
+  let q = manningQ(dw, depth)
+  let vel = if area > 0.0: q / area else: 0.0
+  let tw = 2.0 * sqrt(
+    depth * (dw.diameter - depth))
+  let hDep = if tw > 0.0: area / tw else: 0.0
+  if hDep > 0.0: result = vel / sqrt(gravity * hDep)
+  else: result = 0.0`,
+    ada: `-- dwflow.adb — Steady/Normal Flow Initialization
+-- SWMM5 Engine in Ada — Manning's Equation & Bisection
+-- Computes normal depth and uniform flow for circular
+-- conduits using bisection root-finding
+
+with Ada.Numerics.Elementary_Functions;
+use  Ada.Numerics.Elementary_Functions;
+
+package body DWFlow_Pkg is
+
+   Gravity   : constant Float := 32.2;
+   Max_Iter  : constant Integer := 50;
+   Tolerance : constant Float := 1.0E-6;
+
+   type DWFlow is record
+      Diameter  : Float;
+      Slope     : Float;
+      Roughness : Float;
+   end record;
+
+   function Get_Area
+     (Diameter, Depth : Float) return Float is
+      R, Theta : Float;
+   begin
+      if Depth <= 0.0 then return 0.0; end if;
+      if Depth >= Diameter then
+         return Ada.Numerics.Pi
+                * Diameter * Diameter / 4.0;
+      end if;
+      R := Diameter / 2.0;
+      Theta := 2.0 * Arccos((R - Depth) / R);
+      return R * R * (Theta - Sin(Theta)) / 2.0;
+   end Get_Area;
+
+   function Get_Hyd_Radius
+     (Diameter, Depth : Float) return Float is
+      R, Theta, Area, Perim : Float;
+   begin
+      if Depth <= 0.0 then return 0.0; end if;
+      if Depth >= Diameter then
+         return Diameter / 4.0;
+      end if;
+      R := Diameter / 2.0;
+      Theta := 2.0 * Arccos((R - Depth) / R);
+      Area := R * R * (Theta - Sin(Theta)) / 2.0;
+      Perim := R * Theta;
+      if Perim > 0.0 then
+         return Area / Perim;
+      end if;
+      return 0.0;
+   end Get_Hyd_Radius;
+
+   function Manning_Q
+     (DW : DWFlow; Depth : Float) return Float is
+      Area, H_Rad : Float;
+   begin
+      Area := Get_Area(DW.Diameter, Depth);
+      H_Rad := Get_Hyd_Radius(DW.Diameter, Depth);
+      if Area <= 0.0 or else H_Rad <= 0.0 then
+         return 0.0;
+      end if;
+      return (1.486 / DW.Roughness) * Area
+             * (H_Rad ** (2.0 / 3.0))
+             * Sqrt(DW.Slope);
+   end Manning_Q;
+
+   function Get_Normal_Depth
+     (DW : DWFlow; Q_Target : Float) return Float is
+      Lo, Hi, Mid, Q_Mid : Float;
+   begin
+      if Q_Target <= 0.0 or else DW.Slope <= 0.0 then
+         return 0.0;
+      end if;
+      Lo := 0.0;
+      Hi := DW.Diameter;
+      for I in 1 .. Max_Iter loop
+         Mid := (Lo + Hi) / 2.0;
+         Q_Mid := Manning_Q(DW, Mid);
+         if abs(Q_Mid - Q_Target) < Tolerance then
+            return Mid;
+         end if;
+         if Q_Mid < Q_Target then
+            Lo := Mid;
+         else
+            Hi := Mid;
+         end if;
+      end loop;
+      return (Lo + Hi) / 2.0;
+   end Get_Normal_Depth;
+
+   function Get_Froude
+     (DW : DWFlow; Depth : Float) return Float is
+      Area, Q, Vel, TW, H_Dep : Float;
+   begin
+      if Depth <= 0.0 or else Depth >= DW.Diameter then
+         return 0.0;
+      end if;
+      Area := Get_Area(DW.Diameter, Depth);
+      Q := Manning_Q(DW, Depth);
+      if Area > 0.0 then Vel := Q / Area;
+      else Vel := 0.0; end if;
+      TW := 2.0 * Sqrt(
+          Depth * (DW.Diameter - Depth));
+      if TW > 0.0 then H_Dep := Area / TW;
+      else H_Dep := 0.0; end if;
+      if H_Dep > 0.0 then
+         return Vel / Sqrt(Gravity * H_Dep);
+      end if;
+      return 0.0;
+   end Get_Froude;
+
+end DWFlow_Pkg;`,
+    chapel: `// dwflow.chpl — Steady/Normal Flow Initialization
+// SWMM5 Engine in Chapel — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+use Math;
+
+const GRAVITY: real = 32.2;
+const MAX_ITER: int = 50;
+const TOLERANCE: real = 1.0e-6;
+
+record DWFlow {
+    var diameter: real;
+    var slope: real;
+    var roughness: real;
+}
+
+proc getArea(diameter: real, depth: real): real {
+    if depth <= 0.0 then return 0.0;
+    if depth >= diameter then
+        return pi * diameter * diameter / 4.0;
+    const r = diameter / 2.0;
+    const theta = 2.0 * acos((r - depth) / r);
+    return r * r * (theta - sin(theta)) / 2.0;
+}
+
+proc getHydRadius(diameter: real, depth: real): real {
+    if depth <= 0.0 then return 0.0;
+    if depth >= diameter then return diameter / 4.0;
+    const r = diameter / 2.0;
+    const theta = 2.0 * acos((r - depth) / r);
+    const area = r * r * (theta - sin(theta)) / 2.0;
+    const perim = r * theta;
+    return if perim > 0.0 then area / perim else 0.0;
+}
+
+proc manningQ(ref dw: DWFlow, depth: real): real {
+    const area = getArea(dw.diameter, depth);
+    const hRad = getHydRadius(dw.diameter, depth);
+    if area <= 0.0 || hRad <= 0.0 then return 0.0;
+    return (1.486 / dw.roughness) * area
+        * hRad ** (2.0 / 3.0) * sqrt(dw.slope);
+}
+
+proc getNormalDepth(ref dw: DWFlow,
+                    qTarget: real): real {
+    if qTarget <= 0.0 || dw.slope <= 0.0 then
+        return 0.0;
+    var lo = 0.0;
+    var hi = dw.diameter;
+    for i in 0..#MAX_ITER {
+        const mid = (lo + hi) / 2.0;
+        const qMid = manningQ(dw, mid);
+        if abs(qMid - qTarget) < TOLERANCE then
+            return mid;
+        if qMid < qTarget then lo = mid;
+        else hi = mid;
+    }
+    return (lo + hi) / 2.0;
+}
+
+proc getFroude(ref dw: DWFlow, depth: real): real {
+    if depth <= 0.0 || depth >= dw.diameter then
+        return 0.0;
+    const area = getArea(dw.diameter, depth);
+    const q = manningQ(dw, depth);
+    const vel = if area > 0.0 then q / area else 0.0;
+    const tw = 2.0 * sqrt(
+        depth * (dw.diameter - depth));
+    const hDep = if tw > 0.0 then area / tw else 0.0;
+    return if hDep > 0.0
+        then vel / sqrt(GRAVITY * hDep) else 0.0;
+}`,
+    swift: `// dwflow.swift — Steady/Normal Flow Initialization
+// SWMM5 Engine in Swift — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+import Foundation
+
+let gravity: Double = 32.2
+let maxIterations: Int = 50
+let tolerance: Double = 1.0e-6
+
+struct DWFlow {
+    let diameter: Double
+    let slope: Double
+    let roughness: Double
+
+    static func getArea(diameter: Double,
+                        depth: Double) -> Double {
+        guard depth > 0.0 else { return 0.0 }
+        guard depth < diameter else {
+            return .pi * diameter * diameter / 4.0
+        }
+        let r = diameter / 2.0
+        let theta = 2.0 * acos((r - depth) / r)
+        return r * r * (theta - sin(theta)) / 2.0
+    }
+
+    static func getHydRadius(diameter: Double,
+                              depth: Double) -> Double {
+        guard depth > 0.0 else { return 0.0 }
+        guard depth < diameter else {
+            return diameter / 4.0
+        }
+        let r = diameter / 2.0
+        let theta = 2.0 * acos((r - depth) / r)
+        let area = r * r
+                   * (theta - sin(theta)) / 2.0
+        let perim = r * theta
+        return perim > 0.0 ? area / perim : 0.0
+    }
+
+    func manningQ(depth: Double) -> Double {
+        let area = DWFlow.getArea(diameter: diameter,
+                                  depth: depth)
+        let hRad = DWFlow.getHydRadius(
+            diameter: diameter, depth: depth)
+        guard area > 0.0, hRad > 0.0 else { return 0.0 }
+        return (1.486 / roughness) * area
+            * pow(hRad, 2.0 / 3.0) * sqrt(slope)
+    }
+
+    func getNormalDepth(qTarget: Double) -> Double {
+        guard qTarget > 0.0, slope > 0.0 else {
+            return 0.0
+        }
+        var lo = 0.0, hi = diameter
+        for _ in 0..<maxIterations {
+            let mid = (lo + hi) / 2.0
+            let qMid = manningQ(depth: mid)
+            if abs(qMid - qTarget) < tolerance {
+                return mid
+            }
+            if qMid < qTarget { lo = mid }
+            else { hi = mid }
+        }
+        return (lo + hi) / 2.0
+    }
+
+    func getFroude(depth: Double) -> Double {
+        guard depth > 0.0, depth < diameter else {
+            return 0.0
+        }
+        let area = DWFlow.getArea(diameter: diameter,
+                                   depth: depth)
+        let q = manningQ(depth: depth)
+        let vel = area > 0.0 ? q / area : 0.0
+        let tw = 2.0 * sqrt(
+            depth * (diameter - depth))
+        let hDep = tw > 0.0 ? area / tw : 0.0
+        return hDep > 0.0
+            ? vel / sqrt(gravity * hDep) : 0.0
+    }
+}`,
+    kotlin: `// DWFlow.kt — Steady/Normal Flow Initialization
+// SWMM5 Engine in Kotlin — Manning's Equation & Bisection
+// Computes normal depth and uniform flow for circular
+// conduits using bisection root-finding
+
+package swmm
+
+import kotlin.math.*
+
+private const val GRAVITY = 32.2
+private const val MAX_ITER = 50
+private const val TOLERANCE = 1.0e-6
+
+data class DWFlow(
+    val diameter: Double,
+    val slope: Double,
+    val roughness: Double
+) {
+    companion object {
+        fun getArea(diameter: Double,
+                    depth: Double): Double {
+            if (depth <= 0.0) return 0.0
+            if (depth >= diameter)
+                return PI * diameter * diameter / 4.0
+            val r = diameter / 2.0
+            val theta = 2.0 * acos((r - depth) / r)
+            return r * r * (theta - sin(theta)) / 2.0
+        }
+
+        fun getHydRadius(diameter: Double,
+                         depth: Double): Double {
+            if (depth <= 0.0) return 0.0
+            if (depth >= diameter)
+                return diameter / 4.0
+            val r = diameter / 2.0
+            val theta = 2.0 * acos((r - depth) / r)
+            val area = r * r
+                       * (theta - sin(theta)) / 2.0
+            val perim = r * theta
+            return if (perim > 0.0) area / perim
+                   else 0.0
+        }
+    }
+
+    fun manningQ(depth: Double): Double {
+        val area = getArea(diameter, depth)
+        val hRad = getHydRadius(diameter, depth)
+        if (area <= 0.0 || hRad <= 0.0) return 0.0
+        return (1.486 / roughness) * area *
+            hRad.pow(2.0 / 3.0) * sqrt(slope)
+    }
+
+    fun getNormalDepth(qTarget: Double): Double {
+        if (qTarget <= 0.0 || slope <= 0.0) return 0.0
+        var lo = 0.0
+        var hi = diameter
+        for (i in 0 until MAX_ITER) {
+            val mid = (lo + hi) / 2.0
+            val qMid = manningQ(mid)
+            if (abs(qMid - qTarget) < TOLERANCE)
+                return mid
+            if (qMid < qTarget) lo = mid
+            else hi = mid
+        }
+        return (lo + hi) / 2.0
+    }
+
+    fun getFroude(depth: Double): Double {
+        if (depth <= 0.0 || depth >= diameter)
+            return 0.0
+        val area = getArea(diameter, depth)
+        val q = manningQ(depth)
+        val vel = if (area > 0.0) q / area else 0.0
+        val tw = 2.0 * sqrt(
+            depth * (diameter - depth))
+        val hDep = if (tw > 0.0) area / tw else 0.0
+        return if (hDep > 0.0)
+            vel / sqrt(GRAVITY * hDep) else 0.0
+    }
+}`,
+  },
+  "hotstart.c — Simulation State Save/Restore": {
+    category: "Data Processing",
+    difficulty: "intermediate",
+    tags: ["hotstart", "state", "save", "restore", "checkpoint", "restart", "binary", "serialization"],
+    description: "Saves and restores the complete simulation state (node depths, link flows, subcatchment moisture, groundwater levels) to/from a binary file. Allows long continuous simulations to be split into segments, warm-starting from a previous state. Critical for real-time forecasting where each forecast starts from the previous simulation's end state.",
+    equations: "State = {node_depths[], link_flows[], subcatch_moisture[], gw_levels[]}; File format: header + node_count + link_count + state arrays",
+    inputs: "Current simulation state (arrays of node depths, link flows, subcatchment runoff, groundwater table)",
+    outputs: "Binary state file (save) or restored simulation state (load)",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// hotstart.c — Simulation State Save/Restore
+// EPA SWMM5 Engine — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define HOTSTART_MAGIC 0x48535430  /* HST0 */
+#define HOTSTART_VERSION 1
+
+typedef struct {
+    int      nNodes;
+    int      nLinks;
+    int      nSubcatch;
+    double*  nodeDepths;
+    double*  linkFlows;
+    double*  subcatchMoisture;
+    double*  gwLevels;
+} SimState;
+
+SimState* hotstart_createState(int nNodes, int nLinks,
+                                int nSubcatch)
+{
+    SimState* s = (SimState*)malloc(sizeof(SimState));
+    s->nNodes    = nNodes;
+    s->nLinks    = nLinks;
+    s->nSubcatch = nSubcatch;
+    s->nodeDepths       = (double*)calloc(nNodes, sizeof(double));
+    s->linkFlows        = (double*)calloc(nLinks, sizeof(double));
+    s->subcatchMoisture = (double*)calloc(nSubcatch, sizeof(double));
+    s->gwLevels         = (double*)calloc(nSubcatch, sizeof(double));
+    return s;
+}
+
+int hotstart_saveState(const SimState* s, const char* fname)
+{
+    FILE* fp = fopen(fname, "wb");
+    if (!fp) return -1;
+
+    int magic = HOTSTART_MAGIC;
+    int ver   = HOTSTART_VERSION;
+    fwrite(&magic,       sizeof(int), 1, fp);
+    fwrite(&ver,         sizeof(int), 1, fp);
+    fwrite(&s->nNodes,   sizeof(int), 1, fp);
+    fwrite(&s->nLinks,   sizeof(int), 1, fp);
+    fwrite(&s->nSubcatch,sizeof(int), 1, fp);
+    fwrite(s->nodeDepths,       sizeof(double), s->nNodes, fp);
+    fwrite(s->linkFlows,        sizeof(double), s->nLinks, fp);
+    fwrite(s->subcatchMoisture, sizeof(double), s->nSubcatch, fp);
+    fwrite(s->gwLevels,         sizeof(double), s->nSubcatch, fp);
+    fclose(fp);
+    return 0;
+}
+
+SimState* hotstart_loadState(const char* fname)
+{
+    FILE* fp = fopen(fname, "rb");
+    if (!fp) return NULL;
+
+    int magic, ver;
+    fread(&magic, sizeof(int), 1, fp);
+    fread(&ver,   sizeof(int), 1, fp);
+    if (magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION) {
+        fclose(fp);
+        return NULL;
+    }
+
+    int nn, nl, ns;
+    fread(&nn, sizeof(int), 1, fp);
+    fread(&nl, sizeof(int), 1, fp);
+    fread(&ns, sizeof(int), 1, fp);
+
+    SimState* s = hotstart_createState(nn, nl, ns);
+    fread(s->nodeDepths,       sizeof(double), nn, fp);
+    fread(s->linkFlows,        sizeof(double), nl, fp);
+    fread(s->subcatchMoisture, sizeof(double), ns, fp);
+    fread(s->gwLevels,         sizeof(double), ns, fp);
+    fclose(fp);
+    return s;
+}`,
+    rust: `// hotstart.rs — Simulation State Save/Restore
+// SWMM5 Engine in Rust — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+use std::io::{self, Read, Write, BufWriter, BufReader};
+use std::fs::File;
+
+const HOTSTART_MAGIC: u32 = 0x48535430;
+const HOTSTART_VERSION: u32 = 1;
+
+pub struct SimState {
+    pub node_depths: Vec<f64>,
+    pub link_flows: Vec<f64>,
+    pub subcatch_moisture: Vec<f64>,
+    pub gw_levels: Vec<f64>,
+}
+
+impl SimState {
+    pub fn new(n_nodes: usize, n_links: usize,
+               n_subcatch: usize) -> Self {
+        SimState {
+            node_depths: vec![0.0; n_nodes],
+            link_flows: vec![0.0; n_links],
+            subcatch_moisture: vec![0.0; n_subcatch],
+            gw_levels: vec![0.0; n_subcatch],
+        }
+    }
+
+    pub fn save(&self, path: &str) -> io::Result<()> {
+        let f = File::create(path)?;
+        let mut w = BufWriter::new(f);
+        w.write_all(&HOTSTART_MAGIC.to_le_bytes())?;
+        w.write_all(&HOTSTART_VERSION.to_le_bytes())?;
+        w.write_all(&(self.node_depths.len() as u32).to_le_bytes())?;
+        w.write_all(&(self.link_flows.len() as u32).to_le_bytes())?;
+        w.write_all(&(self.subcatch_moisture.len() as u32).to_le_bytes())?;
+        for &v in &self.node_depths { w.write_all(&v.to_le_bytes())?; }
+        for &v in &self.link_flows { w.write_all(&v.to_le_bytes())?; }
+        for &v in &self.subcatch_moisture { w.write_all(&v.to_le_bytes())?; }
+        for &v in &self.gw_levels { w.write_all(&v.to_le_bytes())?; }
+        Ok(())
+    }
+
+    pub fn load(path: &str) -> io::Result<Self> {
+        let f = File::open(path)?;
+        let mut r = BufReader::new(f);
+        let mut buf4 = [0u8; 4];
+        r.read_exact(&mut buf4)?;
+        let magic = u32::from_le_bytes(buf4);
+        r.read_exact(&mut buf4)?;
+        let ver = u32::from_le_bytes(buf4);
+        if magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION {
+            return Err(io::Error::new(io::ErrorKind::InvalidData, "bad header"));
+        }
+        r.read_exact(&mut buf4)?; let nn = u32::from_le_bytes(buf4) as usize;
+        r.read_exact(&mut buf4)?; let nl = u32::from_le_bytes(buf4) as usize;
+        r.read_exact(&mut buf4)?; let ns = u32::from_le_bytes(buf4) as usize;
+        let mut state = SimState::new(nn, nl, ns);
+        let mut buf8 = [0u8; 8];
+        for v in &mut state.node_depths { r.read_exact(&mut buf8)?; *v = f64::from_le_bytes(buf8); }
+        for v in &mut state.link_flows { r.read_exact(&mut buf8)?; *v = f64::from_le_bytes(buf8); }
+        for v in &mut state.subcatch_moisture { r.read_exact(&mut buf8)?; *v = f64::from_le_bytes(buf8); }
+        for v in &mut state.gw_levels { r.read_exact(&mut buf8)?; *v = f64::from_le_bytes(buf8); }
+        Ok(state)
+    }
+
+    pub fn get_state_size(&self) -> usize {
+        20 + 8 * (self.node_depths.len() + self.link_flows.len()
+                  + self.subcatch_moisture.len() + self.gw_levels.len())
+    }
+}`,
+    python: `# hotstart.py — Simulation State Save/Restore
+# SWMM5 Engine in Python — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+import struct
+from dataclasses import dataclass, field
+from typing import List
+
+HOTSTART_MAGIC = 0x48535430
+HOTSTART_VERSION = 1
+
+@dataclass
+class SimState:
+    node_depths: List[float] = field(default_factory=list)
+    link_flows: List[float] = field(default_factory=list)
+    subcatch_moisture: List[float] = field(default_factory=list)
+    gw_levels: List[float] = field(default_factory=list)
+
+    @classmethod
+    def create(cls, n_nodes: int, n_links: int,
+               n_subcatch: int) -> 'SimState':
+        return cls(
+            node_depths=[0.0] * n_nodes,
+            link_flows=[0.0] * n_links,
+            subcatch_moisture=[0.0] * n_subcatch,
+            gw_levels=[0.0] * n_subcatch,
+        )
+
+    def save(self, path: str) -> None:
+        with open(path, 'wb') as f:
+            f.write(struct.pack('<II', HOTSTART_MAGIC,
+                                HOTSTART_VERSION))
+            nn, nl = len(self.node_depths), len(self.link_flows)
+            ns = len(self.subcatch_moisture)
+            f.write(struct.pack('<III', nn, nl, ns))
+            f.write(struct.pack(f'<{nn}d', *self.node_depths))
+            f.write(struct.pack(f'<{nl}d', *self.link_flows))
+            f.write(struct.pack(f'<{ns}d', *self.subcatch_moisture))
+            f.write(struct.pack(f'<{ns}d', *self.gw_levels))
+
+    @classmethod
+    def load(cls, path: str) -> 'SimState':
+        with open(path, 'rb') as f:
+            magic, ver = struct.unpack('<II', f.read(8))
+            if magic != HOTSTART_MAGIC or ver != HOTSTART_VERSION:
+                raise ValueError("Invalid hotstart file")
+            nn, nl, ns = struct.unpack('<III', f.read(12))
+            state = cls.create(nn, nl, ns)
+            state.node_depths = list(struct.unpack(f'<{nn}d', f.read(nn * 8)))
+            state.link_flows = list(struct.unpack(f'<{nl}d', f.read(nl * 8)))
+            state.subcatch_moisture = list(struct.unpack(f'<{ns}d', f.read(ns * 8)))
+            state.gw_levels = list(struct.unpack(f'<{ns}d', f.read(ns * 8)))
+            return state
+
+    def get_state_size(self) -> int:
+        return 20 + 8 * (len(self.node_depths) + len(self.link_flows)
+                         + len(self.subcatch_moisture) + len(self.gw_levels))`,
+    fortran: `! hotstart.f90 — Simulation State Save/Restore
+! SWMM5 Engine in Fortran — Binary Checkpoint I/O
+! Saves and restores complete simulation state
+! for warm-starting continuous simulations
+
+module hotstart_module
+    implicit none
+
+    integer, parameter :: HOTSTART_MAGIC   = 1213415472
+    integer, parameter :: HOTSTART_VERSION = 1
+
+    type :: SimState
+        integer :: nNodes, nLinks, nSubcatch
+        real(8), allocatable :: nodeDepths(:)
+        real(8), allocatable :: linkFlows(:)
+        real(8), allocatable :: subcatchMoisture(:)
+        real(8), allocatable :: gwLevels(:)
+    end type SimState
+
+contains
+
+    subroutine create_state(s, nNodes, nLinks, nSubcatch)
+        type(SimState), intent(out) :: s
+        integer, intent(in) :: nNodes, nLinks, nSubcatch
+        s%nNodes    = nNodes
+        s%nLinks    = nLinks
+        s%nSubcatch = nSubcatch
+        allocate(s%nodeDepths(nNodes))
+        allocate(s%linkFlows(nLinks))
+        allocate(s%subcatchMoisture(nSubcatch))
+        allocate(s%gwLevels(nSubcatch))
+        s%nodeDepths       = 0.0d0
+        s%linkFlows        = 0.0d0
+        s%subcatchMoisture = 0.0d0
+        s%gwLevels         = 0.0d0
+    end subroutine create_state
+
+    subroutine save_state(s, unit_num)
+        type(SimState), intent(in) :: s
+        integer, intent(in) :: unit_num
+        write(unit_num) HOTSTART_MAGIC, HOTSTART_VERSION
+        write(unit_num) s%nNodes, s%nLinks, s%nSubcatch
+        write(unit_num) s%nodeDepths
+        write(unit_num) s%linkFlows
+        write(unit_num) s%subcatchMoisture
+        write(unit_num) s%gwLevels
+    end subroutine save_state
+
+    subroutine load_state(s, unit_num, ierr)
+        type(SimState), intent(out) :: s
+        integer, intent(in) :: unit_num
+        integer, intent(out) :: ierr
+        integer :: magic, ver
+        read(unit_num) magic, ver
+        if (magic /= HOTSTART_MAGIC .or. ver /= HOTSTART_VERSION) then
+            ierr = -1
+            return
+        end if
+        read(unit_num) s%nNodes, s%nLinks, s%nSubcatch
+        call create_state(s, s%nNodes, s%nLinks, s%nSubcatch)
+        read(unit_num) s%nodeDepths
+        read(unit_num) s%linkFlows
+        read(unit_num) s%subcatchMoisture
+        read(unit_num) s%gwLevels
+        ierr = 0
+    end subroutine load_state
+
+end module hotstart_module`,
+    julia: `# hotstart.jl — Simulation State Save/Restore
+# SWMM5 Engine in Julia — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+const HOTSTART_MAGIC   = 0x48535430
+const HOTSTART_VERSION = 1
+
+mutable struct SimState
+    node_depths::Vector{Float64}
+    link_flows::Vector{Float64}
+    subcatch_moisture::Vector{Float64}
+    gw_levels::Vector{Float64}
+end
+
+function create_state(n_nodes::Int, n_links::Int,
+                      n_subcatch::Int)::SimState
+    SimState(zeros(n_nodes), zeros(n_links),
+             zeros(n_subcatch), zeros(n_subcatch))
+end
+
+function save_state(s::SimState, path::String)
+    open(path, "w") do io
+        write(io, UInt32(HOTSTART_MAGIC))
+        write(io, UInt32(HOTSTART_VERSION))
+        write(io, UInt32(length(s.node_depths)))
+        write(io, UInt32(length(s.link_flows)))
+        write(io, UInt32(length(s.subcatch_moisture)))
+        write(io, s.node_depths)
+        write(io, s.link_flows)
+        write(io, s.subcatch_moisture)
+        write(io, s.gw_levels)
+    end
+end
+
+function load_state(path::String)::SimState
+    open(path, "r") do io
+        magic = read(io, UInt32)
+        ver   = read(io, UInt32)
+        (magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION) &&
+            error("Invalid hotstart file")
+        nn = Int(read(io, UInt32))
+        nl = Int(read(io, UInt32))
+        ns = Int(read(io, UInt32))
+        s = create_state(nn, nl, ns)
+        read!(io, s.node_depths)
+        read!(io, s.link_flows)
+        read!(io, s.subcatch_moisture)
+        read!(io, s.gw_levels)
+        return s
+    end
+end
+
+function get_state_size(s::SimState)::Int
+    20 + 8 * (length(s.node_depths) + length(s.link_flows)
+              + length(s.subcatch_moisture) + length(s.gw_levels))
+end`,
+    javascript: `// hotstart.js — Simulation State Save/Restore
+// SWMM5 Engine in JavaScript — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+const HOTSTART_MAGIC   = 0x48535430;
+const HOTSTART_VERSION = 1;
+
+class SimState {
+    constructor(nNodes, nLinks, nSubcatch) {
+        this.nodeDepths      = new Float64Array(nNodes);
+        this.linkFlows       = new Float64Array(nLinks);
+        this.subcatchMoisture = new Float64Array(nSubcatch);
+        this.gwLevels        = new Float64Array(nSubcatch);
+    }
+
+    save() {
+        const nn = this.nodeDepths.length;
+        const nl = this.linkFlows.length;
+        const ns = this.subcatchMoisture.length;
+        const headerSize = 5 * 4;
+        const dataSize = (nn + nl + ns + ns) * 8;
+        const buf = new ArrayBuffer(headerSize + dataSize);
+        const view = new DataView(buf);
+        let off = 0;
+        view.setUint32(off, HOTSTART_MAGIC, true); off += 4;
+        view.setUint32(off, HOTSTART_VERSION, true); off += 4;
+        view.setUint32(off, nn, true); off += 4;
+        view.setUint32(off, nl, true); off += 4;
+        view.setUint32(off, ns, true); off += 4;
+        for (const arr of [this.nodeDepths, this.linkFlows,
+                           this.subcatchMoisture, this.gwLevels]) {
+            for (let i = 0; i < arr.length; i++) {
+                view.setFloat64(off, arr[i], true); off += 8;
+            }
+        }
+        return buf;
+    }
+
+    static load(buf) {
+        const view = new DataView(buf);
+        let off = 0;
+        const magic = view.getUint32(off, true); off += 4;
+        const ver   = view.getUint32(off, true); off += 4;
+        if (magic !== HOTSTART_MAGIC || ver !== HOTSTART_VERSION)
+            throw new Error("Invalid hotstart file");
+        const nn = view.getUint32(off, true); off += 4;
+        const nl = view.getUint32(off, true); off += 4;
+        const ns = view.getUint32(off, true); off += 4;
+        const s = new SimState(nn, nl, ns);
+        for (const arr of [s.nodeDepths, s.linkFlows,
+                           s.subcatchMoisture, s.gwLevels]) {
+            for (let i = 0; i < arr.length; i++) {
+                arr[i] = view.getFloat64(off, true); off += 8;
+            }
+        }
+        return s;
+    }
+
+    getStateSize() {
+        return 20 + 8 * (this.nodeDepths.length + this.linkFlows.length
+                         + this.subcatchMoisture.length + this.gwLevels.length);
+    }
+}
+
+export { SimState, HOTSTART_MAGIC };`,
+    go: `// hotstart.go — Simulation State Save/Restore
+// SWMM5 Engine in Go — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+package swmm
+
+import (
+	"encoding/binary"
+	"fmt"
+	"io"
+	"os"
+)
+
+const HotstartMagic   uint32 = 0x48535430
+const HotstartVersion uint32 = 1
+
+type SimState struct {
+	NodeDepths      []float64
+	LinkFlows       []float64
+	SubcatchMoisture []float64
+	GwLevels        []float64
+}
+
+func NewSimState(nNodes, nLinks, nSubcatch int) *SimState {
+	return &SimState{
+		NodeDepths:       make([]float64, nNodes),
+		LinkFlows:        make([]float64, nLinks),
+		SubcatchMoisture: make([]float64, nSubcatch),
+		GwLevels:         make([]float64, nSubcatch),
+	}
+}
+
+func (s *SimState) Save(path string) error {
+	f, err := os.Create(path)
+	if err != nil { return err }
+	defer f.Close()
+	le := binary.LittleEndian
+	binary.Write(f, le, HotstartMagic)
+	binary.Write(f, le, HotstartVersion)
+	binary.Write(f, le, uint32(len(s.NodeDepths)))
+	binary.Write(f, le, uint32(len(s.LinkFlows)))
+	binary.Write(f, le, uint32(len(s.SubcatchMoisture)))
+	binary.Write(f, le, s.NodeDepths)
+	binary.Write(f, le, s.LinkFlows)
+	binary.Write(f, le, s.SubcatchMoisture)
+	binary.Write(f, le, s.GwLevels)
+	return nil
+}
+
+func LoadSimState(path string) (*SimState, error) {
+	f, err := os.Open(path)
+	if err != nil { return nil, err }
+	defer f.Close()
+	le := binary.LittleEndian
+	var magic, ver uint32
+	binary.Read(f, le, &magic)
+	binary.Read(f, le, &ver)
+	if magic != HotstartMagic || ver != HotstartVersion {
+		return nil, fmt.Errorf("invalid hotstart file")
+	}
+	var nn, nl, ns uint32
+	binary.Read(f, le, &nn)
+	binary.Read(f, le, &nl)
+	binary.Read(f, le, &ns)
+	s := NewSimState(int(nn), int(nl), int(ns))
+	binary.Read(f, le, &s.NodeDepths)
+	binary.Read(f, le, &s.LinkFlows)
+	binary.Read(f, le, &s.SubcatchMoisture)
+	binary.Read(f, le, &s.GwLevels)
+	_ = io.EOF
+	return s, nil
+}`,
+    zig: `// hotstart.zig — Simulation State Save/Restore
+// SWMM5 Engine in Zig — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const HOTSTART_MAGIC: u32 = 0x48535430;
+const HOTSTART_VERSION: u32 = 1;
+
+const SimState = struct {
+    node_depths: []f64,
+    link_flows: []f64,
+    subcatch_moisture: []f64,
+    gw_levels: []f64,
+    allocator: Allocator,
+
+    pub fn init(alloc: Allocator, n_nodes: usize,
+                n_links: usize, n_subcatch: usize) !SimState {
+        var s = SimState{
+            .node_depths = try alloc.alloc(f64, n_nodes),
+            .link_flows = try alloc.alloc(f64, n_links),
+            .subcatch_moisture = try alloc.alloc(f64, n_subcatch),
+            .gw_levels = try alloc.alloc(f64, n_subcatch),
+            .allocator = alloc,
+        };
+        @memset(s.node_depths, 0);
+        @memset(s.link_flows, 0);
+        @memset(s.subcatch_moisture, 0);
+        @memset(s.gw_levels, 0);
+        return s;
+    }
+
+    pub fn save(self: SimState, writer: anytype) !void {
+        try writer.writeInt(u32, HOTSTART_MAGIC, .little);
+        try writer.writeInt(u32, HOTSTART_VERSION, .little);
+        try writer.writeInt(u32, @intCast(self.node_depths.len), .little);
+        try writer.writeInt(u32, @intCast(self.link_flows.len), .little);
+        try writer.writeInt(u32, @intCast(self.subcatch_moisture.len), .little);
+        for (self.node_depths) |v| try writer.writeAll(std.mem.asBytes(&v));
+        for (self.link_flows) |v| try writer.writeAll(std.mem.asBytes(&v));
+        for (self.subcatch_moisture) |v| try writer.writeAll(std.mem.asBytes(&v));
+        for (self.gw_levels) |v| try writer.writeAll(std.mem.asBytes(&v));
+    }
+
+    pub fn deinit(self: *SimState) void {
+        self.allocator.free(self.node_depths);
+        self.allocator.free(self.link_flows);
+        self.allocator.free(self.subcatch_moisture);
+        self.allocator.free(self.gw_levels);
+    }
+
+    pub fn getStateSize(self: SimState) usize {
+        return 20 + 8 * (self.node_depths.len + self.link_flows.len
+                         + self.subcatch_moisture.len + self.gw_levels.len);
+    }
+};`,
+    cpp: `// hotstart.cpp — Simulation State Save/Restore
+// SWMM5 Engine in C++ — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+#include <vector>
+#include <fstream>
+#include <cstdint>
+#include <stdexcept>
+
+namespace swmm {
+
+constexpr uint32_t HOTSTART_MAGIC   = 0x48535430;
+constexpr uint32_t HOTSTART_VERSION = 1;
+
+struct SimState {
+    std::vector<double> nodeDepths;
+    std::vector<double> linkFlows;
+    std::vector<double> subcatchMoisture;
+    std::vector<double> gwLevels;
+
+    SimState(int nNodes, int nLinks, int nSubcatch)
+        : nodeDepths(nNodes, 0.0), linkFlows(nLinks, 0.0),
+          subcatchMoisture(nSubcatch, 0.0),
+          gwLevels(nSubcatch, 0.0) {}
+
+    void save(const std::string& path) const {
+        std::ofstream f(path, std::ios::binary);
+        auto w = [&](const auto& v) {
+            f.write(reinterpret_cast<const char*>(&v), sizeof(v));
+        };
+        w(HOTSTART_MAGIC); w(HOTSTART_VERSION);
+        uint32_t nn = nodeDepths.size(), nl = linkFlows.size();
+        uint32_t ns = subcatchMoisture.size();
+        w(nn); w(nl); w(ns);
+        f.write(reinterpret_cast<const char*>(nodeDepths.data()), nn * 8);
+        f.write(reinterpret_cast<const char*>(linkFlows.data()), nl * 8);
+        f.write(reinterpret_cast<const char*>(subcatchMoisture.data()), ns * 8);
+        f.write(reinterpret_cast<const char*>(gwLevels.data()), ns * 8);
+    }
+
+    static SimState load(const std::string& path) {
+        std::ifstream f(path, std::ios::binary);
+        uint32_t magic, ver;
+        f.read(reinterpret_cast<char*>(&magic), 4);
+        f.read(reinterpret_cast<char*>(&ver), 4);
+        if (magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION)
+            throw std::runtime_error("Invalid hotstart file");
+        uint32_t nn, nl, ns;
+        f.read(reinterpret_cast<char*>(&nn), 4);
+        f.read(reinterpret_cast<char*>(&nl), 4);
+        f.read(reinterpret_cast<char*>(&ns), 4);
+        SimState s(nn, nl, ns);
+        f.read(reinterpret_cast<char*>(s.nodeDepths.data()), nn * 8);
+        f.read(reinterpret_cast<char*>(s.linkFlows.data()), nl * 8);
+        f.read(reinterpret_cast<char*>(s.subcatchMoisture.data()), ns * 8);
+        f.read(reinterpret_cast<char*>(s.gwLevels.data()), ns * 8);
+        return s;
+    }
+
+    size_t getStateSize() const {
+        return 20 + 8 * (nodeDepths.size() + linkFlows.size()
+                         + subcatchMoisture.size() + gwLevels.size());
+    }
+};
+
+} // namespace swmm`,
+    csharp: `// Hotstart.cs — Simulation State Save/Restore
+// SWMM5 Engine in C# — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+using System;
+using System.IO;
+
+namespace Swmm
+{
+    public class SimState
+    {
+        private const uint HotstartMagic = 0x48535430;
+        private const uint HotstartVersion = 1;
+
+        public double[] NodeDepths { get; set; }
+        public double[] LinkFlows { get; set; }
+        public double[] SubcatchMoisture { get; set; }
+        public double[] GwLevels { get; set; }
+
+        public SimState(int nNodes, int nLinks, int nSubcatch)
+        {
+            NodeDepths = new double[nNodes];
+            LinkFlows = new double[nLinks];
+            SubcatchMoisture = new double[nSubcatch];
+            GwLevels = new double[nSubcatch];
+        }
+
+        public void Save(string path)
+        {
+            using var w = new BinaryWriter(File.Create(path));
+            w.Write(HotstartMagic);
+            w.Write(HotstartVersion);
+            w.Write((uint)NodeDepths.Length);
+            w.Write((uint)LinkFlows.Length);
+            w.Write((uint)SubcatchMoisture.Length);
+            foreach (var v in NodeDepths) w.Write(v);
+            foreach (var v in LinkFlows) w.Write(v);
+            foreach (var v in SubcatchMoisture) w.Write(v);
+            foreach (var v in GwLevels) w.Write(v);
+        }
+
+        public static SimState Load(string path)
+        {
+            using var r = new BinaryReader(File.OpenRead(path));
+            uint magic = r.ReadUInt32();
+            uint ver = r.ReadUInt32();
+            if (magic != HotstartMagic || ver != HotstartVersion)
+                throw new InvalidDataException("Invalid hotstart");
+            int nn = (int)r.ReadUInt32();
+            int nl = (int)r.ReadUInt32();
+            int ns = (int)r.ReadUInt32();
+            var s = new SimState(nn, nl, ns);
+            for (int i = 0; i < nn; i++) s.NodeDepths[i] = r.ReadDouble();
+            for (int i = 0; i < nl; i++) s.LinkFlows[i] = r.ReadDouble();
+            for (int i = 0; i < ns; i++) s.SubcatchMoisture[i] = r.ReadDouble();
+            for (int i = 0; i < ns; i++) s.GwLevels[i] = r.ReadDouble();
+            return s;
+        }
+
+        public int GetStateSize() =>
+            20 + 8 * (NodeDepths.Length + LinkFlows.Length
+                      + SubcatchMoisture.Length + GwLevels.Length);
+    }
+}`,
+    matlab: `% hotstart.m — Simulation State Save/Restore
+% SWMM5 Engine in MATLAB — Binary Checkpoint I/O
+% Saves and restores complete simulation state
+% for warm-starting continuous simulations
+
+function state = create_sim_state(nNodes, nLinks, nSubcatch)
+    state.nodeDepths      = zeros(1, nNodes);
+    state.linkFlows       = zeros(1, nLinks);
+    state.subcatchMoisture = zeros(1, nSubcatch);
+    state.gwLevels        = zeros(1, nSubcatch);
+end
+
+function save_state(state, filename)
+    MAGIC   = uint32(hex2dec('48535430'));
+    VERSION = uint32(1);
+    fid = fopen(filename, 'wb');
+    fwrite(fid, MAGIC, 'uint32');
+    fwrite(fid, VERSION, 'uint32');
+    fwrite(fid, uint32(length(state.nodeDepths)), 'uint32');
+    fwrite(fid, uint32(length(state.linkFlows)), 'uint32');
+    fwrite(fid, uint32(length(state.subcatchMoisture)), 'uint32');
+    fwrite(fid, state.nodeDepths, 'double');
+    fwrite(fid, state.linkFlows, 'double');
+    fwrite(fid, state.subcatchMoisture, 'double');
+    fwrite(fid, state.gwLevels, 'double');
+    fclose(fid);
+end
+
+function state = load_state(filename)
+    MAGIC   = uint32(hex2dec('48535430'));
+    VERSION = uint32(1);
+    fid = fopen(filename, 'rb');
+    magic = fread(fid, 1, 'uint32');
+    ver   = fread(fid, 1, 'uint32');
+    if magic ~= MAGIC || ver ~= VERSION
+        fclose(fid);
+        error('Invalid hotstart file');
+    end
+    nn = fread(fid, 1, 'uint32');
+    nl = fread(fid, 1, 'uint32');
+    ns = fread(fid, 1, 'uint32');
+    state.nodeDepths      = fread(fid, nn, 'double')';
+    state.linkFlows       = fread(fid, nl, 'double')';
+    state.subcatchMoisture = fread(fid, ns, 'double')';
+    state.gwLevels        = fread(fid, ns, 'double')';
+    fclose(fid);
+end
+
+function sz = get_state_size(state)
+    sz = 20 + 8 * (length(state.nodeDepths) ...
+         + length(state.linkFlows) ...
+         + length(state.subcatchMoisture) ...
+         + length(state.gwLevels));
+end`,
+    r: `# hotstart.R — Simulation State Save/Restore
+# SWMM5 Engine in R — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+HOTSTART_MAGIC   <- 0x48535430
+HOTSTART_VERSION <- 1L
+
+create_sim_state <- function(n_nodes, n_links, n_subcatch) {
+    list(
+        node_depths       = rep(0.0, n_nodes),
+        link_flows        = rep(0.0, n_links),
+        subcatch_moisture = rep(0.0, n_subcatch),
+        gw_levels         = rep(0.0, n_subcatch)
+    )
+}
+
+save_state <- function(state, path) {
+    con <- file(path, "wb")
+    writeBin(as.integer(HOTSTART_MAGIC), con, size = 4)
+    writeBin(as.integer(HOTSTART_VERSION), con, size = 4)
+    writeBin(as.integer(length(state$node_depths)), con, size = 4)
+    writeBin(as.integer(length(state$link_flows)), con, size = 4)
+    writeBin(as.integer(length(state$subcatch_moisture)), con, size = 4)
+    writeBin(state$node_depths, con, size = 8)
+    writeBin(state$link_flows, con, size = 8)
+    writeBin(state$subcatch_moisture, con, size = 8)
+    writeBin(state$gw_levels, con, size = 8)
+    close(con)
+}
+
+load_state <- function(path) {
+    con <- file(path, "rb")
+    magic <- readBin(con, "integer", n = 1, size = 4)
+    ver   <- readBin(con, "integer", n = 1, size = 4)
+    if (magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION) {
+        close(con)
+        stop("Invalid hotstart file")
+    }
+    nn <- readBin(con, "integer", n = 1, size = 4)
+    nl <- readBin(con, "integer", n = 1, size = 4)
+    ns <- readBin(con, "integer", n = 1, size = 4)
+    state <- create_sim_state(nn, nl, ns)
+    state$node_depths       <- readBin(con, "double", n = nn)
+    state$link_flows        <- readBin(con, "double", n = nl)
+    state$subcatch_moisture <- readBin(con, "double", n = ns)
+    state$gw_levels         <- readBin(con, "double", n = ns)
+    close(con)
+    state
+}
+
+get_state_size <- function(state) {
+    20 + 8 * (length(state$node_depths) + length(state$link_flows)
+              + length(state$subcatch_moisture) + length(state$gw_levels))
+}`,
+    delphi: `{ hotstart.pas — Simulation State Save/Restore }
+{ SWMM5 Engine in Delphi — Binary Checkpoint I/O }
+{ Saves and restores complete simulation state }
+{ for warm-starting continuous simulations }
+
+unit Hotstart;
+
+interface
+
+const
+  HOTSTART_MAGIC: Cardinal   = $48535430;
+  HOTSTART_VERSION: Cardinal = 1;
+
+type
+  TDoubleArray = array of Double;
+
+  TSimState = class
+  private
+    FNodeDepths: TDoubleArray;
+    FLinkFlows: TDoubleArray;
+    FSubcatchMoisture: TDoubleArray;
+    FGwLevels: TDoubleArray;
+  public
+    constructor Create(NNodes, NLinks, NSubcatch: Integer);
+    procedure SaveToFile(const FileName: string);
+    class function LoadFromFile(const FileName: string): TSimState;
+    function GetStateSize: Integer;
+    property NodeDepths: TDoubleArray read FNodeDepths;
+    property LinkFlows: TDoubleArray read FLinkFlows;
+    property SubcatchMoisture: TDoubleArray read FSubcatchMoisture;
+    property GwLevels: TDoubleArray read FGwLevels;
+  end;
+
+implementation
+
+uses SysUtils, Classes;
+
+constructor TSimState.Create(NNodes, NLinks, NSubcatch: Integer);
+begin
+  SetLength(FNodeDepths, NNodes);
+  SetLength(FLinkFlows, NLinks);
+  SetLength(FSubcatchMoisture, NSubcatch);
+  SetLength(FGwLevels, NSubcatch);
+end;
+
+procedure TSimState.SaveToFile(const FileName: string);
+var
+  F: TFileStream;
+  nn, nl, ns: Cardinal;
+begin
+  F := TFileStream.Create(FileName, fmCreate);
+  try
+    F.Write(HOTSTART_MAGIC, 4);
+    F.Write(HOTSTART_VERSION, 4);
+    nn := Length(FNodeDepths); F.Write(nn, 4);
+    nl := Length(FLinkFlows); F.Write(nl, 4);
+    ns := Length(FSubcatchMoisture); F.Write(ns, 4);
+    F.Write(FNodeDepths[0], nn * SizeOf(Double));
+    F.Write(FLinkFlows[0], nl * SizeOf(Double));
+    F.Write(FSubcatchMoisture[0], ns * SizeOf(Double));
+    F.Write(FGwLevels[0], ns * SizeOf(Double));
+  finally
+    F.Free;
+  end;
+end;
+
+class function TSimState.LoadFromFile(const FileName: string): TSimState;
+var
+  F: TFileStream;
+  Magic, Ver, NN, NL, NS: Cardinal;
+begin
+  F := TFileStream.Create(FileName, fmOpenRead);
+  try
+    F.Read(Magic, 4); F.Read(Ver, 4);
+    if (Magic <> HOTSTART_MAGIC) or (Ver <> HOTSTART_VERSION) then
+      raise Exception.Create('Invalid hotstart file');
+    F.Read(NN, 4); F.Read(NL, 4); F.Read(NS, 4);
+    Result := TSimState.Create(NN, NL, NS);
+    F.Read(Result.FNodeDepths[0], NN * SizeOf(Double));
+    F.Read(Result.FLinkFlows[0], NL * SizeOf(Double));
+    F.Read(Result.FSubcatchMoisture[0], NS * SizeOf(Double));
+    F.Read(Result.FGwLevels[0], NS * SizeOf(Double));
+  finally
+    F.Free;
+  end;
+end;
+
+function TSimState.GetStateSize: Integer;
+begin
+  Result := 20 + 8 * (Length(FNodeDepths) + Length(FLinkFlows)
+                       + Length(FSubcatchMoisture) + Length(FGwLevels));
+end;
+
+end.`,
+    typescript: `// hotstart.ts — Simulation State Save/Restore
+// SWMM5 Engine in TypeScript — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+const HOTSTART_MAGIC: number   = 0x48535430;
+const HOTSTART_VERSION: number = 1;
+
+interface StateArrays {
+    nodeDepths: Float64Array;
+    linkFlows: Float64Array;
+    subcatchMoisture: Float64Array;
+    gwLevels: Float64Array;
+}
+
+class SimState implements StateArrays {
+    nodeDepths: Float64Array;
+    linkFlows: Float64Array;
+    subcatchMoisture: Float64Array;
+    gwLevels: Float64Array;
+
+    constructor(nNodes: number, nLinks: number, nSubcatch: number) {
+        this.nodeDepths = new Float64Array(nNodes);
+        this.linkFlows = new Float64Array(nLinks);
+        this.subcatchMoisture = new Float64Array(nSubcatch);
+        this.gwLevels = new Float64Array(nSubcatch);
+    }
+
+    save(): ArrayBuffer {
+        const nn = this.nodeDepths.length;
+        const nl = this.linkFlows.length;
+        const ns = this.subcatchMoisture.length;
+        const buf = new ArrayBuffer(20 + (nn + nl + ns + ns) * 8);
+        const dv = new DataView(buf);
+        let off = 0;
+        dv.setUint32(off, HOTSTART_MAGIC, true); off += 4;
+        dv.setUint32(off, HOTSTART_VERSION, true); off += 4;
+        dv.setUint32(off, nn, true); off += 4;
+        dv.setUint32(off, nl, true); off += 4;
+        dv.setUint32(off, ns, true); off += 4;
+        for (const arr of [this.nodeDepths, this.linkFlows,
+                           this.subcatchMoisture, this.gwLevels]) {
+            for (let i = 0; i < arr.length; i++) {
+                dv.setFloat64(off, arr[i], true); off += 8;
+            }
+        }
+        return buf;
+    }
+
+    static load(buf: ArrayBuffer): SimState {
+        const dv = new DataView(buf);
+        let off = 0;
+        const magic = dv.getUint32(off, true); off += 4;
+        const ver = dv.getUint32(off, true); off += 4;
+        if (magic !== HOTSTART_MAGIC || ver !== HOTSTART_VERSION)
+            throw new Error("Invalid hotstart file");
+        const nn = dv.getUint32(off, true); off += 4;
+        const nl = dv.getUint32(off, true); off += 4;
+        const ns = dv.getUint32(off, true); off += 4;
+        const s = new SimState(nn, nl, ns);
+        for (const arr of [s.nodeDepths, s.linkFlows,
+                           s.subcatchMoisture, s.gwLevels]) {
+            for (let i = 0; i < arr.length; i++) {
+                arr[i] = dv.getFloat64(off, true); off += 8;
+            }
+        }
+        return s;
+    }
+
+    getStateSize(): number {
+        return 20 + 8 * (this.nodeDepths.length + this.linkFlows.length
+                         + this.subcatchMoisture.length + this.gwLevels.length);
+    }
+}
+
+export { SimState, HOTSTART_MAGIC };`,
+    cuda: `// hotstart.cu — Simulation State Save/Restore
+// SWMM5 Engine in CUDA — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+#define HOTSTART_MAGIC   0x48535430
+#define HOTSTART_VERSION 1
+
+struct SimState {
+    int nNodes, nLinks, nSubcatch;
+    float* nodeDepths;
+    float* linkFlows;
+    float* subcatchMoisture;
+    float* gwLevels;
+};
+
+__host__ SimState* createState(int nNodes, int nLinks,
+                                int nSubcatch)
+{
+    SimState* s = (SimState*)malloc(sizeof(SimState));
+    s->nNodes = nNodes; s->nLinks = nLinks;
+    s->nSubcatch = nSubcatch;
+    s->nodeDepths       = (float*)calloc(nNodes, sizeof(float));
+    s->linkFlows        = (float*)calloc(nLinks, sizeof(float));
+    s->subcatchMoisture = (float*)calloc(nSubcatch, sizeof(float));
+    s->gwLevels         = (float*)calloc(nSubcatch, sizeof(float));
+    return s;
+}
+
+__host__ int saveState(const SimState* s, const char* fname)
+{
+    FILE* fp = fopen(fname, "wb");
+    if (!fp) return -1;
+    int magic = HOTSTART_MAGIC, ver = HOTSTART_VERSION;
+    fwrite(&magic, 4, 1, fp);
+    fwrite(&ver, 4, 1, fp);
+    fwrite(&s->nNodes, 4, 1, fp);
+    fwrite(&s->nLinks, 4, 1, fp);
+    fwrite(&s->nSubcatch, 4, 1, fp);
+    fwrite(s->nodeDepths, sizeof(float), s->nNodes, fp);
+    fwrite(s->linkFlows, sizeof(float), s->nLinks, fp);
+    fwrite(s->subcatchMoisture, sizeof(float), s->nSubcatch, fp);
+    fwrite(s->gwLevels, sizeof(float), s->nSubcatch, fp);
+    fclose(fp);
+    return 0;
+}
+
+__global__ void restoreToDevice(float* d_depths,
+    const float* h_depths, int n)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx < n) d_depths[idx] = h_depths[idx];
+}`,
+    wasm: `;; hotstart.wat — Simulation State Save/Restore
+;; SWMM5 Engine in WebAssembly — Binary Checkpoint I/O
+;; Saves and restores complete simulation state
+;; for warm-starting continuous simulations
+
+(module
+  (memory (export "mem") 1)
+
+  ;; Layout: 0-3 magic, 4-7 ver, 8-11 nNodes,
+  ;; 12-15 nLinks, 16-19 nSubcatch, 20+ data
+
+  (global $MAGIC i32 (i32.const 0x48535430))
+  (global $VERSION i32 (i32.const 1))
+
+  (func $writeHeader (param $base i32)
+        (param $nn i32) (param $nl i32) (param $ns i32)
+    (i32.store (local.get $base) (global.get $MAGIC))
+    (i32.store (i32.add (local.get $base) (i32.const 4))
+               (global.get $VERSION))
+    (i32.store (i32.add (local.get $base) (i32.const 8))
+               (local.get $nn))
+    (i32.store (i32.add (local.get $base) (i32.const 12))
+               (local.get $nl))
+    (i32.store (i32.add (local.get $base) (i32.const 16))
+               (local.get $ns))
+  )
+
+  (func $validateHeader (param $base i32) (result i32)
+    (if (i32.ne (i32.load (local.get $base)) (global.get $MAGIC))
+        (then (return (i32.const 0))))
+    (if (i32.ne (i32.load (i32.add (local.get $base) (i32.const 4)))
+                (global.get $VERSION))
+        (then (return (i32.const 0))))
+    (i32.const 1)
+  )
+
+  (func $getStateSize (param $nn i32) (param $nl i32)
+        (param $ns i32) (result i32)
+    (i32.add (i32.const 20)
+      (i32.mul (i32.const 8)
+        (i32.add (i32.add (local.get $nn) (local.get $nl))
+                 (i32.add (local.get $ns) (local.get $ns)))))
+  )
+
+  (func $copyState (param $src i32) (param $dst i32)
+        (param $count i32)
+    (local $i i32)
+    (local.set $i (i32.const 0))
+    (block $done (loop $loop
+      (br_if $done (i32.ge_u (local.get $i) (local.get $count)))
+      (f64.store
+        (i32.add (local.get $dst)
+                 (i32.mul (local.get $i) (i32.const 8)))
+        (f64.load
+          (i32.add (local.get $src)
+                   (i32.mul (local.get $i) (i32.const 8)))))
+      (local.set $i (i32.add (local.get $i) (i32.const 1)))
+      (br $loop)))
+  )
+
+  (export "writeHeader" (func $writeHeader))
+  (export "validateHeader" (func $validateHeader))
+  (export "getStateSize" (func $getStateSize))
+  (export "copyState" (func $copyState))
+)`,
+    mojo: `# hotstart.mojo — Simulation State Save/Restore
+# SWMM5 Engine in Mojo — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+from memory import memset_zero
+
+alias HOTSTART_MAGIC: Int = 0x48535430
+alias HOTSTART_VERSION: Int = 1
+
+struct SimState:
+    var node_depths: DynamicVector[Float64]
+    var link_flows: DynamicVector[Float64]
+    var subcatch_moisture: DynamicVector[Float64]
+    var gw_levels: DynamicVector[Float64]
+
+    fn __init__(inout self, n_nodes: Int, n_links: Int,
+                n_subcatch: Int):
+        self.node_depths = DynamicVector[Float64](n_nodes)
+        self.link_flows = DynamicVector[Float64](n_links)
+        self.subcatch_moisture = DynamicVector[Float64](n_subcatch)
+        self.gw_levels = DynamicVector[Float64](n_subcatch)
+        for i in range(n_nodes):
+            self.node_depths.push_back(0.0)
+        for i in range(n_links):
+            self.link_flows.push_back(0.0)
+        for i in range(n_subcatch):
+            self.subcatch_moisture.push_back(0.0)
+            self.gw_levels.push_back(0.0)
+
+    fn get_state_size(self) -> Int:
+        return 20 + 8 * (len(self.node_depths)
+                         + len(self.link_flows)
+                         + len(self.subcatch_moisture)
+                         + len(self.gw_levels))
+
+    fn validate(self, magic: Int, version: Int) -> Bool:
+        return magic == HOTSTART_MAGIC and version == HOTSTART_VERSION
+
+    fn copy_from(inout self, other: SimState):
+        for i in range(len(other.node_depths)):
+            self.node_depths[i] = other.node_depths[i]
+        for i in range(len(other.link_flows)):
+            self.link_flows[i] = other.link_flows[i]
+        for i in range(len(other.subcatch_moisture)):
+            self.subcatch_moisture[i] = other.subcatch_moisture[i]
+        for i in range(len(other.gw_levels)):
+            self.gw_levels[i] = other.gw_levels[i]`,
+    java: `// Hotstart.java — Simulation State Save/Restore
+// SWMM5 Engine in Java — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+package swmm;
+
+import java.io.*;
+import java.nio.*;
+import java.nio.channels.FileChannel;
+
+public class SimState {
+    private static final int HOTSTART_MAGIC = 0x48535430;
+    private static final int HOTSTART_VERSION = 1;
+
+    public double[] nodeDepths;
+    public double[] linkFlows;
+    public double[] subcatchMoisture;
+    public double[] gwLevels;
+
+    public SimState(int nNodes, int nLinks, int nSubcatch) {
+        nodeDepths = new double[nNodes];
+        linkFlows = new double[nLinks];
+        subcatchMoisture = new double[nSubcatch];
+        gwLevels = new double[nSubcatch];
+    }
+
+    public void save(String path) throws IOException {
+        try (DataOutputStream out = new DataOutputStream(
+                new BufferedOutputStream(
+                    new FileOutputStream(path)))) {
+            out.writeInt(Integer.reverseBytes(HOTSTART_MAGIC));
+            out.writeInt(Integer.reverseBytes(HOTSTART_VERSION));
+            out.writeInt(Integer.reverseBytes(nodeDepths.length));
+            out.writeInt(Integer.reverseBytes(linkFlows.length));
+            out.writeInt(Integer.reverseBytes(subcatchMoisture.length));
+            for (double v : nodeDepths)
+                out.writeLong(Long.reverseBytes(
+                    Double.doubleToRawLongBits(v)));
+            for (double v : linkFlows)
+                out.writeLong(Long.reverseBytes(
+                    Double.doubleToRawLongBits(v)));
+            for (double v : subcatchMoisture)
+                out.writeLong(Long.reverseBytes(
+                    Double.doubleToRawLongBits(v)));
+            for (double v : gwLevels)
+                out.writeLong(Long.reverseBytes(
+                    Double.doubleToRawLongBits(v)));
+        }
+    }
+
+    public static SimState load(String path) throws IOException {
+        try (DataInputStream in = new DataInputStream(
+                new BufferedInputStream(
+                    new FileInputStream(path)))) {
+            int magic = Integer.reverseBytes(in.readInt());
+            int ver = Integer.reverseBytes(in.readInt());
+            if (magic != HOTSTART_MAGIC || ver != HOTSTART_VERSION)
+                throw new IOException("Invalid hotstart file");
+            int nn = Integer.reverseBytes(in.readInt());
+            int nl = Integer.reverseBytes(in.readInt());
+            int ns = Integer.reverseBytes(in.readInt());
+            SimState s = new SimState(nn, nl, ns);
+            for (int i = 0; i < nn; i++)
+                s.nodeDepths[i] = Double.longBitsToDouble(
+                    Long.reverseBytes(in.readLong()));
+            for (int i = 0; i < nl; i++)
+                s.linkFlows[i] = Double.longBitsToDouble(
+                    Long.reverseBytes(in.readLong()));
+            for (int i = 0; i < ns; i++)
+                s.subcatchMoisture[i] = Double.longBitsToDouble(
+                    Long.reverseBytes(in.readLong()));
+            for (int i = 0; i < ns; i++)
+                s.gwLevels[i] = Double.longBitsToDouble(
+                    Long.reverseBytes(in.readLong()));
+            return s;
+        }
+    }
+
+    public int getStateSize() {
+        return 20 + 8 * (nodeDepths.length + linkFlows.length
+                         + subcatchMoisture.length + gwLevels.length);
+    }
+}`,
+    nim: `# hotstart.nim — Simulation State Save/Restore
+# SWMM5 Engine in Nim — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+const
+  HotstartMagic: uint32   = 0x48535430'u32
+  HotstartVersion: uint32 = 1'u32
+
+type
+  SimState = object
+    nodeDepths: seq[float64]
+    linkFlows: seq[float64]
+    subcatchMoisture: seq[float64]
+    gwLevels: seq[float64]
+
+proc newSimState(nNodes, nLinks, nSubcatch: int): SimState =
+  result.nodeDepths = newSeq[float64](nNodes)
+  result.linkFlows = newSeq[float64](nLinks)
+  result.subcatchMoisture = newSeq[float64](nSubcatch)
+  result.gwLevels = newSeq[float64](nSubcatch)
+
+proc saveState(s: SimState, path: string) =
+  var f = open(path, fmWrite)
+  defer: f.close()
+  var magic = HotstartMagic
+  var ver = HotstartVersion
+  discard f.writeBuffer(addr magic, 4)
+  discard f.writeBuffer(addr ver, 4)
+  var nn = uint32(s.nodeDepths.len)
+  var nl = uint32(s.linkFlows.len)
+  var ns = uint32(s.subcatchMoisture.len)
+  discard f.writeBuffer(addr nn, 4)
+  discard f.writeBuffer(addr nl, 4)
+  discard f.writeBuffer(addr ns, 4)
+  for v in s.nodeDepths:
+    var val = v
+    discard f.writeBuffer(addr val, 8)
+  for v in s.linkFlows:
+    var val = v
+    discard f.writeBuffer(addr val, 8)
+  for v in s.subcatchMoisture:
+    var val = v
+    discard f.writeBuffer(addr val, 8)
+  for v in s.gwLevels:
+    var val = v
+    discard f.writeBuffer(addr val, 8)
+
+proc loadState(path: string): SimState =
+  var f = open(path, fmRead)
+  defer: f.close()
+  var magic, ver: uint32
+  discard f.readBuffer(addr magic, 4)
+  discard f.readBuffer(addr ver, 4)
+  if magic != HotstartMagic or ver != HotstartVersion:
+    raise newException(IOError, "Invalid hotstart file")
+  var nn, nl, ns: uint32
+  discard f.readBuffer(addr nn, 4)
+  discard f.readBuffer(addr nl, 4)
+  discard f.readBuffer(addr ns, 4)
+  result = newSimState(int(nn), int(nl), int(ns))
+  for i in 0 ..< int(nn):
+    discard f.readBuffer(addr result.nodeDepths[i], 8)
+  for i in 0 ..< int(nl):
+    discard f.readBuffer(addr result.linkFlows[i], 8)
+  for i in 0 ..< int(ns):
+    discard f.readBuffer(addr result.subcatchMoisture[i], 8)
+  for i in 0 ..< int(ns):
+    discard f.readBuffer(addr result.gwLevels[i], 8)
+
+proc getStateSize(s: SimState): int =
+  result = 20 + 8 * (s.nodeDepths.len + s.linkFlows.len
+                      + s.subcatchMoisture.len + s.gwLevels.len)`,
+    ada: `-- hotstart.adb — Simulation State Save/Restore
+-- SWMM5 Engine in Ada — Binary Checkpoint I/O
+-- Saves and restores complete simulation state
+-- for warm-starting continuous simulations
+
+with Ada.Sequential_IO;
+
+package Hotstart is
+
+   Hotstart_Magic   : constant := 16#48535430#;
+   Hotstart_Version : constant := 1;
+
+   type Double_Array is array (Positive range <>) of Long_Float;
+
+   type SimState (NNodes, NLinks, NSubcatch : Positive) is record
+      Node_Depths       : Double_Array (1 .. NNodes);
+      Link_Flows        : Double_Array (1 .. NLinks);
+      Subcatch_Moisture : Double_Array (1 .. NSubcatch);
+      Gw_Levels         : Double_Array (1 .. NSubcatch);
+   end record;
+
+   procedure Create_State
+     (S        : out SimState;
+      N_Nodes  : Positive;
+      N_Links  : Positive;
+      N_Sub    : Positive) is
+   begin
+      S.Node_Depths       := (others => 0.0);
+      S.Link_Flows        := (others => 0.0);
+      S.Subcatch_Moisture := (others => 0.0);
+      S.Gw_Levels         := (others => 0.0);
+   end Create_State;
+
+   function Validate_Header
+     (Magic : Integer; Version : Integer) return Boolean is
+   begin
+      return Magic = Hotstart_Magic
+             and then Version = Hotstart_Version;
+   end Validate_Header;
+
+   function Get_State_Size (S : SimState) return Integer is
+   begin
+      return 20 + 8 * (S.Node_Depths'Length
+                       + S.Link_Flows'Length
+                       + S.Subcatch_Moisture'Length
+                       + S.Gw_Levels'Length);
+   end Get_State_Size;
+
+end Hotstart;`,
+    chapel: `// hotstart.chpl — Simulation State Save/Restore
+// SWMM5 Engine in Chapel — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+param HOTSTART_MAGIC: uint(32)   = 0x48535430;
+param HOTSTART_VERSION: uint(32) = 1;
+
+record SimState {
+    var nNodes, nLinks, nSubcatch: int;
+    var nodeDepths: [0..#nNodes] real;
+    var linkFlows: [0..#nLinks] real;
+    var subcatchMoisture: [0..#nSubcatch] real;
+    var gwLevels: [0..#nSubcatch] real;
+
+    proc init(nNodes: int, nLinks: int, nSubcatch: int) {
+        this.nNodes = nNodes;
+        this.nLinks = nLinks;
+        this.nSubcatch = nSubcatch;
+    }
+}
+
+proc createState(nNodes: int, nLinks: int,
+                  nSubcatch: int): SimState {
+    var s = new SimState(nNodes, nLinks, nSubcatch);
+    s.nodeDepths = 0.0;
+    s.linkFlows = 0.0;
+    s.subcatchMoisture = 0.0;
+    s.gwLevels = 0.0;
+    return s;
+}
+
+proc validateHeader(magic: uint(32),
+                     ver: uint(32)): bool {
+    return magic == HOTSTART_MAGIC
+           && ver == HOTSTART_VERSION;
+}
+
+proc getStateSize(s: SimState): int {
+    return 20 + 8 * (s.nNodes + s.nLinks
+                     + s.nSubcatch + s.nSubcatch);
+}
+
+proc copyState(ref dst: SimState, const ref src: SimState) {
+    dst.nodeDepths = src.nodeDepths;
+    dst.linkFlows = src.linkFlows;
+    dst.subcatchMoisture = src.subcatchMoisture;
+    dst.gwLevels = src.gwLevels;
+}`,
+    swift: `// hotstart.swift — Simulation State Save/Restore
+// SWMM5 Engine in Swift — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+import Foundation
+
+let hotstartMagic: UInt32   = 0x48535430
+let hotstartVersion: UInt32 = 1
+
+struct SimState {
+    var nodeDepths: [Double]
+    var linkFlows: [Double]
+    var subcatchMoisture: [Double]
+    var gwLevels: [Double]
+
+    init(nNodes: Int, nLinks: Int, nSubcatch: Int) {
+        nodeDepths = Array(repeating: 0.0, count: nNodes)
+        linkFlows = Array(repeating: 0.0, count: nLinks)
+        subcatchMoisture = Array(repeating: 0.0, count: nSubcatch)
+        gwLevels = Array(repeating: 0.0, count: nSubcatch)
+    }
+
+    func save(to url: URL) throws {
+        var data = Data()
+        var magic = hotstartMagic.littleEndian
+        var ver = hotstartVersion.littleEndian
+        data.append(Data(bytes: &magic, count: 4))
+        data.append(Data(bytes: &ver, count: 4))
+        var nn = UInt32(nodeDepths.count).littleEndian
+        var nl = UInt32(linkFlows.count).littleEndian
+        var ns = UInt32(subcatchMoisture.count).littleEndian
+        data.append(Data(bytes: &nn, count: 4))
+        data.append(Data(bytes: &nl, count: 4))
+        data.append(Data(bytes: &ns, count: 4))
+        for arr in [nodeDepths, linkFlows,
+                    subcatchMoisture, gwLevels] {
+            for val in arr {
+                var v = val.bitPattern.littleEndian
+                data.append(Data(bytes: &v, count: 8))
+            }
+        }
+        try data.write(to: url)
+    }
+
+    static func load(from url: URL) throws -> SimState {
+        let data = try Data(contentsOf: url)
+        var off = 0
+        let magic = data.subdata(in: off..<off+4)
+            .withUnsafeBytes { $0.load(as: UInt32.self) }
+        off += 4
+        let ver = data.subdata(in: off..<off+4)
+            .withUnsafeBytes { $0.load(as: UInt32.self) }
+        off += 4
+        guard magic == hotstartMagic, ver == hotstartVersion
+        else { throw NSError(domain: "hotstart", code: -1) }
+        let nn = Int(data.subdata(in: off..<off+4)
+            .withUnsafeBytes { $0.load(as: UInt32.self) }); off += 4
+        let nl = Int(data.subdata(in: off..<off+4)
+            .withUnsafeBytes { $0.load(as: UInt32.self) }); off += 4
+        let ns = Int(data.subdata(in: off..<off+4)
+            .withUnsafeBytes { $0.load(as: UInt32.self) }); off += 4
+        var s = SimState(nNodes: nn, nLinks: nl, nSubcatch: ns)
+        for i in 0..<nn {
+            let bits = data.subdata(in: off..<off+8)
+                .withUnsafeBytes { $0.load(as: UInt64.self) }
+            s.nodeDepths[i] = Double(bitPattern: bits); off += 8
+        }
+        for i in 0..<nl {
+            let bits = data.subdata(in: off..<off+8)
+                .withUnsafeBytes { $0.load(as: UInt64.self) }
+            s.linkFlows[i] = Double(bitPattern: bits); off += 8
+        }
+        for i in 0..<ns {
+            let bits = data.subdata(in: off..<off+8)
+                .withUnsafeBytes { $0.load(as: UInt64.self) }
+            s.subcatchMoisture[i] = Double(bitPattern: bits); off += 8
+        }
+        for i in 0..<ns {
+            let bits = data.subdata(in: off..<off+8)
+                .withUnsafeBytes { $0.load(as: UInt64.self) }
+            s.gwLevels[i] = Double(bitPattern: bits); off += 8
+        }
+        return s
+    }
+
+    func getStateSize() -> Int {
+        20 + 8 * (nodeDepths.count + linkFlows.count
+                  + subcatchMoisture.count + gwLevels.count)
+    }
+}`,
+    kotlin: `// Hotstart.kt — Simulation State Save/Restore
+// SWMM5 Engine in Kotlin — Binary Checkpoint I/O
+// Saves and restores complete simulation state
+// for warm-starting continuous simulations
+
+package swmm
+
+import java.io.*
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+
+data class SimState(
+    val nodeDepths: DoubleArray,
+    val linkFlows: DoubleArray,
+    val subcatchMoisture: DoubleArray,
+    val gwLevels: DoubleArray
+) {
+    companion object {
+        const val MAGIC = 0x48535430
+        const val VERSION = 1
+
+        fun create(nNodes: Int, nLinks: Int,
+                   nSubcatch: Int): SimState =
+            SimState(
+                DoubleArray(nNodes),
+                DoubleArray(nLinks),
+                DoubleArray(nSubcatch),
+                DoubleArray(nSubcatch)
+            )
+
+        fun load(path: String): SimState {
+            DataInputStream(
+                BufferedInputStream(FileInputStream(path))
+            ).use { inp ->
+                val buf4 = ByteArray(4)
+                inp.readFully(buf4)
+                val magic = ByteBuffer.wrap(buf4)
+                    .order(ByteOrder.LITTLE_ENDIAN).int
+                inp.readFully(buf4)
+                val ver = ByteBuffer.wrap(buf4)
+                    .order(ByteOrder.LITTLE_ENDIAN).int
+                require(magic == MAGIC && ver == VERSION) {
+                    "Invalid hotstart file"
+                }
+                inp.readFully(buf4)
+                val nn = ByteBuffer.wrap(buf4)
+                    .order(ByteOrder.LITTLE_ENDIAN).int
+                inp.readFully(buf4)
+                val nl = ByteBuffer.wrap(buf4)
+                    .order(ByteOrder.LITTLE_ENDIAN).int
+                inp.readFully(buf4)
+                val ns = ByteBuffer.wrap(buf4)
+                    .order(ByteOrder.LITTLE_ENDIAN).int
+                val s = create(nn, nl, ns)
+                val buf8 = ByteArray(8)
+                fun readDoubles(arr: DoubleArray) {
+                    for (i in arr.indices) {
+                        inp.readFully(buf8)
+                        arr[i] = ByteBuffer.wrap(buf8)
+                            .order(ByteOrder.LITTLE_ENDIAN).double
+                    }
+                }
+                readDoubles(s.nodeDepths)
+                readDoubles(s.linkFlows)
+                readDoubles(s.subcatchMoisture)
+                readDoubles(s.gwLevels)
+                return s
+            }
+        }
+    }
+
+    fun save(path: String) {
+        DataOutputStream(
+            BufferedOutputStream(FileOutputStream(path))
+        ).use { out ->
+            val hdr = ByteBuffer.allocate(20)
+                .order(ByteOrder.LITTLE_ENDIAN)
+            hdr.putInt(MAGIC)
+            hdr.putInt(VERSION)
+            hdr.putInt(nodeDepths.size)
+            hdr.putInt(linkFlows.size)
+            hdr.putInt(subcatchMoisture.size)
+            out.write(hdr.array())
+            fun writeDoubles(arr: DoubleArray) {
+                val buf = ByteBuffer.allocate(8)
+                    .order(ByteOrder.LITTLE_ENDIAN)
+                for (v in arr) {
+                    buf.clear(); buf.putDouble(v)
+                    out.write(buf.array())
+                }
+            }
+            writeDoubles(nodeDepths)
+            writeDoubles(linkFlows)
+            writeDoubles(subcatchMoisture)
+            writeDoubles(gwLevels)
+        }
+    }
+
+    fun getStateSize(): Int =
+        20 + 8 * (nodeDepths.size + linkFlows.size
+                  + subcatchMoisture.size + gwLevels.size)
+}`,
+  },
+  "iface.c — Interface File Handling": {
+    category: "Data Processing",
+    difficulty: "intermediate",
+    tags: ["interface", "file", "routing", "inflow", "outflow", "cascade", "upstream", "downstream", "time series"],
+    description: "Manages interface files that pass flows between cascaded SWMM models or from external sources. An upstream model writes its outfall flows to an interface file; a downstream model reads those flows as inflow boundary conditions. Handles time interpolation between reporting intervals and unit/format conversion.",
+    equations: "Q_interp(t) = Q1 + (Q2-Q1)·(t-t1)/(t2-t1) (linear interpolation); Inflow_node(t) = Σ Q_iface(t) (superposition)",
+    inputs: "Interface file with timestamped flow records, node mapping (which flows go to which nodes)",
+    outputs: "Interpolated inflow time series at each receiving node",
+    links: [
+      { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
+    ],
+    c: `// iface.c — Interface File Handling
+// EPA SWMM5 Engine — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define MAX_IFACE_NODES 100
+
+typedef struct {
+    double time;
+    double flows[MAX_IFACE_NODES];
+} IfaceRecord;
+
+typedef struct {
+    int         nNodes;
+    int         nodeMap[MAX_IFACE_NODES];
+    IfaceRecord prev;
+    IfaceRecord next;
+    FILE*       fp;
+    int         isOpen;
+} IfaceFile;
+
+void iface_init(IfaceFile* f)
+{
+    f->nNodes = 0;
+    f->isOpen = 0;
+    f->fp     = NULL;
+}
+
+int iface_open(IfaceFile* f, const char* fname, int nNodes)
+{
+    f->fp = fopen(fname, "r");
+    if (!f->fp) return -1;
+    f->nNodes = nNodes;
+    f->isOpen = 1;
+
+    f->prev.time = 0.0;
+    f->next.time = 0.0;
+    for (int i = 0; i < nNodes; i++) {
+        f->prev.flows[i] = 0.0;
+        f->next.flows[i] = 0.0;
+        f->nodeMap[i]     = i;
+    }
+    return 0;
+}
+
+int iface_readRecord(IfaceFile* f)
+{
+    if (!f->isOpen || feof(f->fp)) return -1;
+
+    f->prev = f->next;
+
+    if (fscanf(f->fp, "%lf", &f->next.time) != 1)
+        return -1;
+    for (int i = 0; i < f->nNodes; i++) {
+        if (fscanf(f->fp, "%lf", &f->next.flows[i]) != 1)
+            return -1;
+    }
+    return 0;
+}
+
+double iface_interpolateFlow(const IfaceFile* f, int nodeIdx,
+                              double t)
+{
+    if (nodeIdx < 0 || nodeIdx >= f->nNodes) return 0.0;
+
+    double dt = f->next.time - f->prev.time;
+    if (dt <= 0.0) return f->prev.flows[nodeIdx];
+
+    double frac = (t - f->prev.time) / dt;
+    if (frac < 0.0) frac = 0.0;
+    if (frac > 1.0) frac = 1.0;
+
+    double q1 = f->prev.flows[nodeIdx];
+    double q2 = f->next.flows[nodeIdx];
+    return q1 + (q2 - q1) * frac;
+}
+
+double iface_getInflow(const IfaceFile* f, int destNode,
+                        double t)
+{
+    for (int i = 0; i < f->nNodes; i++) {
+        if (f->nodeMap[i] == destNode)
+            return iface_interpolateFlow(f, i, t);
+    }
+    return 0.0;
+}
+
+void iface_close(IfaceFile* f)
+{
+    if (f->fp) fclose(f->fp);
+    f->isOpen = 0;
+    f->fp = NULL;
+}`,
+    rust: `// iface.rs — Interface File Handling
+// SWMM5 Engine in Rust — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+use std::io::{self, BufRead, BufReader};
+use std::fs::File;
+
+#[derive(Clone)]
+pub struct IfaceRecord {
+    pub time: f64,
+    pub flows: Vec<f64>,
+}
+
+impl IfaceRecord {
+    fn new(n_nodes: usize) -> Self {
+        IfaceRecord { time: 0.0, flows: vec![0.0; n_nodes] }
+    }
+}
+
+pub struct IfaceFile {
+    n_nodes: usize,
+    node_map: Vec<usize>,
+    prev: IfaceRecord,
+    next: IfaceRecord,
+    reader: Option<BufReader<File>>,
+}
+
+impl IfaceFile {
+    pub fn new() -> Self {
+        IfaceFile {
+            n_nodes: 0, node_map: Vec::new(),
+            prev: IfaceRecord::new(0),
+            next: IfaceRecord::new(0),
+            reader: None,
+        }
+    }
+
+    pub fn open(&mut self, path: &str, n_nodes: usize) -> io::Result<()> {
+        let f = File::open(path)?;
+        self.reader = Some(BufReader::new(f));
+        self.n_nodes = n_nodes;
+        self.node_map = (0..n_nodes).collect();
+        self.prev = IfaceRecord::new(n_nodes);
+        self.next = IfaceRecord::new(n_nodes);
+        Ok(())
+    }
+
+    pub fn read_record(&mut self) -> io::Result<bool> {
+        let reader = match &mut self.reader {
+            Some(r) => r,
+            None => return Ok(false),
+        };
+        self.prev = self.next.clone();
+        let mut line = String::new();
+        if reader.read_line(&mut line)? == 0 { return Ok(false); }
+        let vals: Vec<f64> = line.split_whitespace()
+            .filter_map(|s| s.parse().ok()).collect();
+        if vals.len() < 1 + self.n_nodes { return Ok(false); }
+        self.next.time = vals[0];
+        for i in 0..self.n_nodes {
+            self.next.flows[i] = vals[i + 1];
+        }
+        Ok(true)
+    }
+
+    pub fn interpolate_flow(&self, node_idx: usize, t: f64) -> f64 {
+        if node_idx >= self.n_nodes { return 0.0; }
+        let dt = self.next.time - self.prev.time;
+        if dt <= 0.0 { return self.prev.flows[node_idx]; }
+        let frac = ((t - self.prev.time) / dt).clamp(0.0, 1.0);
+        let q1 = self.prev.flows[node_idx];
+        let q2 = self.next.flows[node_idx];
+        q1 + (q2 - q1) * frac
+    }
+
+    pub fn get_inflow(&self, dest_node: usize, t: f64) -> f64 {
+        for (i, &mapped) in self.node_map.iter().enumerate() {
+            if mapped == dest_node {
+                return self.interpolate_flow(i, t);
+            }
+        }
+        0.0
+    }
+}`,
+    python: `# iface.py — Interface File Handling
+# SWMM5 Engine in Python — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+from dataclasses import dataclass, field
+from typing import List, Optional, TextIO
+
+@dataclass
+class IfaceRecord:
+    time: float = 0.0
+    flows: List[float] = field(default_factory=list)
+
+@dataclass
+class IfaceFile:
+    n_nodes: int = 0
+    node_map: List[int] = field(default_factory=list)
+    prev: IfaceRecord = field(default_factory=IfaceRecord)
+    next: IfaceRecord = field(default_factory=IfaceRecord)
+    _fp: Optional[TextIO] = field(default=None, repr=False)
+
+    def open(self, path: str, n_nodes: int) -> None:
+        self._fp = open(path, 'r')
+        self.n_nodes = n_nodes
+        self.node_map = list(range(n_nodes))
+        self.prev = IfaceRecord(0.0, [0.0] * n_nodes)
+        self.next = IfaceRecord(0.0, [0.0] * n_nodes)
+
+    def read_record(self) -> bool:
+        if self._fp is None:
+            return False
+        self.prev = IfaceRecord(self.next.time,
+                                list(self.next.flows))
+        line = self._fp.readline()
+        if not line:
+            return False
+        vals = [float(x) for x in line.split()]
+        if len(vals) < 1 + self.n_nodes:
+            return False
+        self.next.time = vals[0]
+        self.next.flows = vals[1:1 + self.n_nodes]
+        return True
+
+    def interpolate_flow(self, node_idx: int,
+                         t: float) -> float:
+        if node_idx < 0 or node_idx >= self.n_nodes:
+            return 0.0
+        dt = self.next.time - self.prev.time
+        if dt <= 0.0:
+            return self.prev.flows[node_idx]
+        frac = max(0.0, min(1.0,
+            (t - self.prev.time) / dt))
+        q1 = self.prev.flows[node_idx]
+        q2 = self.next.flows[node_idx]
+        return q1 + (q2 - q1) * frac
+
+    def get_inflow(self, dest_node: int, t: float) -> float:
+        for i, mapped in enumerate(self.node_map):
+            if mapped == dest_node:
+                return self.interpolate_flow(i, t)
+        return 0.0
+
+    def close(self) -> None:
+        if self._fp:
+            self._fp.close()
+            self._fp = None`,
+    fortran: `! iface.f90 — Interface File Handling
+! SWMM5 Engine in Fortran — Cascaded Model I/O
+! Reads/writes interface files for passing flows
+! between upstream and downstream SWMM models
+
+module iface_module
+    implicit none
+    integer, parameter :: MAX_IFACE_NODES = 100
+
+    type :: IfaceRecord
+        real(8) :: time = 0.0d0
+        real(8) :: flows(MAX_IFACE_NODES) = 0.0d0
+    end type IfaceRecord
+
+    type :: IfaceFile
+        integer :: nNodes = 0
+        integer :: unitNum = 10
+        integer :: nodeMap(MAX_IFACE_NODES) = 0
+        type(IfaceRecord) :: prev, next
+        logical :: isOpen = .false.
+    end type IfaceFile
+
+contains
+
+    subroutine iface_open(f, fname, nNodes)
+        type(IfaceFile), intent(inout) :: f
+        character(len=*), intent(in) :: fname
+        integer, intent(in) :: nNodes
+        integer :: i
+        open(unit=f%unitNum, file=fname, status='old')
+        f%nNodes = nNodes
+        f%isOpen = .true.
+        do i = 1, nNodes
+            f%nodeMap(i) = i
+        end do
+        f%prev%time = 0.0d0
+        f%next%time = 0.0d0
+    end subroutine iface_open
+
+    function iface_readRecord(f) result(ok)
+        type(IfaceFile), intent(inout) :: f
+        logical :: ok
+        integer :: ios, i
+        ok = .false.
+        if (.not. f%isOpen) return
+        f%prev = f%next
+        read(f%unitNum, *, iostat=ios) f%next%time, &
+            (f%next%flows(i), i = 1, f%nNodes)
+        ok = (ios == 0)
+    end function iface_readRecord
+
+    function iface_interpolate(f, nodeIdx, t) result(q)
+        type(IfaceFile), intent(in) :: f
+        integer, intent(in) :: nodeIdx
+        real(8), intent(in) :: t
+        real(8) :: q, dt, frac, q1, q2
+        if (nodeIdx < 1 .or. nodeIdx > f%nNodes) then
+            q = 0.0d0; return
+        end if
+        dt = f%next%time - f%prev%time
+        if (dt <= 0.0d0) then
+            q = f%prev%flows(nodeIdx); return
+        end if
+        frac = (t - f%prev%time) / dt
+        frac = max(0.0d0, min(1.0d0, frac))
+        q1 = f%prev%flows(nodeIdx)
+        q2 = f%next%flows(nodeIdx)
+        q = q1 + (q2 - q1) * frac
+    end function iface_interpolate
+
+    function iface_getInflow(f, destNode, t) result(q)
+        type(IfaceFile), intent(in) :: f
+        integer, intent(in) :: destNode
+        real(8), intent(in) :: t
+        real(8) :: q
+        integer :: i
+        q = 0.0d0
+        do i = 1, f%nNodes
+            if (f%nodeMap(i) == destNode) then
+                q = iface_interpolate(f, i, t)
+                return
+            end if
+        end do
+    end function iface_getInflow
+
+    subroutine iface_close(f)
+        type(IfaceFile), intent(inout) :: f
+        if (f%isOpen) close(f%unitNum)
+        f%isOpen = .false.
+    end subroutine iface_close
+
+end module iface_module`,
+    julia: `# iface.jl — Interface File Handling
+# SWMM5 Engine in Julia — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+mutable struct IfaceRecord
+    time::Float64
+    flows::Vector{Float64}
+end
+
+IfaceRecord(n::Int) = IfaceRecord(0.0, zeros(n))
+
+mutable struct IfaceFile
+    n_nodes::Int
+    node_map::Vector{Int}
+    prev::IfaceRecord
+    next::IfaceRecord
+    io::Union{IOStream, Nothing}
+end
+
+function iface_open(path::String, n_nodes::Int)::IfaceFile
+    f = IfaceFile(
+        n_nodes,
+        collect(1:n_nodes),
+        IfaceRecord(n_nodes),
+        IfaceRecord(n_nodes),
+        open(path, "r")
+    )
+    return f
+end
+
+function iface_read_record!(f::IfaceFile)::Bool
+    f.io === nothing && return false
+    f.prev = IfaceRecord(f.next.time, copy(f.next.flows))
+    eof(f.io) && return false
+    line = readline(f.io)
+    vals = parse.(Float64, split(line))
+    length(vals) < 1 + f.n_nodes && return false
+    f.next.time = vals[1]
+    f.next.flows = vals[2:1+f.n_nodes]
+    return true
+end
+
+function iface_interpolate(f::IfaceFile, node_idx::Int,
+                           t::Float64)::Float64
+    (node_idx < 1 || node_idx > f.n_nodes) && return 0.0
+    dt = f.next.time - f.prev.time
+    dt <= 0.0 && return f.prev.flows[node_idx]
+    frac = clamp((t - f.prev.time) / dt, 0.0, 1.0)
+    q1 = f.prev.flows[node_idx]
+    q2 = f.next.flows[node_idx]
+    return q1 + (q2 - q1) * frac
+end
+
+function iface_get_inflow(f::IfaceFile, dest_node::Int,
+                          t::Float64)::Float64
+    for (i, mapped) in enumerate(f.node_map)
+        mapped == dest_node &&
+            return iface_interpolate(f, i, t)
+    end
+    return 0.0
+end
+
+function iface_close!(f::IfaceFile)
+    f.io !== nothing && close(f.io)
+    f.io = nothing
+end`,
+    javascript: `// iface.js — Interface File Handling
+// SWMM5 Engine in JavaScript — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+class IfaceRecord {
+    constructor(nNodes) {
+        this.time = 0.0;
+        this.flows = new Array(nNodes).fill(0.0);
+    }
+
+    clone() {
+        const r = new IfaceRecord(this.flows.length);
+        r.time = this.time;
+        r.flows = [...this.flows];
+        return r;
+    }
+}
+
+class IfaceFile {
+    constructor() {
+        this.nNodes = 0;
+        this.nodeMap = [];
+        this.prev = new IfaceRecord(0);
+        this.next = new IfaceRecord(0);
+        this.lines = [];
+        this.lineIdx = 0;
+    }
+
+    open(text, nNodes) {
+        this.nNodes = nNodes;
+        this.nodeMap = Array.from({length: nNodes}, (_, i) => i);
+        this.prev = new IfaceRecord(nNodes);
+        this.next = new IfaceRecord(nNodes);
+        this.lines = text.trim().split('\\n');
+        this.lineIdx = 0;
+    }
+
+    readRecord() {
+        if (this.lineIdx >= this.lines.length) return false;
+        this.prev = this.next.clone();
+        const vals = this.lines[this.lineIdx++]
+            .trim().split(/\\s+/).map(Number);
+        if (vals.length < 1 + this.nNodes) return false;
+        this.next.time = vals[0];
+        for (let i = 0; i < this.nNodes; i++) {
+            this.next.flows[i] = vals[i + 1];
+        }
+        return true;
+    }
+
+    interpolateFlow(nodeIdx, t) {
+        if (nodeIdx < 0 || nodeIdx >= this.nNodes) return 0.0;
+        const dt = this.next.time - this.prev.time;
+        if (dt <= 0.0) return this.prev.flows[nodeIdx];
+        let frac = (t - this.prev.time) / dt;
+        frac = Math.max(0.0, Math.min(1.0, frac));
+        const q1 = this.prev.flows[nodeIdx];
+        const q2 = this.next.flows[nodeIdx];
+        return q1 + (q2 - q1) * frac;
+    }
+
+    getInflow(destNode, t) {
+        for (let i = 0; i < this.nNodes; i++) {
+            if (this.nodeMap[i] === destNode)
+                return this.interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+}
+
+export { IfaceFile, IfaceRecord };`,
+    go: `// iface.go — Interface File Handling
+// SWMM5 Engine in Go — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+package swmm
+
+import (
+	"bufio"
+	"fmt"
+	"math"
+	"os"
+)
+
+type IfaceRecord struct {
+	Time  float64
+	Flows []float64
+}
+
+type IfaceFile struct {
+	NNodes  int
+	NodeMap []int
+	Prev    IfaceRecord
+	Next    IfaceRecord
+	scanner *bufio.Scanner
+	file    *os.File
+}
+
+func NewIfaceFile() *IfaceFile {
+	return &IfaceFile{}
+}
+
+func (f *IfaceFile) Open(path string, nNodes int) error {
+	fp, err := os.Open(path)
+	if err != nil { return err }
+	f.file = fp
+	f.scanner = bufio.NewScanner(fp)
+	f.NNodes = nNodes
+	f.NodeMap = make([]int, nNodes)
+	for i := range f.NodeMap { f.NodeMap[i] = i }
+	f.Prev = IfaceRecord{0.0, make([]float64, nNodes)}
+	f.Next = IfaceRecord{0.0, make([]float64, nNodes)}
+	return nil
+}
+
+func (f *IfaceFile) ReadRecord() bool {
+	if f.scanner == nil || !f.scanner.Scan() {
+		return false
+	}
+	f.Prev.Time = f.Next.Time
+	copy(f.Prev.Flows, f.Next.Flows)
+
+	line := f.scanner.Text()
+	vals := make([]float64, 1+f.NNodes)
+	args := make([]interface{}, 1+f.NNodes)
+	for i := range vals { args[i] = &vals[i] }
+	n, _ := fmt.Sscan(line, args...)
+	if n < 1+f.NNodes { return false }
+	f.Next.Time = vals[0]
+	copy(f.Next.Flows, vals[1:])
+	return true
+}
+
+func (f *IfaceFile) InterpolateFlow(nodeIdx int,
+	t float64) float64 {
+	if nodeIdx < 0 || nodeIdx >= f.NNodes { return 0.0 }
+	dt := f.Next.Time - f.Prev.Time
+	if dt <= 0.0 { return f.Prev.Flows[nodeIdx] }
+	frac := (t - f.Prev.Time) / dt
+	frac = math.Max(0.0, math.Min(1.0, frac))
+	q1, q2 := f.Prev.Flows[nodeIdx], f.Next.Flows[nodeIdx]
+	return q1 + (q2-q1)*frac
+}
+
+func (f *IfaceFile) GetInflow(destNode int,
+	t float64) float64 {
+	for i, mapped := range f.NodeMap {
+		if mapped == destNode {
+			return f.InterpolateFlow(i, t)
+		}
+	}
+	return 0.0
+}
+
+func (f *IfaceFile) Close() {
+	if f.file != nil { f.file.Close() }
+}`,
+    zig: `// iface.zig — Interface File Handling
+// SWMM5 Engine in Zig — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+const std = @import("std");
+const Allocator = std.mem.Allocator;
+
+const IfaceRecord = struct {
+    time: f64,
+    flows: []f64,
+
+    pub fn init(alloc: Allocator, n: usize) !IfaceRecord {
+        const flows = try alloc.alloc(f64, n);
+        @memset(flows, 0);
+        return IfaceRecord{ .time = 0.0, .flows = flows };
+    }
+
+    pub fn copyFrom(self: *IfaceRecord, other: IfaceRecord) void {
+        self.time = other.time;
+        @memcpy(self.flows, other.flows);
+    }
+};
+
+const IfaceFile = struct {
+    n_nodes: usize,
+    node_map: []usize,
+    prev: IfaceRecord,
+    next: IfaceRecord,
+    allocator: Allocator,
+
+    pub fn init(alloc: Allocator, n_nodes: usize) !IfaceFile {
+        const node_map = try alloc.alloc(usize, n_nodes);
+        for (node_map, 0..) |*v, i| v.* = i;
+        return IfaceFile{
+            .n_nodes = n_nodes,
+            .node_map = node_map,
+            .prev = try IfaceRecord.init(alloc, n_nodes),
+            .next = try IfaceRecord.init(alloc, n_nodes),
+            .allocator = alloc,
+        };
+    }
+
+    pub fn interpolateFlow(self: IfaceFile, node_idx: usize,
+                           t: f64) f64 {
+        if (node_idx >= self.n_nodes) return 0.0;
+        const dt = self.next.time - self.prev.time;
+        if (dt <= 0.0) return self.prev.flows[node_idx];
+        var frac = (t - self.prev.time) / dt;
+        frac = @max(0.0, @min(1.0, frac));
+        const q1 = self.prev.flows[node_idx];
+        const q2 = self.next.flows[node_idx];
+        return q1 + (q2 - q1) * frac;
+    }
+
+    pub fn getInflow(self: IfaceFile, dest_node: usize,
+                     t: f64) f64 {
+        for (self.node_map, 0..) |mapped, i| {
+            if (mapped == dest_node)
+                return self.interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+
+    pub fn deinit(self: *IfaceFile) void {
+        self.allocator.free(self.node_map);
+        self.allocator.free(self.prev.flows);
+        self.allocator.free(self.next.flows);
+    }
+};`,
+    cpp: `// iface.cpp — Interface File Handling
+// SWMM5 Engine in C++ — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+#include <vector>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <algorithm>
+
+namespace swmm {
+
+struct IfaceRecord {
+    double time = 0.0;
+    std::vector<double> flows;
+
+    explicit IfaceRecord(int n = 0)
+        : time(0.0), flows(n, 0.0) {}
+};
+
+class IfaceFile {
+    int nNodes_ = 0;
+    std::vector<int> nodeMap_;
+    IfaceRecord prev_, next_;
+    std::ifstream ifs_;
+
+public:
+    bool open(const std::string& path, int nNodes) {
+        ifs_.open(path);
+        if (!ifs_) return false;
+        nNodes_ = nNodes;
+        nodeMap_.resize(nNodes);
+        for (int i = 0; i < nNodes; i++) nodeMap_[i] = i;
+        prev_ = IfaceRecord(nNodes);
+        next_ = IfaceRecord(nNodes);
+        return true;
+    }
+
+    bool readRecord() {
+        if (!ifs_ || ifs_.eof()) return false;
+        prev_ = next_;
+        std::string line;
+        if (!std::getline(ifs_, line)) return false;
+        std::istringstream ss(line);
+        ss >> next_.time;
+        for (int i = 0; i < nNodes_; i++) {
+            if (!(ss >> next_.flows[i])) return false;
+        }
+        return true;
+    }
+
+    double interpolateFlow(int nodeIdx, double t) const {
+        if (nodeIdx < 0 || nodeIdx >= nNodes_) return 0.0;
+        double dt = next_.time - prev_.time;
+        if (dt <= 0.0) return prev_.flows[nodeIdx];
+        double frac = std::clamp(
+            (t - prev_.time) / dt, 0.0, 1.0);
+        return prev_.flows[nodeIdx]
+               + (next_.flows[nodeIdx]
+                  - prev_.flows[nodeIdx]) * frac;
+    }
+
+    double getInflow(int destNode, double t) const {
+        for (int i = 0; i < nNodes_; i++) {
+            if (nodeMap_[i] == destNode)
+                return interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+
+    void close() { ifs_.close(); }
+};
+
+} // namespace swmm`,
+    csharp: `// Iface.cs — Interface File Handling
+// SWMM5 Engine in C# — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+using System;
+using System.IO;
+using System.Linq;
+
+namespace Swmm
+{
+    public class IfaceRecord
+    {
+        public double Time { get; set; }
+        public double[] Flows { get; set; }
+
+        public IfaceRecord(int n)
+        {
+            Time = 0.0;
+            Flows = new double[n];
+        }
+
+        public IfaceRecord Clone() {
+            var r = new IfaceRecord(Flows.Length);
+            r.Time = Time;
+            Array.Copy(Flows, r.Flows, Flows.Length);
+            return r;
+        }
+    }
+
+    public class IfaceFile : IDisposable
+    {
+        private int _nNodes;
+        private int[] _nodeMap;
+        private IfaceRecord _prev, _next;
+        private StreamReader _reader;
+
+        public void Open(string path, int nNodes)
+        {
+            _reader = new StreamReader(path);
+            _nNodes = nNodes;
+            _nodeMap = Enumerable.Range(0, nNodes).ToArray();
+            _prev = new IfaceRecord(nNodes);
+            _next = new IfaceRecord(nNodes);
+        }
+
+        public bool ReadRecord()
+        {
+            if (_reader == null) return false;
+            _prev = _next.Clone();
+            var line = _reader.ReadLine();
+            if (line == null) return false;
+            var vals = line.Split(new[] {' ', '\t'},
+                StringSplitOptions.RemoveEmptyEntries)
+                .Select(double.Parse).ToArray();
+            if (vals.Length < 1 + _nNodes) return false;
+            _next.Time = vals[0];
+            for (int i = 0; i < _nNodes; i++)
+                _next.Flows[i] = vals[i + 1];
+            return true;
+        }
+
+        public double InterpolateFlow(int nodeIdx, double t)
+        {
+            if (nodeIdx < 0 || nodeIdx >= _nNodes) return 0.0;
+            double dt = _next.Time - _prev.Time;
+            if (dt <= 0.0) return _prev.Flows[nodeIdx];
+            double frac = Math.Clamp(
+                (t - _prev.Time) / dt, 0.0, 1.0);
+            return _prev.Flows[nodeIdx]
+                   + (_next.Flows[nodeIdx]
+                      - _prev.Flows[nodeIdx]) * frac;
+        }
+
+        public double GetInflow(int destNode, double t)
+        {
+            for (int i = 0; i < _nNodes; i++)
+                if (_nodeMap[i] == destNode)
+                    return InterpolateFlow(i, t);
+            return 0.0;
+        }
+
+        public void Dispose() => _reader?.Dispose();
+    }
+}`,
+    matlab: `% iface.m — Interface File Handling
+% SWMM5 Engine in MATLAB — Cascaded Model I/O
+% Reads/writes interface files for passing flows
+% between upstream and downstream SWMM models
+
+function f = iface_open(filename, nNodes)
+    f.fid     = fopen(filename, 'r');
+    f.nNodes  = nNodes;
+    f.nodeMap = 1:nNodes;
+    f.prev    = struct('time', 0.0, 'flows', zeros(1, nNodes));
+    f.next    = struct('time', 0.0, 'flows', zeros(1, nNodes));
+end
+
+function [f, ok] = iface_read_record(f)
+    ok = false;
+    if feof(f.fid)
+        return;
+    end
+    f.prev = f.next;
+    line = fgetl(f.fid);
+    if ~ischar(line)
+        return;
+    end
+    vals = sscanf(line, '%f');
+    if length(vals) < 1 + f.nNodes
+        return;
+    end
+    f.next.time = vals(1);
+    f.next.flows = vals(2:1+f.nNodes)';
+    ok = true;
+end
+
+function q = iface_interpolate(f, nodeIdx, t)
+    if nodeIdx < 1 || nodeIdx > f.nNodes
+        q = 0.0;
+        return;
+    end
+    dt = f.next.time - f.prev.time;
+    if dt <= 0.0
+        q = f.prev.flows(nodeIdx);
+        return;
+    end
+    frac = (t - f.prev.time) / dt;
+    frac = max(0.0, min(1.0, frac));
+    q1 = f.prev.flows(nodeIdx);
+    q2 = f.next.flows(nodeIdx);
+    q = q1 + (q2 - q1) * frac;
+end
+
+function q = iface_get_inflow(f, destNode, t)
+    q = 0.0;
+    for i = 1:f.nNodes
+        if f.nodeMap(i) == destNode
+            q = iface_interpolate(f, i, t);
+            return;
+        end
+    end
+end
+
+function iface_close(f)
+    fclose(f.fid);
+end`,
+    r: `# iface.R — Interface File Handling
+# SWMM5 Engine in R — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+iface_open <- function(path, n_nodes) {
+    con <- file(path, "r")
+    list(
+        con      = con,
+        n_nodes  = n_nodes,
+        node_map = seq_len(n_nodes),
+        prev     = list(time = 0.0, flows = rep(0.0, n_nodes)),
+        next_rec = list(time = 0.0, flows = rep(0.0, n_nodes))
+    )
+}
+
+iface_read_record <- function(f) {
+    f$prev <- f$next_rec
+    line <- readLines(f$con, n = 1)
+    if (length(line) == 0) return(list(f = f, ok = FALSE))
+    vals <- as.numeric(strsplit(trimws(line), "\\\\s+")[[1]])
+    if (length(vals) < 1 + f$n_nodes)
+        return(list(f = f, ok = FALSE))
+    f$next_rec$time  <- vals[1]
+    f$next_rec$flows <- vals[2:(1 + f$n_nodes)]
+    list(f = f, ok = TRUE)
+}
+
+iface_interpolate <- function(f, node_idx, t) {
+    if (node_idx < 1 || node_idx > f$n_nodes) return(0.0)
+    dt <- f$next_rec$time - f$prev$time
+    if (dt <= 0.0) return(f$prev$flows[node_idx])
+    frac <- max(0.0, min(1.0,
+        (t - f$prev$time) / dt))
+    q1 <- f$prev$flows[node_idx]
+    q2 <- f$next_rec$flows[node_idx]
+    q1 + (q2 - q1) * frac
+}
+
+iface_get_inflow <- function(f, dest_node, t) {
+    for (i in seq_along(f$node_map)) {
+        if (f$node_map[i] == dest_node)
+            return(iface_interpolate(f, i, t))
+    }
+    0.0
+}
+
+iface_close <- function(f) {
+    close(f$con)
+}`,
+    delphi: `{ iface.pas — Interface File Handling }
+{ SWMM5 Engine in Delphi — Cascaded Model I/O }
+{ Reads/writes interface files for passing flows }
+{ between upstream and downstream SWMM models }
+
+unit Iface;
+
+interface
+
+const
+  MAX_IFACE_NODES = 100;
+
+type
+  TIfaceRecord = record
+    Time: Double;
+    Flows: array[0..MAX_IFACE_NODES-1] of Double;
+  end;
+
+  TIfaceFile = class
+  private
+    FNNodes: Integer;
+    FNodeMap: array[0..MAX_IFACE_NODES-1] of Integer;
+    FPrev, FNext: TIfaceRecord;
+    FFile: TextFile;
+    FIsOpen: Boolean;
+  public
+    procedure Open(const FileName: string; NNodes: Integer);
+    function ReadRecord: Boolean;
+    function InterpolateFlow(NodeIdx: Integer;
+                              T: Double): Double;
+    function GetInflow(DestNode: Integer;
+                        T: Double): Double;
+    procedure Close;
+  end;
+
+implementation
+
+uses SysUtils, Math;
+
+procedure TIfaceFile.Open(const FileName: string;
+                           NNodes: Integer);
+var I: Integer;
+begin
+  AssignFile(FFile, FileName);
+  Reset(FFile);
+  FNNodes := NNodes;
+  FIsOpen := True;
+  for I := 0 to NNodes - 1 do begin
+    FNodeMap[I] := I;
+    FPrev.Flows[I] := 0.0;
+    FNext.Flows[I] := 0.0;
+  end;
+  FPrev.Time := 0.0;
+  FNext.Time := 0.0;
+end;
+
+function TIfaceFile.ReadRecord: Boolean;
+var I: Integer;
+begin
+  Result := False;
+  if not FIsOpen or Eof(FFile) then Exit;
+  FPrev := FNext;
+  Read(FFile, FNext.Time);
+  for I := 0 to FNNodes - 1 do
+    Read(FFile, FNext.Flows[I]);
+  ReadLn(FFile);
+  Result := True;
+end;
+
+function TIfaceFile.InterpolateFlow(NodeIdx: Integer;
+                                     T: Double): Double;
+var DT, Frac, Q1, Q2: Double;
+begin
+  if (NodeIdx < 0) or (NodeIdx >= FNNodes) then Exit(0.0);
+  DT := FNext.Time - FPrev.Time;
+  if DT <= 0.0 then Exit(FPrev.Flows[NodeIdx]);
+  Frac := (T - FPrev.Time) / DT;
+  Frac := Max(0.0, Min(1.0, Frac));
+  Q1 := FPrev.Flows[NodeIdx];
+  Q2 := FNext.Flows[NodeIdx];
+  Result := Q1 + (Q2 - Q1) * Frac;
+end;
+
+function TIfaceFile.GetInflow(DestNode: Integer;
+                               T: Double): Double;
+var I: Integer;
+begin
+  for I := 0 to FNNodes - 1 do
+    if FNodeMap[I] = DestNode then
+      Exit(InterpolateFlow(I, T));
+  Result := 0.0;
+end;
+
+procedure TIfaceFile.Close;
+begin
+  if FIsOpen then CloseFile(FFile);
+  FIsOpen := False;
+end;
+
+end.`,
+    typescript: `// iface.ts — Interface File Handling
+// SWMM5 Engine in TypeScript — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+interface IfaceRecordData {
+    time: number;
+    flows: number[];
+}
+
+class IfaceRecord implements IfaceRecordData {
+    time: number;
+    flows: number[];
+
+    constructor(nNodes: number) {
+        this.time = 0.0;
+        this.flows = new Array(nNodes).fill(0.0);
+    }
+
+    clone(): IfaceRecord {
+        const r = new IfaceRecord(this.flows.length);
+        r.time = this.time;
+        r.flows = [...this.flows];
+        return r;
+    }
+}
+
+class IfaceFile {
+    private nNodes: number = 0;
+    private nodeMap: number[] = [];
+    private prev: IfaceRecord = new IfaceRecord(0);
+    private next: IfaceRecord = new IfaceRecord(0);
+    private lines: string[] = [];
+    private lineIdx: number = 0;
+
+    open(text: string, nNodes: number): void {
+        this.nNodes = nNodes;
+        this.nodeMap = Array.from({length: nNodes}, (_, i) => i);
+        this.prev = new IfaceRecord(nNodes);
+        this.next = new IfaceRecord(nNodes);
+        this.lines = text.trim().split('\\n');
+        this.lineIdx = 0;
+    }
+
+    readRecord(): boolean {
+        if (this.lineIdx >= this.lines.length) return false;
+        this.prev = this.next.clone();
+        const vals: number[] = this.lines[this.lineIdx++]
+            .trim().split(/\\s+/).map(Number);
+        if (vals.length < 1 + this.nNodes) return false;
+        this.next.time = vals[0];
+        for (let i = 0; i < this.nNodes; i++) {
+            this.next.flows[i] = vals[i + 1];
+        }
+        return true;
+    }
+
+    interpolateFlow(nodeIdx: number, t: number): number {
+        if (nodeIdx < 0 || nodeIdx >= this.nNodes) return 0.0;
+        const dt: number = this.next.time - this.prev.time;
+        if (dt <= 0.0) return this.prev.flows[nodeIdx];
+        const frac: number = Math.max(0.0, Math.min(1.0,
+            (t - this.prev.time) / dt));
+        const q1: number = this.prev.flows[nodeIdx];
+        const q2: number = this.next.flows[nodeIdx];
+        return q1 + (q2 - q1) * frac;
+    }
+
+    getInflow(destNode: number, t: number): number {
+        for (let i = 0; i < this.nNodes; i++) {
+            if (this.nodeMap[i] === destNode)
+                return this.interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+}
+
+export { IfaceFile, IfaceRecord };`,
+    cuda: `// iface.cu — Interface File Handling
+// SWMM5 Engine in CUDA — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+#include <stdio.h>
+#include <stdlib.h>
+
+#define MAX_IFACE_NODES 100
+
+struct IfaceRecord {
+    float time;
+    float flows[MAX_IFACE_NODES];
+};
+
+struct IfaceData {
+    int nNodes;
+    int nodeMap[MAX_IFACE_NODES];
+    IfaceRecord prev;
+    IfaceRecord next;
+};
+
+__host__ void iface_init(IfaceData* d, int nNodes) {
+    d->nNodes = nNodes;
+    d->prev.time = 0.0f;
+    d->next.time = 0.0f;
+    for (int i = 0; i < nNodes; i++) {
+        d->nodeMap[i] = i;
+        d->prev.flows[i] = 0.0f;
+        d->next.flows[i] = 0.0f;
+    }
+}
+
+__device__ float iface_interpolate(const IfaceData* d,
+    int nodeIdx, float t)
+{
+    if (nodeIdx < 0 || nodeIdx >= d->nNodes) return 0.0f;
+    float dt = d->next.time - d->prev.time;
+    if (dt <= 0.0f) return d->prev.flows[nodeIdx];
+    float frac = (t - d->prev.time) / dt;
+    frac = fmaxf(0.0f, fminf(1.0f, frac));
+    float q1 = d->prev.flows[nodeIdx];
+    float q2 = d->next.flows[nodeIdx];
+    return q1 + (q2 - q1) * frac;
+}
+
+__global__ void interpolateAllNodes(const IfaceData* d,
+    float t, float* outflows, int nNodes)
+{
+    int idx = blockIdx.x * blockDim.x + threadIdx.x;
+    if (idx >= nNodes) return;
+    outflows[idx] = iface_interpolate(d, idx, t);
+}
+
+__device__ float iface_getInflow(const IfaceData* d,
+    int destNode, float t)
+{
+    for (int i = 0; i < d->nNodes; i++) {
+        if (d->nodeMap[i] == destNode)
+            return iface_interpolate(d, i, t);
+    }
+    return 0.0f;
+}`,
+    wasm: `;; iface.wat — Interface File Handling
+;; SWMM5 Engine in WebAssembly — Cascaded Model I/O
+;; Reads/writes interface files for passing flows
+;; between upstream and downstream SWMM models
+
+(module
+  (memory (export "mem") 1)
+
+  ;; Record layout at base offset:
+  ;; [0..7] prev_time, [8..N] prev_flows,
+  ;; [N+8..] next_time, next_flows
+
+  (func $interpolateFlow
+    (param $prevTime f64) (param $nextTime f64)
+    (param $prevQ f64) (param $nextQ f64)
+    (param $t f64)
+    (result f64)
+    (local $dt f64) (local $frac f64)
+
+    (local.set $dt
+      (f64.sub (local.get $nextTime) (local.get $prevTime)))
+
+    (if (f64.le (local.get $dt) (f64.const 0.0))
+        (then (return (local.get $prevQ))))
+
+    (local.set $frac
+      (f64.div
+        (f64.sub (local.get $t) (local.get $prevTime))
+        (local.get $dt)))
+
+    ;; clamp frac to [0, 1]
+    (if (f64.lt (local.get $frac) (f64.const 0.0))
+        (then (local.set $frac (f64.const 0.0))))
+    (if (f64.gt (local.get $frac) (f64.const 1.0))
+        (then (local.set $frac (f64.const 1.0))))
+
+    (f64.add
+      (local.get $prevQ)
+      (f64.mul
+        (f64.sub (local.get $nextQ) (local.get $prevQ))
+        (local.get $frac)))
+  )
+
+  (func $getFlowAt (param $base i32) (param $idx i32)
+        (param $nNodes i32) (param $t f64)
+        (result f64)
+    (local $prevOff i32) (local $nextOff i32)
+    (local $recSize i32)
+
+    (local.set $recSize
+      (i32.add (i32.const 8)
+        (i32.mul (local.get $nNodes) (i32.const 8))))
+
+    (local.set $prevOff (local.get $base))
+    (local.set $nextOff
+      (i32.add (local.get $base) (local.get $recSize)))
+
+    (call $interpolateFlow
+      (f64.load (local.get $prevOff))
+      (f64.load (local.get $nextOff))
+      (f64.load (i32.add (local.get $prevOff)
+        (i32.add (i32.const 8)
+          (i32.mul (local.get $idx) (i32.const 8)))))
+      (f64.load (i32.add (local.get $nextOff)
+        (i32.add (i32.const 8)
+          (i32.mul (local.get $idx) (i32.const 8)))))
+      (local.get $t))
+  )
+
+  (export "interpolateFlow" (func $interpolateFlow))
+  (export "getFlowAt" (func $getFlowAt))
+)`,
+    mojo: `# iface.mojo — Interface File Handling
+# SWMM5 Engine in Mojo — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+struct IfaceRecord:
+    var time: Float64
+    var flows: DynamicVector[Float64]
+
+    fn __init__(inout self, n_nodes: Int):
+        self.time = 0.0
+        self.flows = DynamicVector[Float64](n_nodes)
+        for i in range(n_nodes):
+            self.flows.push_back(0.0)
+
+    fn copy_from(inout self, other: IfaceRecord):
+        self.time = other.time
+        for i in range(len(other.flows)):
+            self.flows[i] = other.flows[i]
+
+struct IfaceFile:
+    var n_nodes: Int
+    var node_map: DynamicVector[Int]
+    var prev: IfaceRecord
+    var next: IfaceRecord
+
+    fn __init__(inout self, n_nodes: Int):
+        self.n_nodes = n_nodes
+        self.node_map = DynamicVector[Int](n_nodes)
+        for i in range(n_nodes):
+            self.node_map.push_back(i)
+        self.prev = IfaceRecord(n_nodes)
+        self.next = IfaceRecord(n_nodes)
+
+    fn advance(inout self, time: Float64,
+               flows: DynamicVector[Float64]):
+        self.prev.copy_from(self.next)
+        self.next.time = time
+        for i in range(self.n_nodes):
+            self.next.flows[i] = flows[i]
+
+    fn interpolate_flow(self, node_idx: Int,
+                        t: Float64) -> Float64:
+        if node_idx < 0 or node_idx >= self.n_nodes:
+            return 0.0
+        var dt = self.next.time - self.prev.time
+        if dt <= 0.0:
+            return self.prev.flows[node_idx]
+        var frac = (t - self.prev.time) / dt
+        if frac < 0.0:
+            frac = 0.0
+        if frac > 1.0:
+            frac = 1.0
+        var q1 = self.prev.flows[node_idx]
+        var q2 = self.next.flows[node_idx]
+        return q1 + (q2 - q1) * frac
+
+    fn get_inflow(self, dest_node: Int,
+                  t: Float64) -> Float64:
+        for i in range(self.n_nodes):
+            if self.node_map[i] == dest_node:
+                return self.interpolate_flow(i, t)
+        return 0.0`,
+    java: `// Iface.java — Interface File Handling
+// SWMM5 Engine in Java — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+package swmm;
+
+import java.io.*;
+import java.util.Arrays;
+
+public class IfaceFile {
+    private int nNodes;
+    private int[] nodeMap;
+    private double prevTime, nextTime;
+    private double[] prevFlows, nextFlows;
+    private BufferedReader reader;
+
+    public IfaceFile() {
+        nNodes = 0;
+    }
+
+    public void open(String path, int nNodes) throws IOException {
+        reader = new BufferedReader(new FileReader(path));
+        this.nNodes = nNodes;
+        nodeMap = new int[nNodes];
+        for (int i = 0; i < nNodes; i++) nodeMap[i] = i;
+        prevFlows = new double[nNodes];
+        nextFlows = new double[nNodes];
+        prevTime = 0.0;
+        nextTime = 0.0;
+    }
+
+    public boolean readRecord() throws IOException {
+        if (reader == null) return false;
+        prevTime = nextTime;
+        System.arraycopy(nextFlows, 0, prevFlows, 0, nNodes);
+        String line = reader.readLine();
+        if (line == null) return false;
+        String[] parts = line.trim().split("\\\\s+");
+        if (parts.length < 1 + nNodes) return false;
+        nextTime = Double.parseDouble(parts[0]);
+        for (int i = 0; i < nNodes; i++)
+            nextFlows[i] = Double.parseDouble(parts[i + 1]);
+        return true;
+    }
+
+    public double interpolateFlow(int nodeIdx, double t) {
+        if (nodeIdx < 0 || nodeIdx >= nNodes) return 0.0;
+        double dt = nextTime - prevTime;
+        if (dt <= 0.0) return prevFlows[nodeIdx];
+        double frac = Math.max(0.0, Math.min(1.0,
+            (t - prevTime) / dt));
+        return prevFlows[nodeIdx]
+               + (nextFlows[nodeIdx]
+                  - prevFlows[nodeIdx]) * frac;
+    }
+
+    public double getInflow(int destNode, double t) {
+        for (int i = 0; i < nNodes; i++) {
+            if (nodeMap[i] == destNode)
+                return interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+
+    public void close() throws IOException {
+        if (reader != null) reader.close();
+    }
+}`,
+    nim: `# iface.nim — Interface File Handling
+# SWMM5 Engine in Nim — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+import strutils, sequtils
+
+type
+  IfaceRecord = object
+    time: float64
+    flows: seq[float64]
+
+  IfaceFile = object
+    nNodes: int
+    nodeMap: seq[int]
+    prev: IfaceRecord
+    next: IfaceRecord
+    file: File
+    isOpen: bool
+
+proc newIfaceRecord(n: int): IfaceRecord =
+  result.time = 0.0
+  result.flows = newSeq[float64](n)
+
+proc initIfaceFile(): IfaceFile =
+  result.nNodes = 0
+  result.isOpen = false
+
+proc open(f: var IfaceFile, path: string, nNodes: int) =
+  f.file = open(path, fmRead)
+  f.nNodes = nNodes
+  f.isOpen = true
+  f.nodeMap = toSeq(0 ..< nNodes)
+  f.prev = newIfaceRecord(nNodes)
+  f.next = newIfaceRecord(nNodes)
+
+proc readRecord(f: var IfaceFile): bool =
+  if not f.isOpen: return false
+  f.prev = f.next
+  var line: string
+  if not f.file.readLine(line): return false
+  let parts = line.splitWhitespace()
+  if parts.len < 1 + f.nNodes: return false
+  f.next.time = parseFloat(parts[0])
+  for i in 0 ..< f.nNodes:
+    f.next.flows[i] = parseFloat(parts[i + 1])
+  result = true
+
+proc interpolateFlow(f: IfaceFile, nodeIdx: int,
+                      t: float64): float64 =
+  if nodeIdx < 0 or nodeIdx >= f.nNodes: return 0.0
+  let dt = f.next.time - f.prev.time
+  if dt <= 0.0: return f.prev.flows[nodeIdx]
+  var frac = (t - f.prev.time) / dt
+  frac = max(0.0, min(1.0, frac))
+  let q1 = f.prev.flows[nodeIdx]
+  let q2 = f.next.flows[nodeIdx]
+  result = q1 + (q2 - q1) * frac
+
+proc getInflow(f: IfaceFile, destNode: int,
+                t: float64): float64 =
+  for i in 0 ..< f.nNodes:
+    if f.nodeMap[i] == destNode:
+      return f.interpolateFlow(i, t)
+  result = 0.0
+
+proc close(f: var IfaceFile) =
+  if f.isOpen: f.file.close()
+  f.isOpen = false`,
+    ada: `-- iface.adb — Interface File Handling
+-- SWMM5 Engine in Ada — Cascaded Model I/O
+-- Reads/writes interface files for passing flows
+-- between upstream and downstream SWMM models
+
+with Ada.Text_IO;
+with Ada.Float_Text_IO;
+
+package Iface is
+
+   Max_Nodes : constant := 100;
+
+   type Flow_Array is array (1 .. Max_Nodes) of Long_Float;
+   type Map_Array  is array (1 .. Max_Nodes) of Integer;
+
+   type Iface_Record is record
+      Time  : Long_Float := 0.0;
+      Flows : Flow_Array := (others => 0.0);
+   end record;
+
+   type Iface_File is record
+      N_Nodes  : Integer := 0;
+      Node_Map : Map_Array := (others => 0);
+      Prev     : Iface_Record;
+      Next_Rec : Iface_Record;
+      Is_Open  : Boolean := False;
+   end record;
+
+   procedure Init (F : out Iface_File; N_Nodes : Integer) is
+   begin
+      F.N_Nodes := N_Nodes;
+      for I in 1 .. N_Nodes loop
+         F.Node_Map (I) := I;
+      end loop;
+      F.Is_Open := True;
+   end Init;
+
+   function Interpolate_Flow
+     (F        : Iface_File;
+      Node_Idx : Integer;
+      T        : Long_Float) return Long_Float
+   is
+      DT, Frac, Q1, Q2 : Long_Float;
+   begin
+      if Node_Idx < 1 or Node_Idx > F.N_Nodes then
+         return 0.0;
+      end if;
+      DT := F.Next_Rec.Time - F.Prev.Time;
+      if DT <= 0.0 then
+         return F.Prev.Flows (Node_Idx);
+      end if;
+      Frac := (T - F.Prev.Time) / DT;
+      if Frac < 0.0 then Frac := 0.0; end if;
+      if Frac > 1.0 then Frac := 1.0; end if;
+      Q1 := F.Prev.Flows (Node_Idx);
+      Q2 := F.Next_Rec.Flows (Node_Idx);
+      return Q1 + (Q2 - Q1) * Frac;
+   end Interpolate_Flow;
+
+   function Get_Inflow
+     (F         : Iface_File;
+      Dest_Node : Integer;
+      T         : Long_Float) return Long_Float
+   is
+   begin
+      for I in 1 .. F.N_Nodes loop
+         if F.Node_Map (I) = Dest_Node then
+            return Interpolate_Flow (F, I, T);
+         end if;
+      end loop;
+      return 0.0;
+   end Get_Inflow;
+
+end Iface;`,
+    chapel: `// iface.chpl — Interface File Handling
+// SWMM5 Engine in Chapel — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+record IfaceRecord {
+    var nNodes: int;
+    var time: real = 0.0;
+    var flows: [0..#nNodes] real;
+
+    proc init(nNodes: int) {
+        this.nNodes = nNodes;
+    }
+
+    proc ref copyFrom(const ref other: IfaceRecord) {
+        this.time = other.time;
+        this.flows = other.flows;
+    }
+}
+
+record IfaceFile {
+    var nNodes: int;
+    var nodeMap: [0..#nNodes] int;
+    var prev: IfaceRecord;
+    var nextRec: IfaceRecord;
+
+    proc init(nNodes: int) {
+        this.nNodes = nNodes;
+        for i in 0..#nNodes do this.nodeMap[i] = i;
+        this.prev = new IfaceRecord(nNodes);
+        this.nextRec = new IfaceRecord(nNodes);
+    }
+
+    proc ref advance(time: real, flows: [] real) {
+        prev.copyFrom(nextRec);
+        nextRec.time = time;
+        for i in 0..#nNodes do
+            nextRec.flows[i] = flows[i];
+    }
+
+    proc interpolateFlow(nodeIdx: int, t: real): real {
+        if nodeIdx < 0 || nodeIdx >= nNodes then return 0.0;
+        const dt = nextRec.time - prev.time;
+        if dt <= 0.0 then return prev.flows[nodeIdx];
+        var frac = (t - prev.time) / dt;
+        if frac < 0.0 then frac = 0.0;
+        if frac > 1.0 then frac = 1.0;
+        const q1 = prev.flows[nodeIdx];
+        const q2 = nextRec.flows[nodeIdx];
+        return q1 + (q2 - q1) * frac;
+    }
+
+    proc getInflow(destNode: int, t: real): real {
+        for i in 0..#nNodes {
+            if nodeMap[i] == destNode then
+                return interpolateFlow(i, t);
+        }
+        return 0.0;
+    }
+}`,
+    swift: `// iface.swift — Interface File Handling
+// SWMM5 Engine in Swift — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+import Foundation
+
+struct IfaceRecord {
+    var time: Double = 0.0
+    var flows: [Double]
+
+    init(nNodes: Int) {
+        flows = Array(repeating: 0.0, count: nNodes)
+    }
+}
+
+struct IfaceFile {
+    var nNodes: Int = 0
+    var nodeMap: [Int] = []
+    var prev: IfaceRecord = IfaceRecord(nNodes: 0)
+    var next: IfaceRecord = IfaceRecord(nNodes: 0)
+    private var lines: [String] = []
+    private var lineIdx: Int = 0
+
+    mutating func open(text: String, nNodes: Int) {
+        self.nNodes = nNodes
+        self.nodeMap = Array(0..<nNodes)
+        self.prev = IfaceRecord(nNodes: nNodes)
+        self.next = IfaceRecord(nNodes: nNodes)
+        self.lines = text.components(separatedBy: "\\n")
+            .filter { !$0.isEmpty }
+        self.lineIdx = 0
+    }
+
+    mutating func readRecord() -> Bool {
+        guard lineIdx < lines.count else { return false }
+        prev = next
+        let parts = lines[lineIdx]
+            .split(separator: " ").compactMap {
+                Double($0)
+            }
+        lineIdx += 1
+        guard parts.count >= 1 + nNodes else { return false }
+        next.time = parts[0]
+        for i in 0..<nNodes {
+            next.flows[i] = parts[i + 1]
+        }
+        return true
+    }
+
+    func interpolateFlow(nodeIdx: Int, t: Double) -> Double {
+        guard nodeIdx >= 0, nodeIdx < nNodes else { return 0.0 }
+        let dt = next.time - prev.time
+        guard dt > 0.0 else { return prev.flows[nodeIdx] }
+        let frac = max(0.0, min(1.0,
+            (t - prev.time) / dt))
+        let q1 = prev.flows[nodeIdx]
+        let q2 = next.flows[nodeIdx]
+        return q1 + (q2 - q1) * frac
+    }
+
+    func getInflow(destNode: Int, t: Double) -> Double {
+        for (i, mapped) in nodeMap.enumerated() {
+            if mapped == destNode {
+                return interpolateFlow(nodeIdx: i, t: t)
+            }
+        }
+        return 0.0
+    }
+}`,
+    kotlin: `// Iface.kt — Interface File Handling
+// SWMM5 Engine in Kotlin — Cascaded Model I/O
+// Reads/writes interface files for passing flows
+// between upstream and downstream SWMM models
+
+package swmm
+
+import java.io.BufferedReader
+import java.io.FileReader
+import kotlin.math.max
+import kotlin.math.min
+
+data class IfaceRecord(
+    var time: Double = 0.0,
+    val flows: DoubleArray
+) {
+    constructor(nNodes: Int) : this(0.0, DoubleArray(nNodes))
+
+    fun copyFrom(other: IfaceRecord) {
+        time = other.time
+        other.flows.copyInto(flows)
+    }
+}
+
+class IfaceFile {
+    private var nNodes = 0
+    private var nodeMap = IntArray(0)
+    private var prev = IfaceRecord(0)
+    private var next = IfaceRecord(0)
+    private var reader: BufferedReader? = null
+
+    fun open(path: String, nNodes: Int) {
+        reader = BufferedReader(FileReader(path))
+        this.nNodes = nNodes
+        nodeMap = IntArray(nNodes) { it }
+        prev = IfaceRecord(nNodes)
+        next = IfaceRecord(nNodes)
+    }
+
+    fun readRecord(): Boolean {
+        val r = reader ?: return false
+        prev.copyFrom(next)
+        val line = r.readLine() ?: return false
+        val parts = line.trim().split("\\\\s+".toRegex())
+        if (parts.size < 1 + nNodes) return false
+        next.time = parts[0].toDouble()
+        for (i in 0 until nNodes)
+            next.flows[i] = parts[i + 1].toDouble()
+        return true
+    }
+
+    fun interpolateFlow(nodeIdx: Int, t: Double): Double {
+        if (nodeIdx < 0 || nodeIdx >= nNodes) return 0.0
+        val dt = next.time - prev.time
+        if (dt <= 0.0) return prev.flows[nodeIdx]
+        val frac = max(0.0, min(1.0,
+            (t - prev.time) / dt))
+        val q1 = prev.flows[nodeIdx]
+        val q2 = next.flows[nodeIdx]
+        return q1 + (q2 - q1) * frac
+    }
+
+    fun getInflow(destNode: Int, t: Double): Double {
+        for (i in 0 until nNodes) {
+            if (nodeMap[i] == destNode)
+                return interpolateFlow(i, t)
+        }
+        return 0.0
+    }
+
+    fun close() {
+        reader?.close()
+    }
+}`,
+  },
+};
+
 
 const languages = [
   { id: "c", label: "C", ext: ".c", color: "#555555" },

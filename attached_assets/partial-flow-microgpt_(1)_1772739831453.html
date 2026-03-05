@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Partial-Flow MicroGPT — Discover the Hidden Peak at d/D ≈ 0.938</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap');
+  *{margin:0;padding:0;box-sizing:border-box}
+  :root{
+    --bg:#0c1222;--card:rgba(30,41,59,0.35);--bdr:rgba(51,65,85,0.4);
+    --t1:#e2e8f0;--t2:#94a3b8;--t3:#64748b;--t4:#475569;
+    --blue:#0ea5e9;--emerald:#10b981;--amber:#f59e0b;--violet:#8b5cf6;--rose:#f43f5e;--cyan:#06b6d4;--teal:#14b8a6;
+  }
+  body{background:linear-gradient(145deg,#0c1222,#0f172a 40%,#0c1a2e);color:var(--t1);font-family:'JetBrains Mono','Fira Code',monospace;min-height:100vh;line-height:1.5}
+
+  .hdr{padding:24px 24px 8px}.hdr-row{display:flex;align-items:center;gap:12px;margin-bottom:4px}
+  .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0ea5e9,#06b6d4);display:flex;align-items:center;justify-content:center;font:800 13px 'Space Grotesk',sans-serif;color:#fff;box-shadow:0 0 24px rgba(14,165,233,0.4)}
+  .hdr h1{font:700 18px/1.2 'Space Grotesk',sans-serif;color:#fff;letter-spacing:-0.3px}
+  .hdr .sub{font-size:11px;color:var(--t3);letter-spacing:0.5px}
+  .eq-bar{margin-top:12px;padding:10px 16px;border-radius:10px;background:var(--card);border:1px solid var(--bdr);text-align:center}
+  .eq-bar .eq{color:var(--cyan);font-size:12px;font-weight:600}
+  .eq-bar .nt{color:var(--t4);font-size:10px;margin-left:10px}
+
+  .tabs{display:flex;border-bottom:1px solid rgba(30,41,59,0.6);padding:0 16px;margin-top:12px}
+  .tab{padding:10px 16px;font:600 11px/1 inherit;cursor:pointer;color:var(--t3);border:none;border-bottom:2px solid transparent;background:none;transition:.2s;letter-spacing:.3px}
+  .tab:hover{color:var(--t2)}.tab.active{color:#67e8f9;border-bottom-color:#22d3ee;background:rgba(30,41,59,0.3)}
+  .tc{padding:20px 24px;display:none}.tc.active{display:block}
+
+  .card{background:var(--card);border:1px solid var(--bdr);border-radius:12px;padding:20px;margin-bottom:16px}
+  .card-t{font:700 13px/1.3 'Space Grotesk',sans-serif;color:#67e8f9;margin-bottom:12px}
+  .lbl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+
+  .g2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .g4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
+
+  .sl-grp{margin-bottom:8px}
+  .sl-grp input[type=range]{width:100%;accent-color:var(--cyan)}
+  .sl-v{color:#22d3ee;font-size:13px;font-weight:600}
+
+  .stat{background:rgba(30,41,59,0.5);border-radius:10px;padding:12px;border:1px solid rgba(51,65,85,0.3)}
+  .stat .sl{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:var(--t4);margin-bottom:4px}
+  .stat .sv{font-size:20px;font-weight:700;font-family:'JetBrains Mono',monospace}
+  .stat .su{font-size:9px;color:var(--t4);margin-top:2px}
+
+  .btn{flex:1;padding:10px 16px;border-radius:10px;border:none;font:600 13px inherit;cursor:pointer;letter-spacing:.3px;transition:.2s}
+  .btn-g{background:linear-gradient(135deg,#059669,#10b981);color:#fff;box-shadow:0 0 15px rgba(16,185,129,0.3)}
+  .btn-c{background:linear-gradient(135deg,#0891b2,#06b6d4);color:#fff;box-shadow:0 0 15px rgba(6,182,212,0.3)}
+  .btn-r{background:linear-gradient(135deg,#dc2626,#ef4444);color:#fff}
+  .btn:disabled{background:#334155;color:#64748b;cursor:not-allowed;box-shadow:none}
+  .btn-row{display:flex;gap:12px;margin-bottom:16px}
+
+  .sts{font:11px/1.4 'JetBrains Mono',monospace;color:var(--t3);background:var(--card);border:1px solid var(--bdr);border-radius:10px;padding:8px 14px;margin-bottom:16px}
+  .cw{position:relative;height:240px;margin-top:8px}.cwt{position:relative;height:300px;margin-top:8px}
+
+  .dt{width:100%;font-size:11px;border-collapse:collapse}
+  .dt th{text-align:left;padding:6px 8px;color:var(--t4);border-bottom:1px solid rgba(51,65,85,0.4)}
+  .dt td{padding:6px 8px;border-bottom:1px solid rgba(15,23,42,0.4)}
+
+  .pbtn{padding:6px 12px;font:10px inherit;border-radius:6px;cursor:pointer;background:rgba(51,65,85,0.4);color:var(--t2);border:1px solid rgba(71,85,105,0.3);transition:.2s}
+  .pbtn:hover{background:rgba(6,182,212,0.15);color:#67e8f9;border-color:rgba(6,182,212,0.3)}
+
+  .arch{display:flex;align-items:center;justify-content:center;gap:6px;padding:8px 0;flex-wrap:wrap}
+  .an{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700}
+  .ab{width:52px;height:52px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:9px;text-align:center;line-height:1.3}
+  .aa{color:var(--t4);font-size:16px}
+  .al{font-size:8px;color:var(--t4);text-align:center;margin-bottom:3px}
+
+  /* Pipe cross-section */
+  .pipe-viz{display:flex;align-items:center;justify-content:center;gap:32px;padding:16px 0;flex-wrap:wrap}
+  .pipe-svg-wrap{position:relative}
+
+  /* Peak marker */
+  .peak-marker{position:absolute;font-size:9px;color:#fbbf24;font-weight:700;text-align:center;pointer-events:none}
+
+  /* Tip */
+  .tip{position:relative;display:inline-block}
+  .tip-text{display:inline-flex;align-items:center;gap:4px;margin-top:3px;font-size:9px;color:var(--t4);letter-spacing:.3px;cursor:default}
+  .tip-icon{width:14px;height:14px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:var(--t3);background:rgba(51,65,85,0.35);border:1px solid rgba(71,85,105,0.3);cursor:help;flex-shrink:0}
+  .tip-best{color:#22d3ee;font-weight:600}
+  .tip-bubble{visibility:hidden;opacity:0;position:absolute;z-index:100;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:rgba(15,23,42,0.95);border:1px solid rgba(6,182,212,0.3);border-radius:8px;padding:10px 14px;width:220px;box-shadow:0 8px 32px rgba(0,0,0,0.5);transition:opacity .2s,visibility .2s;font-size:10px;line-height:1.6;color:var(--t2)}
+  .tip-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:rgba(6,182,212,0.3)}
+  .tip:hover .tip-bubble{visibility:visible;opacity:1}
+  .tip-bubble .tb-rec{color:#34d399;font-weight:600;font-family:'JetBrains Mono',monospace}
+
+  /* Discovery callout */
+  .discovery{background:linear-gradient(135deg,rgba(245,158,11,0.06),rgba(234,88,12,0.04));border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:16px;margin-bottom:16px}
+  .discovery .d-title{font:700 14px 'Space Grotesk',sans-serif;color:#fbbf24;margin-bottom:8px}
+
+  /* Docs */
+  .ds{margin-bottom:10px;background:rgba(15,23,42,0.4);border-radius:10px;border:1px solid rgba(51,65,85,0.15);overflow:hidden}
+  .dh{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;cursor:pointer;transition:.2s}
+  .dh:hover{background:rgba(30,41,59,0.3)}
+  .dh .tr{display:flex;align-items:center;gap:8px}
+  .dh .ci{color:var(--cyan);font-size:11px}
+  .dh .ti{color:var(--t1);font-size:12px;font-weight:600}
+  .dh .tg{color:var(--t4);font-size:11px}
+  .dc{margin:0 12px 12px;border-radius:10px;overflow:hidden;display:none}
+  .dc.open{display:block}
+  .dc pre{background:rgba(2,6,23,0.7);padding:14px 16px;overflow-x:auto;font:10px/1.7 'JetBrains Mono',monospace;color:#cbd5e1;white-space:pre}
+
+  .rc{display:block;background:rgba(15,23,42,0.5);border-radius:10px;padding:12px;border:1px solid var(--bdr);text-decoration:none;transition:.2s;margin-bottom:10px}
+  .rc:hover{border-color:rgba(6,182,212,0.35)}
+  .rr{display:flex;align-items:flex-start;gap:12px}
+  .ri{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+  .rt{color:var(--t1);font-size:12px;font-weight:600}
+  .rd{font-size:10px;color:var(--t4);margin-top:4px;line-height:1.5}
+  .rl{font-size:9px;color:rgba(14,165,233,0.6);margin-top:4px;display:inline-block}
+
+  .ct{font-size:12px;font-weight:600;color:var(--amber);margin-bottom:4px}
+  .cx{font-size:11px;color:var(--t4);line-height:1.6}.cx .h{color:var(--t2)}
+
+  .footer{padding:12px 24px;text-align:center;border-top:1px solid rgba(30,41,59,0.5);margin-top:16px;font-size:10px;color:var(--t4);letter-spacing:.3px}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="hdr">
+  <div class="hdr-row">
+    <div class="logo">d/D</div>
+    <div>
+      <h1>Partial-Flow MicroGPT</h1>
+      <div class="sub">Train a Neural Network to Discover the Hidden Peak at d/D ≈ 0.938</div>
+    </div>
+  </div>
+  <div class="eq-bar">
+    <span class="eq">Q = (1.49/n) × A(θ) × R<sub>h</sub>(θ)<sup>2/3</sup> × S<sup>1/2</sup></span>
+    <span class="nt">where θ = 2·acos(1 − 2d/D) — Manning's equation for partial depth in circular pipes</span>
+  </div>
+</div>
+
+<!-- TABS -->
+<div class="tabs">
+  <button class="tab active" data-tab="train">1. Generate &amp; Train</button>
+  <button class="tab" data-tab="test">2. Test &amp; Visualize</button>
+  <button class="tab" data-tab="analysis">3. Analysis</button>
+  <button class="tab" data-tab="docs">4. Docs</button>
+</div>
+
+<!-- ===================== TAB 1 ===================== -->
+<div id="tab-train" class="tc active">
+  <div class="g2" style="margin-bottom:16px">
+    <div class="sl-grp"><div class="lbl">Training Samples</div>
+      <input type="range" id="slN" min="500" max="8000" step="500" value="3000">
+      <span class="sl-v" id="vN">3000</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">2000–4000</span></div>
+        <div class="tip-bubble">Only 4 inputs (n, D, S, d/D) so less data needed than RTK v2. Ensure good coverage near d/D = 0.93–0.95 where the peak lives.<br><br>Recommended: <span class="tb-rec">2000–4000</span></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Hidden Layer Size</div>
+      <input type="range" id="slH" min="8" max="64" step="4" value="32">
+      <span class="sl-v" id="vH">32 neurons</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">24–40</span></div>
+        <div class="tip-bubble">Simpler than RTK — the geometry functions are smooth. 32 neurons handles the peak region well. More than 48 risks overfitting.<br><br>Recommended: <span class="tb-rec">24–40</span></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Learning Rate</div>
+      <input type="range" id="slLR" min="0.001" max="0.015" step="0.001" value="0.005">
+      <span class="sl-v" id="vLR">0.005</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">0.004–0.007</span></div>
+        <div class="tip-bubble">Cosine decay anneals to ~0 by end of training. Start moderate and let it settle. Smooth functions tolerate higher LR than exponentials.<br><br>Recommended: <span class="tb-rec">0.004–0.007</span></div></div>
+    </div>
+    <div class="sl-grp"><div class="lbl">Max Epochs</div>
+      <input type="range" id="slE" min="50" max="1000" step="50" value="300">
+      <span class="sl-v" id="vE">300</span>
+      <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Best: <span class="tip-best">200–500</span></div>
+        <div class="tip-bubble">Smooth functions converge faster. 300 is usually enough. Early stopping (patience=60) prevents wasted time. Set 500+ to polish the peak region.<br><br>Recommended: <span class="tb-rec">200–500</span></div></div>
+    </div>
+  </div>
+
+  <!-- Architecture -->
+  <div class="card" style="padding:14px">
+    <div class="lbl">Network Architecture — 4 Inputs (n, D, S, d/D) → 1 Output (Q)</div>
+    <div class="arch">
+      <div>
+        <div class="al">INPUT</div>
+        <div style="display:flex;flex-direction:column;gap:3px">
+          <div class="an" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.4);color:#22d3ee">n</div>
+          <div class="an" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.4);color:#22d3ee">D</div>
+          <div class="an" style="background:rgba(6,182,212,0.1);border:1px solid rgba(6,182,212,0.4);color:#22d3ee">S</div>
+          <div class="an" style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.4);color:#fbbf24">d/D</div>
+        </div>
+      </div>
+      <div class="aa">→</div>
+      <div><div class="al">HIDDEN 1</div><div class="ab" style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);color:#22d3ee"><span id="aH1">32</span><br>ReLU</div></div>
+      <div class="aa">→</div>
+      <div><div class="al">HIDDEN 2</div><div class="ab" style="background:rgba(6,182,212,0.08);border:1px solid rgba(6,182,212,0.25);color:#22d3ee"><span id="aH2">32</span><br>ReLU</div></div>
+      <div class="aa">→</div>
+      <div><div class="al">OUTPUT</div><div class="an" style="background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.4);color:#34d399">Q</div></div>
+    </div>
+    <div style="text-align:center;color:var(--t4);font-size:10px" id="pCnt">—</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-g" id="btnGen">Generate Partial-Flow Data</button>
+    <button class="btn btn-c" id="btnTr" disabled>Train Network</button>
+  </div>
+  <div class="sts" id="st1" style="display:none"></div>
+  <div class="card" id="lossC" style="display:none"><div class="lbl">Training Loss (MSE) — Cosine LR Decay</div><div class="cw"><canvas id="lossCanvas"></canvas></div></div>
+  <div class="card" id="sampC" style="display:none">
+    <div class="lbl">Sample Training Data (first 10)</div>
+    <div style="overflow-x:auto"><table class="dt"><thead><tr><th>n</th><th>D (ft)</th><th>S (ft/ft)</th><th>d/D</th><th>Q (CFS)</th><th>Q/Q<sub>full</sub></th></tr></thead><tbody id="sampB"></tbody></table></div>
+  </div>
+</div>
+
+<!-- ===================== TAB 2 ===================== -->
+<div id="tab-test" class="tc">
+  <div id="t2off" style="text-align:center;padding:60px 0"><div style="color:var(--t4);font-size:13px">Train the network first (Tab 1)</div></div>
+  <div id="t2on" style="display:none">
+
+    <div class="g2" style="margin-bottom:16px">
+      <!-- Pipe params -->
+      <div class="card">
+        <div class="card-t">Pipe Properties</div>
+        <div class="sl-grp"><div class="lbl">Manning's n</div>
+          <input type="range" id="slRn" min="0.010" max="0.025" step="0.001" value="0.013">
+          <div class="sl-v" style="font-size:16px" id="vRn">0.013</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> PVC: <span class="tip-best">0.011</span> · Concrete: <span class="tip-best">0.013</span> · Corrugated: <span class="tip-best">0.024</span></div>
+            <div class="tip-bubble">Manning's roughness coefficient. Lower = smoother pipe, higher velocity and flow capacity.<br><br>PVC/HDPE: <span class="tb-rec">0.010–0.012</span><br>Concrete: <span class="tb-rec">0.012–0.015</span><br>Corrugated metal: <span class="tb-rec">0.022–0.025</span></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">Diameter D (feet)</div>
+          <input type="range" id="slRD" min="0.5" max="6" step="0.25" value="2">
+          <div class="sl-v" style="font-size:16px" id="vRD">2.00 ft (24 in)</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">1–4 ft</span></div>
+            <div class="tip-bubble">Pipe diameter. Q ∝ D^(8/3) so doubling diameter increases capacity ~6.3×.<br><br>Laterals: <span class="tb-rec">0.5–1.0 ft</span><br>Collectors: <span class="tb-rec">1.0–3.0 ft</span><br>Trunk sewers: <span class="tb-rec">3.0–6.0 ft</span></div></div>
+        </div>
+        <div class="sl-grp"><div class="lbl">Slope S (ft/ft)</div>
+          <input type="range" id="slRS" min="0.0005" max="0.05" step="0.0005" value="0.005">
+          <div class="sl-v" style="font-size:16px" id="vRS">0.0050</div>
+          <div class="tip"><div class="tip-text"><span class="tip-icon">?</span> Typical: <span class="tip-best">0.002–0.01</span></div>
+            <div class="tip-bubble">Pipe slope. Q ∝ S^(1/2). Steeper = faster flow.<br><br>Flat terrain: <span class="tb-rec">0.001–0.003</span><br>Moderate: <span class="tb-rec">0.003–0.01</span><br>Steep: <span class="tb-rec">0.01–0.05</span></div></div>
+        </div>
+      </div>
+
+      <!-- The big slider: d/D -->
+      <div class="card" style="display:flex;flex-direction:column;justify-content:center">
+        <div class="card-t" style="color:#fbbf24;font-size:15px;text-align:center">Fill Depth d/D</div>
+        <input type="range" id="slDD" min="0.01" max="1.0" step="0.005" value="0.5" style="accent-color:#fbbf24;margin:8px 0">
+        <div style="text-align:center">
+          <div class="sl-v" style="font-size:32px;color:#fbbf24" id="vDD">0.500</div>
+          <div style="font-size:10px;color:var(--t4);margin-top:4px">Slide to fill the pipe → watch for the peak!</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;font-size:9px;color:var(--t4)">
+          <span>Empty</span>
+          <span style="color:#fbbf24;font-weight:600">← Peak ≈ 0.938 →</span>
+          <span>Full</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Stats -->
+    <div class="g4" style="margin-bottom:16px" id="tStats"></div>
+
+    <!-- Pipe visualization + Q/Qfull curve side by side -->
+    <div class="card">
+      <div class="lbl">Pipe Cross-Section &amp; Flow Curve</div>
+      <div class="pipe-viz">
+        <div class="pipe-svg-wrap">
+          <svg id="pipeSvg" width="220" height="220" viewBox="-110 -110 220 220"></svg>
+        </div>
+        <div style="width:420px">
+          <canvas id="curveChart" height="220"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Q comparison -->
+    <div class="card">
+      <div class="lbl">AI Prediction vs Exact Manning's</div>
+      <div class="g2">
+        <div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+            <span style="font-size:11px;color:var(--t4)">Exact Q:</span>
+            <span style="font-size:22px;font-weight:700;color:#34d399" id="qExact">—</span>
+            <span style="font-size:10px;color:var(--t4)">CFS</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:11px;color:var(--t4)">AI Q:</span>
+            <span style="font-size:22px;font-weight:700;color:#22d3ee" id="qPred">—</span>
+            <span style="font-size:10px;color:var(--t4)">CFS</span>
+          </div>
+        </div>
+        <div>
+          <div style="display:flex;align-items:baseline;gap:8px;margin-bottom:8px">
+            <span style="font-size:11px;color:var(--t4)">Error:</span>
+            <span style="font-size:22px;font-weight:700" id="qErr">—</span>
+          </div>
+          <div style="display:flex;align-items:baseline;gap:8px">
+            <span style="font-size:11px;color:var(--t4)">Q/Q<sub>full</sub>:</span>
+            <span style="font-size:22px;font-weight:700;color:#fbbf24" id="qRatio">—</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Presets -->
+    <div class="card">
+      <div class="lbl">Quick Presets</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px" id="presets"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 3 ===================== -->
+<div id="tab-analysis" class="tc">
+  <div id="t3off" style="text-align:center;padding:60px 0"><div style="color:var(--t4);font-size:13px">Train the network first (Tab 1)</div></div>
+  <div id="t3on" style="display:none">
+    <div class="g3" style="margin-bottom:16px">
+      <div class="stat"><div class="sl">R² Score</div><div class="sv" id="sR2" style="color:#34d399">—</div><div class="su">coefficient of determination</div></div>
+      <div class="stat"><div class="sl">Mean Abs Error</div><div class="sv" id="sMAE" style="color:#fbbf24">—</div><div class="su">across 200 test points</div></div>
+      <div class="stat"><div class="sl">Peak Found At</div><div class="sv" id="sPeak" style="color:#22d3ee">—</div><div class="su">true peak: d/D = 0.938</div></div>
+    </div>
+
+    <!-- The Discovery -->
+    <div class="discovery">
+      <div class="d-title">🔍 Did the Network Discover the Peak?</div>
+      <p style="font-size:11px;color:var(--t2);line-height:1.6" id="discoveryText">Train the network to see if it finds the hidden maximum at d/D ≈ 0.938</p>
+    </div>
+
+    <div class="card"><div class="lbl">Q/Q<sub>full</sub> vs d/D — AI vs Exact (fixed: n=0.013, D=2ft, S=0.005)</div><div class="cwt"><canvas id="discoveryChart"></canvas></div>
+      <div style="text-align:center;font-size:10px;color:var(--t4);margin-top:6px">The vertical dashed line marks d/D = 0.938 where Q/Q<sub>full</sub> reaches its maximum of ~1.076</div>
+    </div>
+
+    <div class="card"><div class="lbl">Predicted vs Actual Q (200 random test points)</div><div class="cwt"><canvas id="scatCanvas"></canvas></div></div>
+
+    <div class="card">
+      <div class="card-t">What the Neural Network Learned</div>
+      <div class="g3">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">Q/Q<sub>full</sub> peaks at d/D ≈ 0.938</div>
+          <div style="font-size:10px;color:var(--t4)">Flow actually DECREASES when the pipe is more than 93.8% full. The wetted perimeter grows faster than the area near the crown, reducing R<sub>h</sub>.</div>
+        </div>
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">Max Q/Q<sub>full</sub> ≈ 1.076</div>
+          <div style="font-size:10px;color:var(--t4)">A pipe at 93.8% depth carries ~7.6% MORE flow than when completely full. This is why SWMM5 reports Q > Q<sub>full</sub> for partially-full pipes.</div>
+        </div>
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#34d399;font-weight:600;font-size:11px;margin-bottom:4px">V/V<sub>full</sub> peaks at d/D ≈ 0.813</div>
+          <div style="font-size:10px;color:var(--t4)">Velocity peaks even earlier than flow — the optimal depth for self-cleaning velocity is about 81% full.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TAB 4 ===================== -->
+<div id="tab-docs" class="tc">
+  <div class="card">
+    <h2 class="card-t" style="font-size:15px">How Partial-Flow MicroGPT Works</h2>
+    <p style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:10px">
+      This app trains a neural network to learn Manning's equation for partially-full circular pipes.
+      The key twist: unlike full-pipe flow, the relationship between depth and flow is <b style="color:#fbbf24">non-monotonic</b> —
+      flow increases with depth until d/D ≈ 0.938, then <em>decreases</em> as the pipe approaches full.
+      The network must discover this hidden peak from data alone.
+    </p>
+    <p style="font-size:11px;color:var(--t4);line-height:1.7">
+      This is the direct sequel to Manning's MicroGPT, adding one input dimension (d/D) that transforms a smooth
+      power law into a function with a hidden maximum. Most engineers know about full-pipe flow but many
+      don't intuitively realize that a pipe at 93.8% depth carries MORE flow than when completely full.
+    </p>
+  </div>
+
+  <!-- The geometry -->
+  <div class="card">
+    <div class="card-t">The Geometry — Why the Peak Exists</div>
+    <div style="font-size:11px;color:var(--t4);line-height:1.7">
+      <p style="margin-bottom:10px">For a circular pipe of diameter D at depth d, the central angle is <span class="h">θ = 2·acos(1 − 2d/D)</span>. All geometric properties follow from θ:</p>
+      <div class="g2" style="margin-bottom:10px">
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#22d3ee;font-weight:600;font-size:11px;margin-bottom:4px">Flow Area</div>
+          <div style="font-size:10px;color:var(--t4)">A = (D²/8)(θ − sin θ)</div>
+          <div style="font-size:10px;color:var(--t4);margin-top:4px">The circular segment area. Grows rapidly at first, then slows as the pipe approaches full.</div>
+        </div>
+        <div style="background:rgba(2,6,23,0.4);border-radius:8px;padding:10px;border:1px solid rgba(51,65,85,0.2)">
+          <div style="color:#22d3ee;font-weight:600;font-size:11px;margin-bottom:4px">Wetted Perimeter</div>
+          <div style="font-size:10px;color:var(--t4)">P<sub>w</sub> = Dθ/2</div>
+          <div style="font-size:10px;color:var(--t4);margin-top:4px">The arc length in contact with water. Grows <em>linearly</em> with θ — this is the key. Near the crown, P grows faster than A.</div>
+        </div>
+      </div>
+      <p style="margin-bottom:10px"><span class="h">Hydraulic radius R<sub>h</sub> = A/P<sub>w</sub></span>. Since Q ∝ A × R<sub>h</sub><sup>2/3</sup>, the peak occurs where the combined A × R<sub>h</sub><sup>2/3</sup> term is maximized. Near the crown, the wetted perimeter wraps around the top of the pipe faster than the remaining area fills in, causing R<sub>h</sub> to drop — and Q with it.</p>
+      <p>The exact peak is at <span style="color:#fbbf24;font-weight:600">d/D = 0.938</span> where <span style="color:#fbbf24;font-weight:600">Q/Q<sub>full</sub> ≈ 1.076</span>. This means a pipe at 93.8% depth carries 7.6% more flow than when completely full!</p>
+    </div>
+  </div>
+
+  <!-- Source Code -->
+  <div class="card"><div class="card-t">Source Code — Annotated</div><div id="codeAcc"></div></div>
+
+  <!-- Key Concepts -->
+  <div class="card">
+    <div class="card-t">Key Concepts</div>
+    <div style="margin-bottom:16px"><div class="ct">Why This Matters for SWMM5</div><p class="cx">SWMM5 computes partial-depth flow at every conduit at every time step. The normal depth computation uses bisection to find the depth where Manning's Q matches the required flow. Understanding the Q vs d/D curve — especially the peak — is essential for interpreting surcharge conditions. When SWMM5 reports d/D > 1.0, the pipe is pressurized; when d/D ≈ 0.94 and Q is at capacity, you're actually at the most efficient depth.</p></div>
+    <div style="margin-bottom:16px"><div class="ct">The Manning's MicroGPT → Partial-Flow Connection</div><p class="cx">Manning's MicroGPT learned Q = f(n, D, S) for full-pipe flow — 3 inputs, all smooth power laws. Partial-Flow MicroGPT adds one dimension (d/D) that transforms the smooth function into one with a <span class="h">hidden maximum</span>. This is a fundamentally different learning challenge: the network must discover that more depth doesn't always mean more flow. ReLU activations are well-suited to learn this peak because they naturally create piecewise-linear approximations.</p></div>
+    <div><div class="ct">Why Engineers Miss the Peak</div><p class="cx">The peak at d/D ≈ 0.938 is counterintuitive because we think "more water = more flow." But hydraulic radius R<sub>h</sub> = A/P<sub>w</sub>, and near the pipe crown the perimeter grows faster than the area. It's like adding a thin sliver of water that touches a lot of pipe wall but doesn't add much cross-section. The friction from the extra wall contact outweighs the extra area. This is also why V/V<sub>full</sub> peaks even earlier (d/D ≈ 0.813) — velocity is Q/A, and the area near the crown contributes little velocity.</p></div>
+  </div>
+
+  <!-- Karpathy -->
+  <div class="card" style="background:linear-gradient(135deg,rgba(30,41,59,0.4),rgba(15,23,42,0.4));border-color:rgba(71,85,105,0.35)">
+    <div class="card-t">The MicroGPT Series</div>
+    <div style="margin-top:8px;background:rgba(2,6,23,0.35);border-radius:10px;padding:14px;border:1px solid rgba(51,65,85,0.15)">
+      <div class="lbl" style="margin-bottom:6px">Progression</div>
+      <div style="font-size:11px;color:var(--t4);line-height:1.8">
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">micrograd</span> (Karpathy) →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">Manning's MicroGPT</span> (3 in, power law) →
+        <span style="color:#22d3ee;font-family:'JetBrains Mono';font-size:10px;font-weight:700">Partial-Flow MicroGPT</span> (4 in, hidden peak) ←&nbsp;you are here<br>
+        <span style="color:#a78bfa;font-family:'JetBrains Mono';font-size:10px">RTK v1</span> (4 in, exponential) →
+        <span style="color:#fbbf24;font-family:'JetBrains Mono';font-size:10px">RTK v2</span> (7 in, convolution) →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">nanoGPT</span> →
+        <span style="color:#34d399;font-family:'JetBrains Mono';font-size:10px">GPT-4</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">Partial-Flow MicroGPT &middot; A SWMM5.org Vibe Coding App &middot; Neural Network discovers Q/Q<sub>full</sub> peak at d/D ≈ 0.938</div>
+
+<!-- ================================================================ -->
+<script>
+// ============================================================
+// TINY MLP
+// ============================================================
+class TinyMLP{
+  constructor(sz){this.layers=[];this.lr=.005;
+    for(let i=0;i<sz.length-1;i++){const r=sz[i+1],c=sz[i],s=Math.sqrt(2/c);
+      this.layers.push({W:Array.from({length:r},()=>Array.from({length:c},()=>(Math.random()*2-1)*s)),b:Array(r).fill(0)})}}
+  forward(inp){const a=[inp.slice()];let c=inp.slice();
+    for(let l=0;l<this.layers.length;l++){const{W,b}=this.layers[l];const n=[];
+      for(let i=0;i<W.length;i++){let s=b[i];for(let j=0;j<W[i].length;j++)s+=W[i][j]*c[j];
+        n.push(l<this.layers.length-1?Math.max(0,s):s)}a.push(n);c=n}return{output:c,activations:a}}
+  train(inp,tgt){const{output,activations}=this.forward(inp);const loss=.5*(output[0]-tgt[0])**2;
+    let d=[output[0]-tgt[0]];for(let l=this.layers.length-1;l>=0;l--){const{W,b}=this.layers[l];const p=activations[l];
+      for(let i=0;i<W.length;i++){for(let j=0;j<W[i].length;j++)W[i][j]-=this.lr*d[i]*p[j];b[i]-=this.lr*d[i]}
+      if(l>0){const nd=[];for(let j=0;j<W[0].length;j++){let s=0;for(let i=0;i<W.length;i++)s+=W[i][j]*d[i];
+        nd.push(s*(activations[l][j]>0?1:0))}d=nd}}return loss}
+  predict(inp){return this.forward(inp).output}
+}
+
+// ============================================================
+// PARTIAL-FLOW GEOMETRY ENGINE
+// ============================================================
+function partialFlow(n, D, S, dD) {
+  // dD = d/D ratio (0 to 1)
+  if (dD <= 0.001) return { Q: 0, V: 0, A: 0, Rh: 0, theta: 0, Qfull: fullFlow(n,D,S).Q };
+  if (dD >= 0.999) return fullFlow(n, D, S);
+
+  const theta = 2 * Math.acos(1 - 2 * dD);
+  const A = (D * D / 8) * (theta - Math.sin(theta));
+  const Pw = D * theta / 2;
+  const Rh = A / Pw;
+  const Q = (1.49 / n) * A * Math.pow(Rh, 2/3) * Math.pow(S, 0.5);
+  const V = Q / A;
+  const full = fullFlow(n, D, S);
+  return { Q, V, A, Rh, theta, Qfull: full.Q, Vfull: full.V, QratIO: Q / full.Q, Vratio: V / full.V };
+}
+
+function fullFlow(n, D, S) {
+  const A = Math.PI * D * D / 4;
+  const Rh = D / 4;
+  const Q = (1.49 / n) * A * Math.pow(Rh, 2/3) * Math.pow(S, 0.5);
+  const V = Q / A;
+  return { Q, V, A, Rh, theta: 2 * Math.PI, Qfull: Q, Vfull: V, QratIO: 1, Vratio: 1 };
+}
+
+// ============================================================
+// NORMALIZATION
+// ============================================================
+const RNG = { n:[0.010,0.025], D:[0.5,6], S:[0.0005,0.05], dD:[0.01,1.0] };
+function norm(n,D,S,dD) {
+  return [
+    (n - RNG.n[0]) / (RNG.n[1] - RNG.n[0]),
+    (D - RNG.D[0]) / (RNG.D[1] - RNG.D[0]),
+    (S - RNG.S[0]) / (RNG.S[1] - RNG.S[0]),
+    dD // already 0-1
+  ];
+}
+
+// ============================================================
+// DATA GENERATION
+// ============================================================
+function genData(count) {
+  const data = [];
+  // Extra sampling near the peak (d/D 0.85-1.0)
+  for (let i = 0; i < count; i++) {
+    const n = RNG.n[0] + Math.random() * (RNG.n[1] - RNG.n[0]);
+    const D = RNG.D[0] + Math.random() * (RNG.D[1] - RNG.D[0]);
+    const S = RNG.S[0] + Math.random() * (RNG.S[1] - RNG.S[0]);
+    // Bias some samples toward the peak region
+    let dD;
+    if (Math.random() < 0.3) {
+      dD = 0.85 + Math.random() * 0.15; // 30% samples in peak region
+    } else {
+      dD = 0.01 + Math.random() * 0.99;
+    }
+    const r = partialFlow(n, D, S, dD);
+    data.push({ n, D, S, dD, Q: r.Q });
+  }
+  return data;
+}
+
+// ============================================================
+// APP STATE
+// ============================================================
+let model=null, tData=null, maxQ=1, training=false, abort=false;
+let lChart=null, curveChart=null, discChart=null, sChart=null;
+let compData=[];
+
+const $=id=>document.getElementById(id);
+const show=e=>{(typeof e==='string'?$(e):e).style.display=''};
+const hide=e=>{(typeof e==='string'?$(e):e).style.display='none'};
+
+// Tabs
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.tc').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');$('tab-'+t.dataset.tab).classList.add('active')}));
+
+// Config sliders
+['N','H','LR','E'].forEach(k=>{$('sl'+k).addEventListener('input',()=>{
+  const v=$('sl'+k).value;
+  if(k==='H'){$('vH').textContent=v+' neurons';$('aH1').textContent=v;$('aH2').textContent=v;updPC()}
+  else if(k==='LR')$('vLR').textContent=parseFloat(v).toFixed(3);
+  else $('v'+k).textContent=v})});
+
+function updPC(){const h=+$('slH').value;$('pCnt').textContent=(4*h+h+h*h+h+h+1)+' total parameters'}
+updPC();
+
+// ============================================================
+// GENERATE
+// ============================================================
+$('btnGen').addEventListener('click',()=>{
+  const cnt=+$('slN').value;
+  tData=genData(cnt);
+  maxQ=Math.max(...tData.map(d=>d.Q),1e-8);
+  model=null;compData=[];
+  $('st1').textContent=`Generated ${cnt} partial-flow samples. Max Q = ${maxQ.toFixed(2)} CFS. 30% biased to peak region (d/D 0.85–1.0). Ready.`;
+  show('st1');$('btnTr').disabled=false;$('btnTr').textContent='Train Network';$('btnTr').className='btn btn-c';
+
+  show('sampC');
+  const b=$('sampB');b.innerHTML='';
+  tData.slice(0,10).forEach(d=>{
+    const r=partialFlow(d.n,d.D,d.S,d.dD);
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td style="color:#22d3ee">${d.n.toFixed(3)}</td><td style="color:#22d3ee">${d.D.toFixed(2)}</td><td style="color:#22d3ee">${d.S.toFixed(4)}</td><td style="color:#fbbf24;font-weight:600">${d.dD.toFixed(3)}</td><td style="color:#34d399;font-weight:600">${d.Q.toFixed(3)}</td><td style="color:var(--t2)">${(r.QratIO||0).toFixed(3)}</td>`;
+    b.appendChild(tr)});
+  hide('lossC');hide('t2on');show('t2off');hide('t3on');show('t3off')});
+
+// ============================================================
+// TRAIN
+// ============================================================
+$('btnTr').addEventListener('click',async()=>{
+  if(training){abort=true;return}
+  if(!tData)return;abort=false;training=true;
+  $('btnTr').textContent='Stop';$('btnTr').className='btn btn-r';
+
+  const h=+$('slH').value,lr=+$('slLR').value,mx=+$('slE').value;
+  const net=new TinyMLP([4,h,h,1]);net.lr=lr;model=net;
+  const losses=[];let bestL=Infinity,stale=0;const PAT=60;
+
+  show('lossC');if(lChart)lChart.destroy();
+  lChart=new Chart($('lossCanvas').getContext('2d'),{type:'line',data:{labels:[],datasets:[{label:'Loss',data:[],borderColor:'#06b6d4',borderWidth:2,pointRadius:0,tension:.3}]},
+    options:{responsive:true,maintainAspectRatio:false,scales:{x:{ticks:{color:'#475569',font:{size:9}},grid:{color:'rgba(30,41,59,0.5)'}},y:{ticks:{color:'#475569',font:{size:9},callback:v=>v.toExponential(1)},grid:{color:'rgba(30,41,59,0.5)'}}},plugins:{legend:{display:false}},animation:{duration:0}}});
+
+  const shuffle=a=>{const b=[...a];for(let i=b.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[b[i],b[j]]=[b[j],b[i]]}return b};
+
+  for(let ep=0;ep<mx;ep++){
+    if(abort)break;
+    net.lr=lr*0.5*(1+Math.cos(Math.PI*ep/mx));
+    const sh=shuffle(tData);let el=0;
+    for(const s of sh){el+=net.train(norm(s.n,s.D,s.S,s.dD),[s.Q/maxQ])}
+    const avg=el/tData.length;losses.push(avg);
+    if(avg<bestL){bestL=avg;stale=0}else stale++;
+    if(stale>=PAT){$('st1').textContent=`Early stop at epoch ${ep+1}. Loss: ${avg.toExponential(4)}`;lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();break}
+    if(ep%5===0||ep===mx-1){
+      $('st1').textContent=`Epoch ${ep+1}/${mx} — Loss: ${avg.toExponential(4)} — LR: ${net.lr.toFixed(5)}${stale>20?' ⚠ plateau':''}`;
+      lChart.data.labels=losses.map((_,i)=>i+1);lChart.data.datasets[0].data=losses;lChart.update();
+      await new Promise(r=>setTimeout(r,0))}}
+
+  training=false;$('btnTr').textContent='Train Network';$('btnTr').className='btn btn-c';
+  $('st1').textContent=`Training complete! ${losses.length} epochs. Go to Test or Analysis tab.`;
+
+  // Validation
+  compData=[];
+  for(let i=0;i<200;i++){
+    const n=RNG.n[0]+Math.random()*(RNG.n[1]-RNG.n[0]);
+    const D=RNG.D[0]+Math.random()*(RNG.D[1]-RNG.D[0]);
+    const S=RNG.S[0]+Math.random()*(RNG.S[1]-RNG.S[0]);
+    const dD=0.01+Math.random()*0.99;
+    const actual=partialFlow(n,D,S,dD).Q;
+    const pred=Math.max(0,net.predict(norm(n,D,S,dD))[0]*maxQ);
+    compData.push({actual,predicted:pred})}
+
+  hide('t2off');show('t2on');hide('t3off');show('t3on');
+  updTest();updAnalysis()});
+
+// ============================================================
+// TEST TAB — Pipe Visualization
+// ============================================================
+const presets=[
+  {l:'8" PVC @ 1%', n:0.011,D:0.667,S:0.01,dD:0.5},
+  {l:'12" Concrete half-full', n:0.013,D:1,S:0.005,dD:0.5},
+  {l:'24" RCP at peak depth', n:0.013,D:2,S:0.005,dD:0.938},
+  {l:'36" near full', n:0.013,D:3,S:0.003,dD:0.95},
+  {l:'48" at 80%', n:0.013,D:4,S:0.002,dD:0.8},
+  {l:'6ft trunk quarter-full', n:0.015,D:6,S:0.001,dD:0.25},
+];
+const pDiv=$('presets');
+presets.forEach(p=>{const b=document.createElement('button');b.className='pbtn';b.textContent=p.l;
+  b.addEventListener('click',()=>{
+    $('slRn').value=p.n;$('vRn').textContent=p.n.toFixed(3);
+    $('slRD').value=p.D;$('vRD').textContent=p.D.toFixed(2)+' ft ('+(p.D*12).toFixed(0)+' in)';
+    $('slRS').value=p.S;$('vRS').textContent=p.S.toFixed(4);
+    $('slDD').value=p.dD;$('vDD').textContent=p.dD.toFixed(3);
+    updTest()});pDiv.appendChild(b)});
+
+['Rn','RD','RS','DD'].forEach(k=>{$('sl'+k).addEventListener('input',()=>{
+  const v=parseFloat($('sl'+k).value);
+  if(k==='Rn')$('vRn').textContent=v.toFixed(3);
+  else if(k==='RD')$('vRD').textContent=v.toFixed(2)+' ft ('+(v*12).toFixed(0)+' in)';
+  else if(k==='RS')$('vRS').textContent=v.toFixed(4);
+  else $('vDD').textContent=v.toFixed(3);
+  if(model)updTest()})});
+
+function drawPipe(dD) {
+  const svg = $('pipeSvg');
+  const R = 90; // pipe radius in SVG coords
+  // Water depth from bottom
+  const waterY = R - 2 * R * dD; // y in SVG (top = -R, bottom = R)
+
+  // Clip path for water
+  let waterPath = '';
+  if (dD <= 0.001) {
+    waterPath = '';
+  } else if (dD >= 0.999) {
+    waterPath = `<circle cx="0" cy="0" r="${R}" fill="rgba(14,165,233,0.25)" stroke="none"/>`;
+  } else {
+    // Water surface as chord
+    const halfChord = Math.sqrt(R * R - waterY * waterY);
+    // Arc from left to right (bottom of pipe)
+    waterPath = `<path d="M ${-halfChord} ${waterY} A ${R} ${R} 0 ${dD > 0.5 ? 1 : 0} 0 ${halfChord} ${waterY} Z" fill="rgba(14,165,233,0.25)" stroke="rgba(14,165,233,0.4)" stroke-width="1"/>`;
+  }
+
+  // Water surface line
+  let surfaceLine = '';
+  if (dD > 0.001 && dD < 0.999) {
+    const halfChord = Math.sqrt(R * R - waterY * waterY);
+    surfaceLine = `<line x1="${-halfChord}" y1="${waterY}" x2="${halfChord}" y2="${waterY}" stroke="#38bdf8" stroke-width="1.5" stroke-dasharray="4,3"/>`;
+  }
+
+  // Depth indicator
+  const depthLine = dD > 0.02 ? `<line x1="0" y1="${R}" x2="0" y2="${waterY}" stroke="#fbbf24" stroke-width="1.5" stroke-dasharray="3,2"/>
+    <text x="8" y="${(R + waterY) / 2 + 4}" fill="#fbbf24" font-size="10" font-family="JetBrains Mono">d</text>` : '';
+
+  // D indicator
+  const dLine = `<line x1="${-R-16}" y1="${-R}" x2="${-R-16}" y2="${R}" stroke="#22d3ee" stroke-width="1" stroke-dasharray="3,2"/>
+    <line x1="${-R-20}" y1="${-R}" x2="${-R-12}" y2="${-R}" stroke="#22d3ee" stroke-width="1"/>
+    <line x1="${-R-20}" y1="${R}" x2="${-R-12}" y2="${R}" stroke="#22d3ee" stroke-width="1"/>
+    <text x="${-R-14}" y="4" fill="#22d3ee" font-size="10" font-family="JetBrains Mono" text-anchor="end">D</text>`;
+
+  svg.innerHTML = `
+    <!-- Pipe wall -->
+    <circle cx="0" cy="0" r="${R}" fill="none" stroke="#475569" stroke-width="3"/>
+    <circle cx="0" cy="0" r="${R}" fill="rgba(15,23,42,0.6)" stroke="none"/>
+    <!-- Water -->
+    ${waterPath}
+    ${surfaceLine}
+    <!-- Indicators -->
+    ${depthLine}
+    ${dLine}
+    <!-- d/D label -->
+    <text x="0" y="${-R - 8}" fill="#fbbf24" font-size="12" font-weight="700" font-family="JetBrains Mono" text-anchor="middle">d/D = ${dD.toFixed(3)}</text>
+  `;
+}
+
+function updTest() {
+  if (!model) return;
+  const n = +$('slRn').value, D = +$('slRD').value, S = +$('slRS').value, dD = +$('slDD').value;
+
+  // Draw pipe
+  drawPipe(dD);
+
+  // Current point
+  const exact = partialFlow(n, D, S, dD);
+  const pred = Math.max(0, model.predict(norm(n, D, S, dD))[0] * maxQ);
+  const err = exact.Q > 0.001 ? Math.abs(pred - exact.Q) / exact.Q * 100 : 0;
+
+  $('qExact').textContent = exact.Q.toFixed(3);
+  $('qPred').textContent = pred.toFixed(3);
+  $('qErr').textContent = err.toFixed(1) + '%';
+  $('qErr').style.color = err < 5 ? '#34d399' : err < 15 ? '#fbbf24' : '#f87171';
+  $('qRatio').textContent = (exact.QratIO || 0).toFixed(3);
+
+  // Stats
+  $('tStats').innerHTML = `
+    <div class="stat"><div class="sl">Flow Area</div><div class="sv" style="color:#22d3ee">${exact.A.toFixed(3)}</div><div class="su">sq ft</div></div>
+    <div class="stat"><div class="sl">Hydraulic Radius</div><div class="sv" style="color:#22d3ee">${exact.Rh.toFixed(4)}</div><div class="su">ft</div></div>
+    <div class="stat"><div class="sl">Velocity</div><div class="sv" style="color:#34d399">${exact.V.toFixed(2)}</div><div class="su">ft/s</div></div>
+    <div class="stat"><div class="sl">Q<sub>full</sub></div><div class="sv" style="color:var(--t2)">${exact.Qfull.toFixed(2)}</div><div class="su">CFS</div></div>`;
+
+  // Q/Qfull curve
+  const labels = [], exactQQ = [], predQQ = [];
+  const steps = 80;
+  for (let i = 1; i <= steps; i++) {
+    const dd = i / steps;
+    labels.push(dd.toFixed(2));
+    const e = partialFlow(n, D, S, dd);
+    exactQQ.push(e.QratIO || 0);
+    const p = Math.max(0, model.predict(norm(n, D, S, dd))[0] * maxQ);
+    predQQ.push(p / exact.Qfull);
+  }
+
+  if (curveChart) curveChart.destroy();
+  curveChart = new Chart($('curveChart').getContext('2d'), {
+    type: 'line',
+    data: {
+      labels,
+      datasets: [
+        { label: 'Exact Q/Qfull', data: exactQQ, borderColor: '#10b981', borderWidth: 2.5, pointRadius: 0, tension: 0.3 },
+        { label: 'AI Q/Qfull', data: predQQ, borderColor: '#06b6d4', borderWidth: 2, pointRadius: 0, borderDash: [5, 3], tension: 0.3 },
+        { label: 'd/D', data: exactQQ.map((_, i) => (i + 1) / steps === Math.round(dD * steps) / steps ? exactQQ[i] : null), borderColor: '#fbbf24', borderWidth: 0, pointRadius: 8, pointBackgroundColor: '#fbbf24', pointBorderColor: '#fbbf24', showLine: false }
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      scales: {
+        x: { title: { display: true, text: 'd/D', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 8 }, maxTicksLimit: 10 }, grid: { color: 'rgba(30,41,59,0.5)' } },
+        y: { title: { display: true, text: 'Q/Qfull', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 9 } }, grid: { color: 'rgba(30,41,59,0.5)' }, min: 0 }
+      },
+      plugins: { legend: { labels: { color: '#94a3b8', font: { size: 9 } } } },
+      animation: { duration: 200 }
+    }
+  });
+}
+
+// ============================================================
+// ANALYSIS
+// ============================================================
+function updAnalysis() {
+  if (!compData.length) return;
+  const acts = compData.map(d => d.actual), prs = compData.map(d => d.predicted);
+  const mn = acts.reduce((a, b) => a + b, 0) / acts.length;
+  const sT = acts.reduce((s, a) => s + (a - mn) ** 2, 0);
+  const sR = compData.reduce((s, d) => s + (d.actual - d.predicted) ** 2, 0);
+  const r2 = 1 - sR / sT;
+  const mae = compData.reduce((s, d) => s + Math.abs(d.actual - d.predicted) / Math.max(d.actual, 1e-6) * 100, 0) / compData.length;
+  $('sR2').textContent = r2.toFixed(4); $('sR2').style.color = r2 > .98 ? '#34d399' : r2 > .94 ? '#fbbf24' : '#f87171';
+  $('sMAE').textContent = mae.toFixed(1) + '%'; $('sMAE').style.color = mae < 5 ? '#34d399' : mae < 15 ? '#fbbf24' : '#f87171';
+
+  // Find AI's peak
+  const n = 0.013, D = 2, S = 0.005;
+  let aiPeakDD = 0, aiPeakQQ = 0;
+  for (let dd = 0.5; dd <= 1.0; dd += 0.002) {
+    const p = Math.max(0, model.predict(norm(n, D, S, dd))[0] * maxQ);
+    const Qf = fullFlow(n, D, S).Q;
+    const qq = p / Qf;
+    if (qq > aiPeakQQ) { aiPeakQQ = qq; aiPeakDD = dd; }
+  }
+  $('sPeak').textContent = 'd/D = ' + aiPeakDD.toFixed(3);
+  const peakErr = Math.abs(aiPeakDD - 0.938);
+  $('sPeak').style.color = peakErr < 0.02 ? '#34d399' : peakErr < 0.05 ? '#fbbf24' : '#f87171';
+
+  // Discovery text
+  if (peakErr < 0.015) {
+    $('discoveryText').innerHTML = `<span style="color:#34d399;font-weight:700">YES!</span> The network found the peak at <b style="color:#fbbf24">d/D = ${aiPeakDD.toFixed(3)}</b> (true: 0.938, error: ${(peakErr*100).toFixed(1)}%). It discovered that flow decreases when the pipe is more than ~94% full — a counterintuitive result that many engineers don't realize. The network learned this entirely from data, with no knowledge of pipe geometry.`;
+  } else if (peakErr < 0.04) {
+    $('discoveryText').innerHTML = `<span style="color:#fbbf24;font-weight:700">Close!</span> The network found a peak near <b style="color:#fbbf24">d/D = ${aiPeakDD.toFixed(3)}</b> (true: 0.938, error: ${(peakErr*100).toFixed(1)}%). It's getting the right idea — flow doesn't always increase with depth. Try more epochs or more samples in the peak region.`;
+  } else {
+    $('discoveryText').innerHTML = `<span style="color:#f87171;font-weight:700">Not yet.</span> The AI's peak is at d/D = ${aiPeakDD.toFixed(3)} (true: 0.938). Try: more training samples (4000+), more epochs (500+), or larger hidden layer (40+). The peak region needs dense sampling to learn the subtle Q decrease near full.`;
+  }
+
+  // Discovery chart: Q/Qfull vs d/D
+  const dLabels = [], exQQ = [], aiQQ = [];
+  const Qf = fullFlow(n, D, S).Q;
+  for (let dd = 0.01; dd <= 1.0; dd += 0.01) {
+    dLabels.push(dd.toFixed(2));
+    exQQ.push(partialFlow(n, D, S, dd).QratIO || 0);
+    aiQQ.push(Math.max(0, model.predict(norm(n, D, S, dd))[0] * maxQ) / Qf);
+  }
+  if (discChart) discChart.destroy();
+  discChart = new Chart($('discoveryChart').getContext('2d'), {
+    type: 'line',
+    data: { labels: dLabels, datasets: [
+      { label: 'Exact Q/Qfull', data: exQQ, borderColor: '#10b981', borderWidth: 2.5, pointRadius: 0, tension: 0.3, fill: true, backgroundColor: 'rgba(16,185,129,0.05)' },
+      { label: 'AI Q/Qfull', data: aiQQ, borderColor: '#06b6d4', borderWidth: 2, pointRadius: 0, borderDash: [5, 3], tension: 0.3 },
+    ]},
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { labels: { color: '#94a3b8', font: { size: 10 } } },
+        annotation: { annotations: {} }
+      },
+      scales: {
+        x: { title: { display: true, text: 'd/D', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 9 }, maxTicksLimit: 12 }, grid: { color: 'rgba(30,41,59,0.5)' } },
+        y: { title: { display: true, text: 'Q/Qfull', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 9 } }, grid: { color: 'rgba(30,41,59,0.5)' }, min: 0 }
+      },
+      animation: { duration: 200 }
+    }
+  });
+
+  // Scatter
+  if (sChart) sChart.destroy();
+  const mx = Math.max(...acts, ...prs) * 1.05;
+  sChart = new Chart($('scatCanvas').getContext('2d'), { type: 'scatter', data: { datasets: [
+    { label: 'Test Points', data: compData.map(d => ({ x: d.actual, y: d.predicted })), backgroundColor: 'rgba(6,182,212,0.5)', pointRadius: 3 },
+    { label: 'Perfect', data: [{ x: 0, y: 0 }, { x: mx, y: mx }], type: 'line', borderColor: '#10b981', borderDash: [5, 5], borderWidth: 1.5, pointRadius: 0 }
+  ]}, options: { responsive: true, maintainAspectRatio: false,
+    scales: { x: { title: { display: true, text: 'Actual Q (CFS)', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 9 } }, grid: { color: 'rgba(30,41,59,0.5)' }, min: 0 },
+    y: { title: { display: true, text: 'Predicted Q (CFS)', color: '#64748b', font: { size: 10 } }, ticks: { color: '#475569', font: { size: 9 } }, grid: { color: 'rgba(30,41,59,0.5)' }, min: 0 } },
+    plugins: { legend: { labels: { color: '#94a3b8', font: { size: 10 } } } }, animation: { duration: 200 } }});
+}
+
+// ============================================================
+// DOCS — Code Accordion
+// ============================================================
+const codeSecs = [
+  { t: "Partial-Flow Geometry (the Oracle)", d: "Central angle θ = 2·acos(1 − 2d/D) unlocks everything. Area, perimeter, hydraulic radius, and flow all derive from θ. The Q/Qfull peak at d/D ≈ 0.938 emerges from the competition between A and P near the crown.",
+    c: `function partialFlow(n, D, S, dD) {
+  const theta = 2 * Math.acos(1 - 2 * dD);
+  const A  = (D*D/8) * (theta - Math.sin(theta));  // flow area
+  const Pw = D * theta / 2;                         // wetted perimeter
+  const Rh = A / Pw;                                // hydraulic radius
+  const Q  = (1.49/n) * A * Math.pow(Rh, 2/3) * Math.pow(S, 0.5);
+  const V  = Q / A;
+  return { Q, V, A, Rh, theta };
+}
+// At d/D = 0.938: A/Afull ≈ 0.987, Rh/Rhfull ≈ 0.983
+// Q/Qfull = (A/Af) × (Rh/Rf)^(2/3) ≈ 1.076` },
+  { t: "Training Data with Peak Biasing", d: "30% of samples are concentrated in the d/D = 0.85–1.0 range where the peak lives. Without this bias, the network may never see enough examples near the peak to learn the Q decrease.",
+    c: `function genData(count) {
+  for (let i = 0; i < count; i++) {
+    const n  = random(0.010, 0.025);
+    const D  = random(0.5, 6.0);
+    const S  = random(0.0005, 0.05);
+    let dD;
+    if (Math.random() < 0.3) {
+      dD = 0.85 + Math.random() * 0.15; // 30% near peak
+    } else {
+      dD = 0.01 + Math.random() * 0.99; // 70% uniform
+    }
+    data.push({ n, D, S, dD, Q: partialFlow(n,D,S,dD).Q });
+  }
+}` },
+  { t: "Peak Detection in Analysis", d: "After training, we sweep d/D from 0.5 to 1.0 in steps of 0.002 and find where the AI thinks Q/Qfull is maximized. If the AI's peak is within ±0.015 of 0.938, it has truly discovered the hidden maximum.",
+    c: `let aiPeakDD = 0, aiPeakQQ = 0;
+for (let dd = 0.5; dd <= 1.0; dd += 0.002) {
+  const pred = model.predict(norm(n, D, S, dd))[0] * maxQ;
+  const qq = pred / Qfull;
+  if (qq > aiPeakQQ) { aiPeakQQ = qq; aiPeakDD = dd; }
+}
+// True peak: d/D = 0.938, Q/Qfull = 1.076
+// Network "discovered" the peak if |aiPeakDD - 0.938| < 0.015` },
+  { t: "Pipe Cross-Section SVG", d: "The pipe visualization uses SVG arc paths to draw water at the correct depth. The water surface is a chord across the circle, and the filled region is a circular segment computed from the central angle θ.",
+    c: `// Water surface position in SVG coordinates
+const waterY = R - 2 * R * dD;  // R=radius, dD=depth ratio
+const halfChord = Math.sqrt(R*R - waterY*waterY);
+
+// SVG arc path for water region
+const path = \`M \${-halfChord} \${waterY}
+  A \${R} \${R} 0 \${dD > 0.5 ? 1 : 0} 0 \${halfChord} \${waterY}
+  Z\`;
+// Large arc flag flips at d/D = 0.5 (half full)` }
+];
+const acc=$('codeAcc');
+codeSecs.forEach((s,i)=>{const d=document.createElement('div');d.className='ds';
+  d.innerHTML=`<div class="dh" onclick="togC(${i})"><div class="tr"><span class="ci">{ }</span><span class="ti">${s.t}</span></div><span class="tg" id="tg${i}">▶</span></div><div style="padding:0 16px 8px;font-size:11px;color:var(--t4);line-height:1.6">${s.d}</div><div class="dc" id="cd${i}"><pre>${s.c}</pre></div>`;
+  acc.appendChild(d)});
+function togC(i){const e=$('cd'+i),t=$('tg'+i);if(e.classList.contains('open')){e.classList.remove('open');t.textContent='▶'}else{e.classList.add('open');t.textContent='▼'}}
+</script>
+</body>
+</html>
