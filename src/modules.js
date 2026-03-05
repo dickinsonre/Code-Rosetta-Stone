@@ -31177,70 +31177,70 @@ export { SimState, HOTSTART_MAGIC };`,
 package swmm
 
 import (
-	"encoding/binary"
-	"fmt"
-	"io"
-	"os"
+        "encoding/binary"
+        "fmt"
+        "io"
+        "os"
 )
 
 const HotstartMagic   uint32 = 0x48535430
 const HotstartVersion uint32 = 1
 
 type SimState struct {
-	NodeDepths      []float64
-	LinkFlows       []float64
-	SubcatchMoisture []float64
-	GwLevels        []float64
+        NodeDepths      []float64
+        LinkFlows       []float64
+        SubcatchMoisture []float64
+        GwLevels        []float64
 }
 
 func NewSimState(nNodes, nLinks, nSubcatch int) *SimState {
-	return &SimState{
-		NodeDepths:       make([]float64, nNodes),
-		LinkFlows:        make([]float64, nLinks),
-		SubcatchMoisture: make([]float64, nSubcatch),
-		GwLevels:         make([]float64, nSubcatch),
-	}
+        return &SimState{
+                NodeDepths:       make([]float64, nNodes),
+                LinkFlows:        make([]float64, nLinks),
+                SubcatchMoisture: make([]float64, nSubcatch),
+                GwLevels:         make([]float64, nSubcatch),
+        }
 }
 
 func (s *SimState) Save(path string) error {
-	f, err := os.Create(path)
-	if err != nil { return err }
-	defer f.Close()
-	le := binary.LittleEndian
-	binary.Write(f, le, HotstartMagic)
-	binary.Write(f, le, HotstartVersion)
-	binary.Write(f, le, uint32(len(s.NodeDepths)))
-	binary.Write(f, le, uint32(len(s.LinkFlows)))
-	binary.Write(f, le, uint32(len(s.SubcatchMoisture)))
-	binary.Write(f, le, s.NodeDepths)
-	binary.Write(f, le, s.LinkFlows)
-	binary.Write(f, le, s.SubcatchMoisture)
-	binary.Write(f, le, s.GwLevels)
-	return nil
+        f, err := os.Create(path)
+        if err != nil { return err }
+        defer f.Close()
+        le := binary.LittleEndian
+        binary.Write(f, le, HotstartMagic)
+        binary.Write(f, le, HotstartVersion)
+        binary.Write(f, le, uint32(len(s.NodeDepths)))
+        binary.Write(f, le, uint32(len(s.LinkFlows)))
+        binary.Write(f, le, uint32(len(s.SubcatchMoisture)))
+        binary.Write(f, le, s.NodeDepths)
+        binary.Write(f, le, s.LinkFlows)
+        binary.Write(f, le, s.SubcatchMoisture)
+        binary.Write(f, le, s.GwLevels)
+        return nil
 }
 
 func LoadSimState(path string) (*SimState, error) {
-	f, err := os.Open(path)
-	if err != nil { return nil, err }
-	defer f.Close()
-	le := binary.LittleEndian
-	var magic, ver uint32
-	binary.Read(f, le, &magic)
-	binary.Read(f, le, &ver)
-	if magic != HotstartMagic || ver != HotstartVersion {
-		return nil, fmt.Errorf("invalid hotstart file")
-	}
-	var nn, nl, ns uint32
-	binary.Read(f, le, &nn)
-	binary.Read(f, le, &nl)
-	binary.Read(f, le, &ns)
-	s := NewSimState(int(nn), int(nl), int(ns))
-	binary.Read(f, le, &s.NodeDepths)
-	binary.Read(f, le, &s.LinkFlows)
-	binary.Read(f, le, &s.SubcatchMoisture)
-	binary.Read(f, le, &s.GwLevels)
-	_ = io.EOF
-	return s, nil
+        f, err := os.Open(path)
+        if err != nil { return nil, err }
+        defer f.Close()
+        le := binary.LittleEndian
+        var magic, ver uint32
+        binary.Read(f, le, &magic)
+        binary.Read(f, le, &ver)
+        if magic != HotstartMagic || ver != HotstartVersion {
+                return nil, fmt.Errorf("invalid hotstart file")
+        }
+        var nn, nl, ns uint32
+        binary.Read(f, le, &nn)
+        binary.Read(f, le, &nl)
+        binary.Read(f, le, &ns)
+        s := NewSimState(int(nn), int(nl), int(ns))
+        binary.Read(f, le, &s.NodeDepths)
+        binary.Read(f, le, &s.LinkFlows)
+        binary.Read(f, le, &s.SubcatchMoisture)
+        binary.Read(f, le, &s.GwLevels)
+        _ = io.EOF
+        return s, nil
 }`,
     zig: `// hotstart.zig — Simulation State Save/Restore
 // SWMM5 Engine in Zig — Binary Checkpoint I/O
@@ -32827,84 +32827,84 @@ export { IfaceFile, IfaceRecord };`,
 package swmm
 
 import (
-	"bufio"
-	"fmt"
-	"math"
-	"os"
+        "bufio"
+        "fmt"
+        "math"
+        "os"
 )
 
 type IfaceRecord struct {
-	Time  float64
-	Flows []float64
+        Time  float64
+        Flows []float64
 }
 
 type IfaceFile struct {
-	NNodes  int
-	NodeMap []int
-	Prev    IfaceRecord
-	Next    IfaceRecord
-	scanner *bufio.Scanner
-	file    *os.File
+        NNodes  int
+        NodeMap []int
+        Prev    IfaceRecord
+        Next    IfaceRecord
+        scanner *bufio.Scanner
+        file    *os.File
 }
 
 func NewIfaceFile() *IfaceFile {
-	return &IfaceFile{}
+        return &IfaceFile{}
 }
 
 func (f *IfaceFile) Open(path string, nNodes int) error {
-	fp, err := os.Open(path)
-	if err != nil { return err }
-	f.file = fp
-	f.scanner = bufio.NewScanner(fp)
-	f.NNodes = nNodes
-	f.NodeMap = make([]int, nNodes)
-	for i := range f.NodeMap { f.NodeMap[i] = i }
-	f.Prev = IfaceRecord{0.0, make([]float64, nNodes)}
-	f.Next = IfaceRecord{0.0, make([]float64, nNodes)}
-	return nil
+        fp, err := os.Open(path)
+        if err != nil { return err }
+        f.file = fp
+        f.scanner = bufio.NewScanner(fp)
+        f.NNodes = nNodes
+        f.NodeMap = make([]int, nNodes)
+        for i := range f.NodeMap { f.NodeMap[i] = i }
+        f.Prev = IfaceRecord{0.0, make([]float64, nNodes)}
+        f.Next = IfaceRecord{0.0, make([]float64, nNodes)}
+        return nil
 }
 
 func (f *IfaceFile) ReadRecord() bool {
-	if f.scanner == nil || !f.scanner.Scan() {
-		return false
-	}
-	f.Prev.Time = f.Next.Time
-	copy(f.Prev.Flows, f.Next.Flows)
+        if f.scanner == nil || !f.scanner.Scan() {
+                return false
+        }
+        f.Prev.Time = f.Next.Time
+        copy(f.Prev.Flows, f.Next.Flows)
 
-	line := f.scanner.Text()
-	vals := make([]float64, 1+f.NNodes)
-	args := make([]interface{}, 1+f.NNodes)
-	for i := range vals { args[i] = &vals[i] }
-	n, _ := fmt.Sscan(line, args...)
-	if n < 1+f.NNodes { return false }
-	f.Next.Time = vals[0]
-	copy(f.Next.Flows, vals[1:])
-	return true
+        line := f.scanner.Text()
+        vals := make([]float64, 1+f.NNodes)
+        args := make([]interface{}, 1+f.NNodes)
+        for i := range vals { args[i] = &vals[i] }
+        n, _ := fmt.Sscan(line, args...)
+        if n < 1+f.NNodes { return false }
+        f.Next.Time = vals[0]
+        copy(f.Next.Flows, vals[1:])
+        return true
 }
 
 func (f *IfaceFile) InterpolateFlow(nodeIdx int,
-	t float64) float64 {
-	if nodeIdx < 0 || nodeIdx >= f.NNodes { return 0.0 }
-	dt := f.Next.Time - f.Prev.Time
-	if dt <= 0.0 { return f.Prev.Flows[nodeIdx] }
-	frac := (t - f.Prev.Time) / dt
-	frac = math.Max(0.0, math.Min(1.0, frac))
-	q1, q2 := f.Prev.Flows[nodeIdx], f.Next.Flows[nodeIdx]
-	return q1 + (q2-q1)*frac
+        t float64) float64 {
+        if nodeIdx < 0 || nodeIdx >= f.NNodes { return 0.0 }
+        dt := f.Next.Time - f.Prev.Time
+        if dt <= 0.0 { return f.Prev.Flows[nodeIdx] }
+        frac := (t - f.Prev.Time) / dt
+        frac = math.Max(0.0, math.Min(1.0, frac))
+        q1, q2 := f.Prev.Flows[nodeIdx], f.Next.Flows[nodeIdx]
+        return q1 + (q2-q1)*frac
 }
 
 func (f *IfaceFile) GetInflow(destNode int,
-	t float64) float64 {
-	for i, mapped := range f.NodeMap {
-		if mapped == destNode {
-			return f.InterpolateFlow(i, t)
-		}
-	}
-	return 0.0
+        t float64) float64 {
+        for i, mapped := range f.NodeMap {
+                if mapped == destNode {
+                        return f.InterpolateFlow(i, t)
+                }
+        }
+        return 0.0
 }
 
 func (f *IfaceFile) Close() {
-	if f.file != nil { f.file.Close() }
+        if f.file != nil { f.file.Close() }
 }`,
     zig: `// iface.zig — Interface File Handling
 // SWMM5 Engine in Zig — Cascaded Model I/O
@@ -34097,7 +34097,7 @@ const translationNotes = {
   "c-chapel": "C's sequential loops become Chapel's parallel forall/coforall. The struct becomes a Chapel record. C's manual memory management becomes Chapel's automatic memory. Chapel's domain-based arrays replace C's pointer-indexed arrays. This translation shows how drainage network computations could scale to HPC systems.",
   "c-cpp": "The most natural translation. C's typedef struct becomes a C++ class with member functions. Pointer dereferences (c->field) become this->field or direct member access. C's #define constants become constexpr. Manual function naming (conduit_getFlow) becomes method namespacing (Conduit::getFlow). C++ adds RAII, std::clamp, and type safety while maintaining C's performance. Most SWMM extensions and the OWA rewrite effort use C++.",
   "c-csharp": "C's low-level pointer manipulation becomes C#'s managed, garbage-collected objects. The typedef struct becomes a class with properties and auto-implemented getters/setters. pow() and sqrt() become Math.Pow() and Math.Sqrt(). C's header files become C# namespaces. The .NET ecosystem is heavily used in EPA's Windows-based tools, and several SWMM wrappers exist in C#.",
-  "c-cuda": "C's sequential algorithms become CUDA's massively parallel kernels. The struct is preserved but functions gain __global__/__device__ qualifiers. Each conduit/node computation maps to a GPU thread via threadIdx/blockIdx. C's single-threaded loops become parallel grid launches. This translation shows how hydraulic solvers can be GPU-accelerated — an active research frontier.",
+  "c-cuda": "C's sequential algorithms become CUDA's massively parallel kernels — one GPU thread per conduit or node. The struct is preserved but functions split into __global__ (launch from host), __device__ (call on GPU), and __host__ (CPU-only). C's `for (i=0; i<N; i++)` loop becomes `int i = blockIdx.x * blockDim.x + threadIdx.x;` with a grid launch `kernel<<<nBlocks, 256>>>()`. Shared memory (__shared__) enables fast intra-block communication for stencil operations like the Saint-Venant solver. C's malloc/free becomes cudaMalloc/cudaFree with explicit host↔device transfers via cudaMemcpy. Thread synchronization (__syncthreads) replaces C's sequential ordering guarantee. The key paradigm shift: C thinks 'iterate over all conduits,' CUDA thinks 'each conduit is a thread — what does ONE conduit do?' Race conditions in node updates require atomicAdd. Branch divergence (if/else within a warp) kills GPU performance, so SWMM's conditional logic needs restructuring. This translation shows how hydraulic solvers can be GPU-accelerated — an active research frontier where 10,000+ conduit networks see 50-100× speedups.",
   "c-delphi": "Historical connection — the original SWMM5 GUI was written in Delphi. C's typedef struct becomes a Delphi class (TConduit). Pointer access becomes Self.Field. C's {} blocks become begin/end. Function return values use Result := instead of return. Delphi's strong typing and RAD capabilities made it ideal for the SWMM5 graphical interface.",
   "c-fortran": "Full circle \u2014 SWMM3 was originally Fortran! The pointer dereference uh->t becomes uh%t using Fortran's derived type syntax. Arrays use 1-based indexing (rainfall(j+1) vs rainfall[j]). The explicit intent(in/inout) declarations make data flow clearer than C's pointer-based approach. The module/contains pattern replaces C's header files. real(8) provides double precision. Subroutines replace functions when modifying arguments in-place.",
   "c-go": "Go uses exported names (capitalized: GetRunoff vs get_runoff) instead of public/private keywords. Methods are defined outside the struct with receiver syntax (func (s *Subcatch) GetRunoff()). Pointer receivers (*Type) indicate mutation, value receivers indicate pure computation. The math package provides numerical functions. Error handling would typically use multiple returns (result, error). Simple, readable, and fast \u2014 Go's philosophy matches C's directness.",
@@ -34105,15 +34105,15 @@ const translationNotes = {
   "c-javascript": "The typedef struct becomes a JavaScript class with constructor. C's sqrt() and pow() become Math.sqrt() and Math.pow(). Computed properties use getter syntax (get tBase()). ES module exports make the code ready for browser-based SWMM implementations and WebAssembly integration. Math.max/Math.min replace manual bounds checking. No pointer arithmetic \u2014 everything is reference-based.",
   "c-julia": "Julia's multiple dispatch replaces C's function naming conventions \u2014 get_runoff(sc, depth) instead of subcatch_getRunoff(sc, depth). The \u2264 operator is native Unicode syntax. Julia uses 1-based indexing like Fortran. Short-circuit returns (expr && return val) are idiomatic. Structs are immutable by default; use mutable struct when state changes are needed. The ! convention (update_level!) signals mutation to callers.",
   "c-kotlin": "C's typedef struct becomes Kotlin's data class. Pointer access becomes property access. C's switch becomes Kotlin's when expression. Null safety (?.) prevents the null pointer bugs common in C. Extension functions can add SWMM-specific operations to standard types. Kotlin runs on the JVM alongside Java-based water utility systems.",
-  "c-matlab": "C's struct becomes a MATLAB struct or classdef. Pointer access (c->field) becomes dot notation (c.field). C's for loops can often become vectorized MATLAB operations. pow() and sqrt() are built-in MATLAB functions. MATLAB's 1-based indexing requires careful translation from C's 0-based arrays. MATLAB is the dominant prototyping language in hydraulic engineering education.",
-  "c-mojo": "Mojo bridges C's performance with Python's syntax. C's typedef struct becomes a Mojo struct with fn methods. Pointer semantics map to Mojo's borrowed/owned/inout parameters. C's pow() and sqrt() become built-in Mojo functions. Mojo promises C-like speed with Python-like readability — directly relevant to the PySWMM community.",
+  "c-matlab": "The biggest paradigm shift: C thinks element-by-element, MATLAB thinks in matrices. C's `for (i=0; i<N; i++) Q[i] = ...` becomes `Q = (1./n) .* A .* Rh.^(2/3) .* sqrt(S)` — one line, no loop, operating on entire arrays simultaneously via broadcasting. C's typedef struct becomes a MATLAB struct (s.field) or classdef. All indexing shifts from 0-based to 1-based: C's `rainfall[j]` becomes `rainfall(j+1)`, a constant source of off-by-one bugs during translation. C's pow(x,y) and sqrt(x) are native MATLAB functions. C's int/double distinction largely disappears — everything is double by default. C's header files and separate compilation become MATLAB's function files (one public function per .m file). Memory management is automatic. The ; operator suppresses output. Logical indexing (`Q(Q < 0) = 0`) replaces C's conditional loops. MATLAB is the dominant prototyping language in hydraulic engineering education — most students encounter Manning's equation here first before seeing it in C.",
+  "c-mojo": "Mojo is what happens when Python and C have a baby. C's typedef struct becomes a Mojo struct with fn methods — looks like Python, runs like C. The ownership model (borrowed/owned/inout) replaces C's raw pointers, preventing use-after-free and dangling pointer bugs at compile time. C's `double* arr = malloc(N * sizeof(double))` becomes `var arr = DTypePointer[DType.float64].alloc(N)` — explicit but safe. SIMD operations are first-class: C's element-by-element loop becomes `var v = SIMD[DType.float64, 4](q1, q2, q3, q4); v = v * factor` for 4-wide vectorization. C's pow(x,y) and sqrt(x) are built-in. Python decorators (@parameter, @always_inline) control compilation. The `let` (immutable) vs `var` (mutable) distinction catches accidental mutation. Mojo's `fn` (strict, fast) vs `def` (Python-compatible, flexible) lets you mix paradigms. For the PySWMM community, this is transformative: Python syntax they already know, but with C's performance for the inner loops of Manning's equation or Saint-Venant solvers.",
   "c-nim": "Nim compiles to C, making this translation particularly interesting. C's typedef struct becomes Nim's type object. Pointer dereferences become dot notation. C's explicit types become Nim's type inference. The result variable replaces return statements. Nim's Python-like syntax with C's performance makes it a fascinating middle ground.",
-  "c-python": "The typedef struct becomes a Python @dataclass with type hints. C's pointer-based access (sc->width) becomes simple dot notation (self.width). Manual memory management disappears entirely. The nested for loops can be replaced with list comprehensions or numpy operations (np.convolve). Python's readability makes the algorithm's intent clearer, though at the cost of runtime performance. Enum classes replace C's #define or enum constants.",
+  "c-python": "The deepest paradigm shift in the SWMM ecosystem. C's typedef struct becomes a Python @dataclass — no malloc, no free, no sizeof, no segfaults. C's pointer-based access (sc->width) becomes simple dot notation (self.width). Dynamic typing means `double x = 0.0` becomes just `x = 0.0` — Python infers the type at runtime, trading compile-time safety for rapid prototyping. C's nested `for` loops can become one-line list comprehensions (`[f(x) for x in data]`) or numpy vectorized operations (`np.convolve(rainfall, uh_ordinates)`). Broadcasting lets you write `Q = (1/n) * A * Rh**(2/3) * np.sqrt(S)` to operate on entire arrays without loops. C's enum/#define constants become Python's Enum class. Error handling shifts from return codes to try/except exceptions. C's `#include <math.h>` becomes `import math` or `from math import sqrt, pow`. The GIL means Python is single-threaded for CPU work, but multiprocessing and numpy's C backend recover performance. PySWMM wraps the C engine in Python, proving this translation works in production. The 100× speed gap matters less than the 10× productivity gain for engineering workflows.",
   "c-r": "C's typedef struct becomes an R list or R6 class. Pointer access becomes $ notation (obj$field). C's math.h functions are built-in R functions. R's vectorized operations can replace many C loops. The swmmr package already bridges C SWMM5 with R for calibration and analysis. R excels at statistical post-processing of SWMM results.",
   "c-rust": "Rust enforces memory safety at compile time. The C typedef struct becomes a Rust struct with pub fields. Pointer dereferences (uh->t) become owned references (&self). Manual bounds checking is replaced by .clamp(). C's pow() becomes .powf(), and sqrt() becomes .sqrt(). The nested for loops can be replaced with iterator chains (.iter().map().sum()). No null pointers possible \u2014 the type system prevents it. Mutable state uses &mut self instead of pointer modification.",
   "c-swift": "C's typedef struct becomes Swift's struct with methods. Pointer dereferences become self.field. C's manual memory becomes Swift's ARC. Optional types (Double?) replace null pointer checks. guard/let statements provide safe unwrapping. Swift enables mobile SWMM tools for field engineers on iOS.",
   "c-typescript": "Like C-to-JavaScript but with static type annotations. C's typedef struct becomes a TypeScript interface + class. Type safety is enforced at compile time (number, string, boolean). C's pointer arithmetic disappears. TypeScript's structural typing provides a middle ground between C's weak typing and full static typing.",
-  "c-wasm": "C's high-level constructs become WebAssembly's low-level stack machine instructions. Structs become linear memory layouts with offset-based access. Variables become local.get/local.set operations. Math functions become f64.mul, f64.sqrt, etc. This translation connects to compiling SWMM5 to WASM via Emscripten for browser-based simulation.",
+  "c-wasm": "The most radical translation: C's abstractions are stripped down to a stack machine. C's typedef struct disappears entirely — fields become offsets in linear memory: `i32.load offset=0` for the first field, `i32.load offset=8` for the second. There are no variables in the C sense — only a stack and numbered locals (`local.get $x`, `local.set $x`). C's `a + b * c` becomes three stack pushes and two operations: `(f64.add (local.get $a) (f64.mul (local.get $b) (local.get $c)))` in S-expression syntax. Only four types exist: i32, i64, f32, f64 — no structs, no enums, no strings. C's `pow(x, 2.0/3.0)` requires manual implementation or import from the host environment. Memory is a flat byte array accessed by integer addresses — `(f64.store (i32.const 0) (local.get $value))` writes a double at address 0. Control flow uses structured blocks (`block`, `loop`, `br_if`) instead of C's goto-capable flow. Functions are exported by name for JavaScript to call. No garbage collection — the host manages the linear memory. This is how SWMM5 runs in the browser via Emscripten: the C source compiles to WASM, and the hand-written WAT shown here reveals exactly what that compilation produces.",
   "c-zig": "Zig replaces C's preprocessor macros and typedefs with comptime and explicit struct definitions. C's pointer dereference (c->width) becomes Zig's dot access on pointer (c.width). malloc/free are replaced by Zig's allocator interface or stack allocation. C's pow() and sqrt() become @sqrt() and std.math.pow(). Zig's explicit error handling via error unions (!T) replaces C's error-code-return convention. No hidden control flow — Zig's philosophy aligns with C's directness while adding safety.",
   "chapel-cpp": "C++'s class/struct with methods becomes Chapel's record or class. std::pow, std::sqrt maps to built-in math. C++'s manual or smart pointers memory contrasts with Chapel's automatic/managed approach. static with templates typing meets static, inferred typing.",
   "chapel-csharp": "C#'s class with properties becomes Chapel's record or class. Math class maps to built-in math. C#'s garbage collected (.NET) memory contrasts with Chapel's automatic/managed approach. static, strong typing meets static, inferred typing.",
