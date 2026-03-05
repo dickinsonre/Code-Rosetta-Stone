@@ -12,6 +12,8 @@ const modules = {
     links: [
       { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
       { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+      { label: "Generate models using this solver → INP MAKER", url: "https://swmm-inp-maker.replit.app" },
+      { label: "Run this solver on your model → Simulation Engine", url: "https://batch-swmm-runner-robertdickinson.replit.app" },
     ],
     c: `// routing.c — Dynamic Wave Routing
 // EPA SWMM5 Engine — Saint-Venant Equation Solver
@@ -5878,6 +5880,7 @@ class Subcatch(params: SubcatchParams) {
     links: [
       { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
       { label: "PySWMM Wrapper", url: "https://github.com/pyswmm/pyswmm" },
+      { label: "Compare infiltration methods → INP MAKER", url: "https://swmm-inp-maker.replit.app" },
     ],
     c: `// infil.c — Infiltration Models
 // EPA SWMM5 Engine — Horton, Green-Ampt, and SCS-CN
@@ -7248,6 +7251,7 @@ fun cnInfiltration(rainfall: Double,
     links: [
       { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
       { label: "PySWMM Wrapper", url: "https://github.com/pyswmm/pyswmm" },
+      { label: "Design LID controls → INP MAKER [LID_CONTROLS]", url: "https://swmm-inp-maker.replit.app" },
     ],
     c: `// lid.c — LID/Green Infrastructure Controls
 // EPA SWMM5 Engine — Low Impact Development
@@ -12950,6 +12954,7 @@ data class JunctionNode(
     links: [
       { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
       { label: "PySWMM Wrapper", url: "https://github.com/pyswmm/pyswmm" },
+      { label: "66 rainfall patterns → Rain Canvas Studio", url: "https://rain-canvas-studio.lovable.app" },
     ],
     c: `// rain.c — Rainfall Processing
 // EPA SWMM5 Engine — Rain Gage Input Handling
@@ -17522,6 +17527,7 @@ data class GWater(
     links: [
       { label: "EPA SWMM5 Source", url: "https://github.com/USEPA/Stormwater-Management-Model" },
       { label: "SWMM5+ Fortran Engine", url: "https://github.com/CIMM-ORG/SWMM5plus" },
+      { label: "See cross-section shapes → INP MAKER", url: "https://swmm-inp-maker.replit.app" },
     ],
     c: `// xsect.c — Cross-Section Geometry
 // EPA SWMM5 Engine — Circular Pipe Geometry
