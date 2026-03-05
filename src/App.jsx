@@ -840,13 +840,6 @@ export default function SWMM5CodeViewer() {
           MicroGPTs
         </button>
         <button
-          className={`app-tab ${activeTab === "swmanywhere" ? "active" : ""}`}
-          onClick={() => setActiveTab("swmanywhere")}
-        >
-          <span style={{ fontSize: 15 }}>{"\uD83C\uDF0D"}</span>
-          SWMManywhere
-        </button>
-        <button
           className={`app-tab ${activeTab === "pyswmm" ? "active" : ""}`}
           onClick={() => setActiveTab("pyswmm")}
         >
@@ -915,22 +908,6 @@ export default function SWMM5CodeViewer() {
             {activeGPT === "groundwater" && <iframe src="/swmm5-groundwater-microgpt.html" style={{ width: "100%", height: "100%", border: "none" }} title="Groundwater MicroGPT" />}
             {activeGPT === "idfmusk" && <iframe src="/idf-muskingum-microgpt.html" style={{ width: "100%", height: "100%", border: "none" }} title="IDF & Muskingum MicroGPT" />}
           </div>
-        </div>
-      )}
-
-      {/* SWMManywhere Tab */}
-      {activeTab === "swmanywhere" && (
-        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
-          <iframe
-            src="https://swm-explorer.replit.app"
-            style={{
-              width: "100%",
-              height: "100%",
-              border: "none",
-            }}
-            title="SWMManywhere Explorer"
-            allow="clipboard-read; clipboard-write"
-          />
         </div>
       )}
 
