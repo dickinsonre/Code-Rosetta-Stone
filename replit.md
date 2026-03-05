@@ -5,7 +5,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Five top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
+- Six top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
 - Fifty SWMM5 modules organized by engineering category:
   - Hydraulics: routing.c, dynwave.c, flowrout.c, kinwave.c, xsect.c, link.c, node.c, dwflow.c, culvert.c, forcmain.c, roadway.c, exfil.c, shape.c, transect.c
   - Hydrology: subcatch.c, infil.c, lid.c, gwater.c, climate.c, rdii.c, snow.c, runoff.c, gage.c, landuse.c, lidproc.c

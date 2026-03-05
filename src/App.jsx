@@ -903,6 +903,13 @@ export default function SWMM5CodeViewer() {
           PySWMM
         </button>
         <button
+          className={`app-tab ${activeTab === "swmmanywhere" ? "active" : ""}`}
+          onClick={() => setActiveTab("swmmanywhere")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83C\uDF0D"}</span>
+          SWMManywhere
+        </button>
+        <button
           className={`app-tab ${activeTab === "hydrocouple" ? "active" : ""}`}
           onClick={() => setActiveTab("hydrocouple")}
         >
@@ -978,6 +985,22 @@ export default function SWMM5CodeViewer() {
               border: "none",
             }}
             title="PySWMM Explorer"
+            allow="clipboard-read; clipboard-write"
+          />
+        </div>
+      )}
+
+      {/* SWMManywhere Tab */}
+      {activeTab === "swmmanywhere" && (
+        <div style={{ width: "100%", height: "calc(100vh - 46px)", overflow: "hidden" }}>
+          <iframe
+            src="https://swmmanywhere-explorer.replit.app"
+            style={{
+              width: "100%",
+              height: "100%",
+              border: "none",
+            }}
+            title="SWMManywhere Explorer"
             allow="clipboard-read; clipboard-write"
           />
         </div>
