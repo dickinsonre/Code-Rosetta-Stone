@@ -1,6 +1,32 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { modules, languages, translationNotes } from "./modules.js";
 import AppShowcase from "./AppShowcase.jsx";
+
+const playgroundUrls = {
+  c: "https://godbolt.org/",
+  rust: "https://play.rust-lang.org/",
+  python: "https://pynative.com/online-python-code-editor-to-execute-python-code/",
+  fortran: "https://godbolt.org/",
+  julia: "https://julialang.org/learning/tryjulia/",
+  javascript: "https://jsfiddle.net/",
+  go: "https://go.dev/play/",
+  zig: "https://godbolt.org/",
+  cpp: "https://godbolt.org/",
+  csharp: "https://dotnetfiddle.net/",
+  matlab: "https://matlab.mathworks.com/",
+  r: "https://www.mycompiler.io/new/r",
+  delphi: "https://www.mycompiler.io/new/pascal",
+  typescript: "https://www.typescriptlang.org/play",
+  cuda: "https://godbolt.org/",
+  wasm: "https://webassembly.sh/",
+  mojo: "https://docs.modular.com/mojo/playground",
+  java: "https://www.jdoodle.com/online-java-compiler/",
+  nim: "https://play.nim-lang.org/",
+  ada: "https://www.mycompiler.io/new/ada",
+  chapel: "https://ato.pxl.se/run?lang=chapel",
+  swift: "https://swiftfiddle.com/",
+  kotlin: "https://play.kotlinlang.org/",
+};
 
 // ─── Code Samples (moved to modules.js) ─────────────────────────────
 
@@ -100,7 +126,7 @@ const difficultyConfig = {
 
 // ─── Components ──────────────────────────────────────────────────────
 
-function CodePanel({ code, langId, label, color, t, scrollRef, onScroll }) {
+function CodePanel({ code, langId, label, color, t, scrollRef, onScroll, highlightedLine, onLineHover, onLineLeave, codeSearch, playgroundUrl }) {
   const [copied, setCopied] = useState(false);
   const lines = code.split("\n");
 
@@ -124,6 +150,8 @@ function CodePanel({ code, langId, label, color, t, scrollRef, onScroll }) {
       setCopied(false);
     }
   };
+
+  const searchLower = codeSearch ? codeSearch.toLowerCase() : "";
 
   return (
     <div style={{
@@ -154,6 +182,15 @@ function CodePanel({ code, langId, label, color, t, scrollRef, onScroll }) {
           fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
           letterSpacing: 0.5,
         }}>{label}</span>
+        {playgroundUrl && (
+          <a href={playgroundUrl} target="_blank" rel="noopener noreferrer"
+            title="Try this language online"
+            style={{
+              padding: "2px 8px", borderRadius: 4, fontSize: 10, fontWeight: 600,
+              border: `1px solid ${t.accent}44`, background: t.accent + "11",
+              color: t.accent, textDecoration: "none", cursor: "pointer",
+            }}>Try Online \u2197</a>
+        )}
         <button
           onClick={handleCopy}
           title="Copy code"
@@ -181,29 +218,41 @@ function CodePanel({ code, langId, label, color, t, scrollRef, onScroll }) {
         lineHeight: 1.65,
         fontFamily: "'JetBrains Mono', 'Fira Code', 'Cascadia Code', 'Source Code Pro', monospace",
       }}>
-        {lines.map((line, i) => (
-          <div key={i} style={{
-            display: "flex",
-            minHeight: 20,
-            paddingRight: 16,
-          }}>
-            <span style={{
-              width: 44,
-              flexShrink: 0,
-              textAlign: "right",
-              paddingRight: 14,
-              color: t.lineNum,
-              userSelect: "none",
-              fontSize: 11,
-            }}>{i + 1}</span>
-            <span
-              style={{ color: t.text, whiteSpace: "pre" }}
-              dangerouslySetInnerHTML={{
-                __html: highlightCode(line, langId),
-              }}
-            />
-          </div>
-        ))}
+        {lines.map((line, i) => {
+          const isHighlighted = highlightedLine === i;
+          const isSearchMatch = searchLower && line.toLowerCase().includes(searchLower);
+          return (
+            <div key={i}
+              onMouseEnter={() => onLineHover && onLineHover(i)}
+              onMouseLeave={() => onLineLeave && onLineLeave()}
+              style={{
+                display: "flex",
+                minHeight: 20,
+                paddingRight: 16,
+                background: isSearchMatch ? (t.accent + "22") : isHighlighted ? (t.accent + "0d") : "transparent",
+                borderLeft: isSearchMatch ? `3px solid ${t.accent}` : isHighlighted ? `3px solid ${t.accent}44` : "3px solid transparent",
+                cursor: "pointer",
+                transition: "background 0.1s",
+              }}>
+              <span style={{
+                width: 44,
+                flexShrink: 0,
+                textAlign: "right",
+                paddingRight: 14,
+                color: isSearchMatch ? t.accent : t.lineNum,
+                userSelect: "none",
+                fontSize: 11,
+                fontWeight: isSearchMatch ? 700 : 400,
+              }}>{i + 1}</span>
+              <span
+                style={{ color: t.text, whiteSpace: "pre" }}
+                dangerouslySetInnerHTML={{
+                  __html: highlightCode(line, langId),
+                }}
+              />
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -463,6 +512,106 @@ const themes = {
   },
 };
 
+// ─── Module Dependency Diagram ───────────────────────────────────────
+
+const MODULE_GRAPH = {
+  nodes: [
+    { id: "rain.c", label: "rain.c", category: "Data", x: 60, y: 40 },
+    { id: "climate.c", label: "climate.c", category: "Hydrology", x: 200, y: 40 },
+    { id: "subcatch.c", label: "subcatch.c", category: "Hydrology", x: 130, y: 120 },
+    { id: "infil.c", label: "infil.c", category: "Hydrology", x: 30, y: 180 },
+    { id: "lid.c", label: "lid.c", category: "Hydrology", x: 30, y: 120 },
+    { id: "gwater.c", label: "gwater.c", category: "Hydrology", x: 250, y: 120 },
+    { id: "node.c", label: "node.c", category: "Hydraulics", x: 200, y: 210 },
+    { id: "link.c", label: "link.c", category: "Hydraulics", x: 340, y: 210 },
+    { id: "xsect.c", label: "xsect.c", category: "Hydraulics", x: 450, y: 150 },
+    { id: "flowrout.c", label: "flowrout.c", category: "Hydraulics", x: 340, y: 290 },
+    { id: "routing.c", label: "routing.c", category: "Hydraulics", x: 200, y: 290 },
+    { id: "dynwave.c", label: "dynwave.c", category: "Hydraulics", x: 270, y: 370 },
+    { id: "kinwave.c", label: "kinwave.c", category: "Hydraulics", x: 420, y: 370 },
+    { id: "controls.c", label: "controls.c", category: "Operations", x: 450, y: 280 },
+    { id: "qualrout.c", label: "qualrout.c", category: "Quality", x: 80, y: 370 },
+    { id: "massbal.c", label: "massbal.c", category: "Data", x: 80, y: 290 },
+  ],
+  edges: [
+    { from: "rain.c", to: "subcatch.c", label: "rainfall" },
+    { from: "climate.c", to: "subcatch.c", label: "ET" },
+    { from: "infil.c", to: "subcatch.c", label: "infiltration" },
+    { from: "lid.c", to: "subcatch.c", label: "storage" },
+    { from: "subcatch.c", to: "node.c", label: "runoff" },
+    { from: "gwater.c", to: "node.c", label: "lateral flow" },
+    { from: "climate.c", to: "gwater.c", label: "ET" },
+    { from: "node.c", to: "routing.c", label: "heads" },
+    { from: "link.c", to: "routing.c", label: "flows" },
+    { from: "xsect.c", to: "link.c", label: "geometry" },
+    { from: "xsect.c", to: "dynwave.c", label: "A, Rh" },
+    { from: "routing.c", to: "flowrout.c", label: "dispatch" },
+    { from: "flowrout.c", to: "dynwave.c", label: "full solve" },
+    { from: "flowrout.c", to: "kinwave.c", label: "simple solve" },
+    { from: "dynwave.c", to: "node.c", label: "update" },
+    { from: "kinwave.c", to: "node.c", label: "update" },
+    { from: "controls.c", to: "link.c", label: "settings" },
+    { from: "node.c", to: "controls.c", label: "state" },
+    { from: "routing.c", to: "qualrout.c", label: "flows" },
+    { from: "node.c", to: "qualrout.c", label: "volumes" },
+    { from: "node.c", to: "massbal.c", label: "totals" },
+    { from: "routing.c", to: "massbal.c", label: "totals" },
+  ],
+};
+
+const catColors = { Hydraulics: "#61afef", Hydrology: "#98c379", Quality: "#c678dd", Operations: "#e5c07b", Data: "#56b6c2" };
+
+function ModuleDependencyDiagram({ t, onClickModule }) {
+  const scale = 1.2;
+  const W = 560 * scale, H = 440 * scale;
+
+  return (
+    <div style={{ overflowX: "auto", padding: "0 20px" }}>
+      <svg width={W} height={H} viewBox={`0 0 ${560} ${440}`} style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
+        <defs>
+          <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill={t.textDim} />
+          </marker>
+        </defs>
+        {MODULE_GRAPH.edges.map((e, i) => {
+          const from = MODULE_GRAPH.nodes.find(n => n.id === e.from);
+          const to = MODULE_GRAPH.nodes.find(n => n.id === e.to);
+          if (!from || !to) return null;
+          const mx = (from.x + to.x) / 2;
+          const my = (from.y + to.y) / 2;
+          return (
+            <g key={i}>
+              <line x1={from.x} y1={from.y} x2={to.x} y2={to.y}
+                stroke={t.textFaint} strokeWidth={1.2} markerEnd="url(#arrowhead)" opacity={0.6} />
+              <text x={mx} y={my - 4} textAnchor="middle" fontSize={7} fill={t.textDim} fontFamily="sans-serif">{e.label}</text>
+            </g>
+          );
+        })}
+        {MODULE_GRAPH.nodes.map(n => {
+          const col = catColors[n.category] || t.accent;
+          return (
+            <g key={n.id} style={{ cursor: "pointer" }} onClick={() => onClickModule && onClickModule(n.id)}>
+              <circle cx={n.x} cy={n.y} r={24} fill={col + "22"} stroke={col} strokeWidth={1.5} />
+              <text x={n.x} y={n.y + 1} textAnchor="middle" dominantBaseline="middle"
+                fontSize={8} fontWeight={600} fill={col} fontFamily="'JetBrains Mono', monospace">
+                {n.label.replace(".c", "")}
+              </text>
+            </g>
+          );
+        })}
+        <g transform="translate(10, 420)">
+          {Object.entries(catColors).map(([cat, col], i) => (
+            <g key={cat} transform={`translate(${i * 100}, 0)`}>
+              <circle cx={6} cy={-3} r={5} fill={col + "44"} stroke={col} strokeWidth={1} />
+              <text x={14} y={0} fontSize={8} fill={t.textMuted} fontFamily="sans-serif">{cat}</text>
+            </g>
+          ))}
+        </g>
+      </svg>
+    </div>
+  );
+}
+
 // ─── Main App ────────────────────────────────────────────────────────
 
 export default function SWMM5CodeViewer() {
@@ -477,6 +626,9 @@ export default function SWMM5CodeViewer() {
   const [showLanding, setShowLanding] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState("rosetta");
+  const [highlightedLine, setHighlightedLine] = useState(-1);
+  const [codeSearch, setCodeSearch] = useState("");
+  const [showDepDiagram, setShowDepDiagram] = useState(false);
 
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
@@ -551,7 +703,7 @@ export default function SWMM5CodeViewer() {
   const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;
 
   const shareUrl = typeof window !== "undefined" ? window.location.href : "";
-  const shareText = `Compare EPA SWMM5 stormwater algorithms across 23 programming languages — from C to Rust, Python, MATLAB, CUDA, and more. The SWMM5 Rosetta Stone:`;
+  const shareText = `Compare EPA SWMM5 stormwater algorithms across ${languages.length} programming languages — from C to Rust, Python, MATLAB, CUDA, and more. The SWMM5 Rosetta Stone:`;
   const linkedInUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
   const twitterUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(shareUrl)}`;
 
@@ -846,7 +998,7 @@ export default function SWMM5CodeViewer() {
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
-            }}>23 languages</span>
+            }}>{languages.length} languages</span>
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
@@ -988,23 +1140,51 @@ export default function SWMM5CodeViewer() {
             </div>
             {mod.description}
           </div>
-          <button
-            onClick={() => setShowModuleInfo(!showModuleInfo)}
-            style={{
-              padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`,
-              background: showModuleInfo ? t.modActiveBg : "transparent",
-              color: showModuleInfo ? t.accent : t.textDim,
-              cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
-              fontFamily: "'IBM Plex Sans', sans-serif",
-            }}
-          >
-            {showModuleInfo ? "▾" : "▸"} Details
-          </button>
+          <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+            <button
+              onClick={() => setShowDepDiagram(!showDepDiagram)}
+              style={{
+                padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`,
+                background: showDepDiagram ? t.modActiveBg : "transparent",
+                color: showDepDiagram ? t.accent : t.textDim,
+                cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
+                fontFamily: "'IBM Plex Sans', sans-serif",
+              }}
+            >
+              {showDepDiagram ? "▾" : "▸"} Diagram
+            </button>
+            <button
+              onClick={() => setShowModuleInfo(!showModuleInfo)}
+              style={{
+                padding: "4px 10px", borderRadius: 6, border: `1px solid ${t.border}`,
+                background: showModuleInfo ? t.modActiveBg : "transparent",
+                color: showModuleInfo ? t.accent : t.textDim,
+                cursor: "pointer", fontSize: 11, whiteSpace: "nowrap",
+                fontFamily: "'IBM Plex Sans', sans-serif",
+              }}
+            >
+              {showModuleInfo ? "▾" : "▸"} Details
+            </button>
+          </div>
         </div>
       </div>
 
       {/* Module Info Panel */}
       {showModuleInfo && <ModuleInfoPanel mod={mod} t={t} show={showModuleInfo} />}
+
+      {/* Module Dependency Diagram */}
+      {showDepDiagram && (
+        <div style={{ padding: "16px 0", borderBottom: `1px solid ${t.borderSubtle}` }}>
+          <div style={{ textAlign: "center", marginBottom: 8 }}>
+            <span style={{ fontSize: 13, fontWeight: 600, color: t.text }}>Module Interconnections</span>
+            <span style={{ fontSize: 11, color: t.textDim, marginLeft: 8 }}>Click a module to select it</span>
+          </div>
+          <ModuleDependencyDiagram t={t} onClickModule={(id) => {
+            const match = moduleKeys.find(k => k.startsWith(id));
+            if (match) { setSelectedModule(match); setShowDepDiagram(false); }
+          }} />
+        </div>
+      )}
 
       {/* Language Selectors */}
       <div style={{
@@ -1093,13 +1273,59 @@ export default function SWMM5CodeViewer() {
         ) : null;
       })()}
 
+      {/* Code Search Bar */}
+      <div style={{
+        padding: "8px 20px",
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        borderBottom: `1px solid ${t.borderSubtle}`,
+      }}>
+        <span style={{ fontSize: 10, color: t.textDim, textTransform: "uppercase", letterSpacing: 1, fontWeight: 600, flexShrink: 0 }}>
+          Search Code
+        </span>
+        <div style={{ position: "relative", flex: "0 1 260px", minWidth: 120 }}>
+          <input
+            type="text"
+            value={codeSearch}
+            onChange={(e) => setCodeSearch(e.target.value)}
+            placeholder="Find in code panels..."
+            style={{
+              width: "100%", padding: "5px 28px 5px 10px",
+              borderRadius: 5, border: `1px solid ${t.border}`,
+              background: t.panelBg, color: t.text,
+              fontSize: 11, outline: "none",
+              fontFamily: "'JetBrains Mono', monospace",
+            }}
+          />
+          {codeSearch && (
+            <button onClick={() => setCodeSearch("")} style={{
+              position: "absolute", right: 4, top: "50%", transform: "translateY(-50%)",
+              background: "transparent", border: "none", color: t.textDim, cursor: "pointer", fontSize: 13, padding: 0,
+            }}>&times;</button>
+          )}
+        </div>
+        {codeSearch && (() => {
+          const lCount = (mod[leftLang] || "").split("\n").filter(l => l.toLowerCase().includes(codeSearch.toLowerCase())).length;
+          const rCount = (mod[rightLang] || "").split("\n").filter(l => l.toLowerCase().includes(codeSearch.toLowerCase())).length;
+          return (
+            <span style={{ fontSize: 10, color: t.textDim, fontFamily: "monospace" }}>
+              {lCount} + {rCount} matches
+            </span>
+          );
+        })()}
+        <span style={{ fontSize: 10, color: t.textFaint, marginLeft: "auto", fontStyle: "italic" }}>
+          Hover a line to highlight its counterpart
+        </span>
+      </div>
+
       {/* Code Panels */}
       <div style={{
         display: "flex",
         flexDirection: isMobile ? "column" : "row",
         gap: 12,
         padding: "16px 20px 24px",
-        height: isMobile ? "auto" : "calc(100vh - 280px)",
+        height: isMobile ? "auto" : "calc(100vh - 320px)",
         minHeight: isMobile ? 0 : 400,
       }}>
         <div style={{ flex: 1, minHeight: isMobile ? 350 : 0, display: "flex", flexDirection: "column" }}>
@@ -1111,6 +1337,11 @@ export default function SWMM5CodeViewer() {
             t={t}
             scrollRef={leftScrollRef}
             onScroll={handleScrollSync("left")}
+            highlightedLine={highlightedLine}
+            onLineHover={(i) => setHighlightedLine(i)}
+            onLineLeave={() => setHighlightedLine(-1)}
+            codeSearch={codeSearch}
+            playgroundUrl={playgroundUrls[leftLang]}
           />
         </div>
         {!isMobile && (
@@ -1135,6 +1366,11 @@ export default function SWMM5CodeViewer() {
             t={t}
             scrollRef={rightScrollRef}
             onScroll={handleScrollSync("right")}
+            highlightedLine={highlightedLine}
+            onLineHover={(i) => setHighlightedLine(i)}
+            onLineLeave={() => setHighlightedLine(-1)}
+            codeSearch={codeSearch}
+            playgroundUrl={playgroundUrls[rightLang]}
           />
         </div>
       </div>

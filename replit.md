@@ -20,6 +20,10 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
 - 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
 - Synchronized scrolling between code panels
+- Line-by-line correspondence highlighting (hover a line to highlight same line in both panels)
+- Code search across panels with match highlighting and count display
+- "Try Online" playground links per language (Godbolt, Rust Playground, Go Playground, etc.)
+- Module dependency diagram (SVG graph showing how 16 modules interconnect, clickable to navigate)
 - Copy-to-clipboard per code panel (with execCommand fallback)
 - Responsive mobile layout (panels stack vertically below 900px)
 - Enriched module descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links
@@ -27,6 +31,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Search/Filter to find modules by concept, equation, tag, or description
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
 - Per-language-pair translation notes (253 pairs covering all 23 languages)
+- All module/language counts are dynamic (no hardcoded numbers)
 
 ## Project Architecture
 - **Framework**: React + Vite

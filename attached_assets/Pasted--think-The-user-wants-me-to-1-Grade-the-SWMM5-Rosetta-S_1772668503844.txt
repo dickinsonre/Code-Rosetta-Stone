@@ -1,0 +1,694 @@
+<think>The user wants me to:
+1. Grade the SWMM5 Rosetta Stone app (fresh look)
+2. Suggest more SWMM apps they can have built
+
+I've graded this app before (A- / 91-92), but let me give a fresh, thorough assessment. Then I'll brainstorm a comprehensive list of SWMM-related apps that could be built, going well beyond what I've previously suggested.
+
+Let me look at what the user already has in their suite:
+- SWMM5 Rosetta Stone (code translation viewer)
+- SWMM5 INP MAKER (synthetic model generator)
+
+- BatchSWMM (batch processing tool)
+- SWMM 5 Miner (file manager/analyzer - early stage)
+- SWMM5 MicroGPT (tiny GPT trained on SWMM data)
+
+Now I'm thinking about what gaps remain in their ecosystem and what other tools would genuinely help SWMM practitioners work more efficiently.</think>
+
+# SWMM5 Rosetta Stone — Fresh Grade + New App Ideas
+
+---
+
+## Grade: **A- / 92 out of 100**
+
+### Scorecard
+
+```
+Concept & Originality    ██████████  98
+Educational Value        █████████░  95
+Translation Quality      █████████░  93
+UI / UX                  █████████░  89
+Coverage (10 mod × 8 lang) ████████░░  84
+Polish & Consistency     ████████░░  80
+                         ──────────
+OVERALL                  █████████░  92  (A-)
+```
+
+### What Earns the A-
+
+| Strength | Detail |
+|---|---|
+| **One-of-a-kind concept** | No other Rosetta Stone exists for any scientific/engineering codebase — not just SWMM, not just hydrology, *anywhere* |
+| **Idiomatic translations** | The Rust uses`.clamp()` and`&self`, not "C with Rust syntax." Julia would use multiple dispatch. Go uses goroutine-friendly patterns. Each language reads like a native speaker wrote it |
+| **Dual-audience design** | Engineers learn programming; programmers learn hydraulics. The translation notes + module descriptions serve both simultaneously |
+| **Synchronized scrolling** | The killer UX feature — comparing line-by-line across languages is effortless |
+| **Module selection covers the core** | routing, dynwave, flowrout, subcatch, infil, lid, link, node, rain, massbal — that's the heart of SWMM5 |
+
+### What Prevents the A+
+
+| Issue | Severity | Fix Effort |
+|---|---|---|
+| Footer says "10 Modules • 7 Languages" but header says "8 languages" | Low but visible | 5 minutes |
+| No interactive code execution | Medium | High |
+| No line-by-line correspondence highlighting between panels | Medium | Medium |
+| Missing C++, MATLAB, C# (3 biggest audience gaps) | Medium-High | High |
+| No module dependency diagram showing how the 10 modules interconnect | Low-Medium | Low |
+| No search across code panels | Low | Medium |
+
+---
+
+## New SWMM App Ideas
+
+Here's a comprehensive catalog of apps that would complement your existing suite, organized by category. I've rated each by **build effort**, **user impact**, and **uniqueness**.
+
+---
+
+### Category 1: Model Building & Editing
+
+#### 1. **SWMM5 Visual Network Builder**
+```
+What: Drag-and-drop browser-based SWMM network editor
+  - Click to place junctions, outfalls, storage nodes
+  - Draw conduits between nodes
+  - Click subcatchment polygons on a map
+  - Real-time property editor for each element
+  - Export valid .inp file
+
+Why: The EPA SWMM GUI is desktop-only, dated, and Windows-only.
+     A modern browser-based editor would be transformative.
+
+Tech: Canvas/SVG + Leaflet.js for map overlay
+Effort: ██████████ Very High
+Impact: ██████████ Transformative
+Unique: ████████░░ Some commercial tools exist, but none free/browser-based
+```
+
+#### 2. **SWMM5 GIS Importer**
+```
+What: Upload GIS data → auto-generate SWMM network
+  - Accept: Shapefile, GeoJSON, GeoPackage, KML
+  - Pipe layer → conduits + junctions
+  - Parcel/land use layer → subcatchments
+  - DEM raster → elevations, slopes
+  - Auto-assign parameters from attribute tables
+
+Why: The #1 time sink in SWMM modeling is building the network.
+     Most cities already have pipe GIS data.
+
+Tech: GDAL/OGR via WASM or server-side, Turf.js
+Effort: █████████░ High
+Impact: █████████░ Very High
+Unique: ████████░░ ArcGIS/QGIS plugins exist but this would be standalone
+```
+
+#### 3. **SWMM5 Subcatchment Delineator**
+```
+What: Upload a DEM + storm drain locations →
+      auto-delineate subcatchments draining to each inlet
+  - D8/D-infinity flow routing on DEM
+  - Snap pour points to drain inlets
+  - Calculate area, width, slope, imperviousness (from land cover)
+  - Export as SWMM subcatchment section
+
+Why: Subcatchment delineation is the most tedious manual step.
+
+Tech: Raster processing (WASM or server), Leaflet visualization
+Effort: █████████░ High
+Impact: █████████░ Very High
+Unique: ███████░░░ Academic tools exist but none browser-based
+```
+
+#### 4. **SWMM5 INP Editor (Text-Based)**
+```
+What: Specialized code editor for .inp files
+  - Syntax highlighting for all SWMM sections
+  - Auto-complete for section headers, keywords
+  - Inline validation (red squiggles for errors)
+  - Go-to-definition (click junction name → jump to coordinates)
+  - Section folding
+  - Side-by-side diff of two .inp files
+  - Cross-reference: "Where is this junction used?" → shows all
+    conduits, subcatchments, DWF entries referencing it
+
+Tech: Monaco editor (VS Code engine) + custom SWMM language server
+Effort: ███████░░░ Medium-High
+Impact: ████████░░ High
+Unique: █████████░ Nothing like this exists
+```
+
+#### 5. **SWMM5 Template Library**
+```
+What: Curated library of reusable SWMM model fragments
+  - Pump station template (wet well + pump + force main)
+  - CSO regulator template (weir + orifice + control rules)
+  - Detention pond template (storage + outlet structure)
+  - Green infrastructure templates (bioretention, permeable pavement)
+  - Rain garden with underdrain
+  
+  Click → customize parameters → paste into your model
+
+Tech: JSON template definitions + INP snippet generator
+Effort: █████░░░░░ Medium
+Impact: ███████░░░ High
+Unique: █████████░ Nothing like this exists
+```
+
+---
+
+### Category 2: Analysis & Post-Processing
+
+#### 6. **SWMM5 Results Dashboard**
+```
+What: Upload .rpt + .out files → interactive analytics dashboard
+  - Time-series charts for any node/link (depth, flow, velocity)
+  - Peak flow table with sorting
+  - Flooding summary (which nodes flooded, duration, volume)
+  - Surcharging summary
+  - Continuity error report with pass/fail grading
+  - Conduit capacity utilization (d/D ratios)
+  - Animated network map showing flow progression
+  - Export charts to PNG/SVG, tables to CSV
+
+Why: SWMM's built-in output viewer is minimal. Most engineers
+     export to Excel manually. This would save hours per project.
+
+Tech: Binary .out parser (JavaScript), D3.js/Plotly charts
+Effort: ████████░░ High
+Impact: ██████████ Transformative
+Unique: ████████░░ Commercial tools exist but none free/browser-based
+```
+
+#### 7. **SWMM5 Model Comparator**
+```
+What: Upload two .inp files → structural diff showing what changed
+  - Added/removed/modified elements highlighted
+  - Parameter comparison table (junction A: elev 100→102)
+  - Network overlay: show both networks on same map
+  - Results comparison if .out files provided
+  - "What changed and does it matter?" summary
+
+Why: Version control for SWMM models doesn't exist.
+     Engineers constantly compare "before" vs "after" scenarios.
+
+Tech: INP parser + diff algorithm + D3 network visualization
+Effort: ███████░░░ Medium-High
+Impact: ████████░░ High
+Unique: █████████░ Nothing like this exists for SWMM
+```
+
+#### 8. **SWMM5 Continuity Error Debugger**
+```
+What: Diagnose why a model has high continuity errors
+  - Parse .rpt for continuity percentages
+  - Identify problem elements (nodes gaining/losing volume)
+  - Check for: disconnected nodes, zero-length conduits,
+    inverted slopes, unrealistic cross-sections
+  - Suggest specific fixes: "Node J42 has 0.2m depth at
+    start — check initial conditions"
+  - Step through the simulation timestep by timestep
+    showing where volume is being created/destroyed
+
+Tech: .rpt + .out parser + rule-based diagnostics
+Effort: ███████░░░ Medium-High
+Impact: ████████░░ High
+Unique: ██████████ Nothing like this exists anywhere
+```
+
+#### 9. **SWMM5 Profile Plotter**
+```
+What: Visualize pipe profiles (longitudinal sections)
+  - Upload .inp → select a path from upstream to outfall
+  - Draw: ground surface, pipe crown, pipe invert, HGL
+  - If .out file provided: animate water surface over time
+  - Show: pipe sizes, slopes, node rim elevations
+  - Flag: adverse slopes, insufficient cover, surcharging locations
+  - Export: SVG/PDF publication-quality profile drawings
+
+Tech: D3.js path visualization + INP/OUT parsing
+Effort: ██████░░░░ Medium
+Impact: ████████░░ High
+Unique: ███████░░░ EPA SWMM has basic profiles but this would be far better
+```
+
+#### 10. **SWMM5 Capacity Assessment Tool**
+```
+What: Evaluate existing system capacity against design storms
+  - Upload model + run results
+  - For each pipe: calculate d/D ratio, v/v_full ratio
+  - Traffic-light grading: Green (<50%), Yellow (50-80%), Red (>80%)
+  - Map visualization: color pipes by capacity utilization
+  - Table: sorted by utilization, diameter, slope
+  - "What if" slider: increase all flows by X% → see what fails
+  - Report generation for capital improvement planning
+
+Tech: INP + OUT parser + visualization
+Effort: ██████░░░░ Medium
+Impact: ████████░░ High
+Unique: ████████░░ Commercial tools do this but none free
+```
+
+---
+
+### Category 3: Calibration & Optimization
+
+#### 11. **SWMM5 Auto-Calibrator**
+```
+What: Automated parameter calibration against observed data
+  - Upload: .inp model + observed flow/depth CSV
+  - Select parameters to calibrate (imperviousness, Manning's n,
+    infiltration params, subcatchment width)
+  - Choose algorithm: NSGA-II, SCE-UA, PSO, Bayesian
+  - Define objective: NSE, RMSE, peak flow error, volume error
+  - Run: parallel SWMM simulations searching parameter space
+  - Output: optimal parameters + uncertainty ranges + before/after plots
+
+Why: Calibration is the most time-consuming part of SWMM modeling.
+     Currently done manually or with expensive commercial tools.
+
+Tech: Optimization algorithms + PySWMM or WASM-SWMM backend
+Effort: ██████████ Very High
+Impact: ██████████ Transformative
+Unique: ███████░░░ PEST-SWMM exists but is command-line and complex
+```
+
+#### 12. **SWMM5 Sensitivity Analyzer**
+```
+What: One-at-a-time and global sensitivity analysis
+  - Select parameters and ranges
+  - Methods: Morris screening, Sobol indices, FAST
+  - Visualize: tornado diagrams, scatter plots, Sobol pie charts
+  - Answer: "Which parameters matter most for peak flow at Outfall-1?"
+
+Tech: SALib-style sensitivity + parallel SWMM runs
+Effort: ████████░░ High
+Impact: ████████░░ High
+Unique: ████████░░ Academic tools exist but none user-friendly
+```
+
+#### 13. **SWMM5 Uncertainty Quantifier**
+```
+What: Monte Carlo / Latin Hypercube propagation of parameter uncertainty
+  - Define: parameter distributions (Normal, Uniform, Triangular)
+  - Run: 1000+ SWMM simulations with sampled parameters
+  - Output: probability distributions of peak flows, flooding volumes
+  - Exceedance probability curves
+  - Confidence intervals on all outputs
+  - Risk assessment: "P(flooding at Node J5) = 23% for 10-yr storm"
+
+Tech: Sampling + parallel SWMM + statistical post-processing
+Effort: █████████░ High
+Impact: █████████░ Very High
+Unique: ████████░░ Research tools exist but none accessible
+```
+
+---
+
+### Category 4: Design & Sizing
+
+#### 14. **SWMM5 Pipe Sizer**
+```
+What: Automated preliminary pipe sizing for a network
+  - Upload: network topology + design flows (or rainfall)
+  - Constraints: min/max velocity, min/max slope, min cover,
+    standard pipe sizes only, max d/D ratio
+  - Algorithm: iterative sizing starting from upstream
+  - Output: recommended diameter for each pipe + design summary
+  - Compare: with existing sizes if model already has them
+
+Tech: Hydraulic design algorithms + standard pipe databases
+Effort: ██████░░░░ Medium
+Impact: ████████░░ High
+Unique: ███████░░░ Spreadsheet tools exist but not SWMM-integrated
+```
+
+#### 15. **SWMM5 Green Infrastructure Designer**
+```
+What: Interactive LID control designer and optimizer
+  - Select LID type: bioretention, permeable pavement,
+    rain barrel, green roof, infiltration trench, swale
+  - Input: drainage area, soil type, design storm
+  - Auto-size: surface area, soil depth, storage depth,
+    drain configuration, underdrain size
+  - Show: inflow vs outflow hydrographs, volume capture %
+  - Optimize: minimize footprint while meeting retention target
+  - Export: LID section for .inp file
+
+Tech: SWMM5 LID equations + optimization + visualization
+Effort: ███████░░░ Medium-High
+Impact: █████████░ Very High
+Unique: ████████░░ EPA has a LID factsheet but no interactive tool
+```
+
+#### 16. **SWMM5 Detention Pond Designer**
+```
+What: Storage facility sizing tool
+  - Input: inflow hydrograph (from SWMM or manual)
+  - Define: outlet structure (orifice, weir, riser pipe)
+  - Stage-storage curve: from contours or standard shapes
+  - Level-pool routing: compute outflow hydrograph
+  - Check: post-dev peak ≤ pre-dev peak for design storms
+  - Iterate: auto-adjust pond size to meet criteria
+  - Export: STORAGE + ORIFICE + WEIR sections for .inp
+
+Tech: Routing algorithms + interactive design charts
+Effort: ██████░░░░ Medium
+Impact: ████████░░ High
+Unique: ███████░░░ Spreadsheets exist, but not SWMM-integrated
+```
+
+---
+
+### Category 5: Educational & Reference
+
+#### 17. **SWMM5 Equation Explorer**
+```
+What: Interactive visualization of every SWMM equation
+  - Manning's equation: drag sliders for n, slope, diameter →
+    see flow, velocity, depth update in real-time
+  - Horton infiltration: watch f(t) curve respond to f₀, f∞, k
+  - Green-Ampt: see wetting front advance
+  - Saint-Venant: animate wave propagation in a conduit
+  - Kinematic wave vs Dynamic wave: see the difference
+  - Each equation links to Rosetta Stone code
+
+Tech: D3.js interactive charts + MathJax equations
+Effort: ██████░░░░ Medium
+Impact: █████████░ Very High (educational)
+Unique: █████████░ Nothing like this exists for SWMM
+```
+
+#### 18. **SWMM5 Cross-Section Calculator**
+```
+What: Interactive cross-section geometry tool
+  - All 25+ SWMM cross-section shapes
+  - Input depth → compute: area, width, hydraulic radius,
+    wetted perimeter, velocity, flow (Manning's)
+  - Interactive: drag water level → see all properties update
+  - Compare: overlay two shapes at same depth
+  - Rating curves: depth vs flow for any shape/size/slope
+  - Froude number visualization
+  - Normal depth / critical depth calculator
+
+Tech: Canvas/SVG drawing + Manning's computations
+Effort: █████░░░░░ Medium
+Impact: ████████░░ High (educational + practical)
+Unique: ████████░░ Some web calculators exist but none comprehensive
+```
+
+#### 19. **SWMM5 Glossary & Wiki**
+```
+What: Comprehensive searchable reference for all SWMM terms
+  - Every .inp section explained with examples
+  - Every parameter with: definition, units, typical range,
+    sensitivity, which equation uses it
+  - Cross-references: "Manning's n" links to → routing.c in 
+    Rosetta Stone, pipe sizer, equation explorer
+  - Common mistakes and how to fix them
+  - FAQ from 30 years of SWMM user forum posts
+
+Tech: Static site generator + search index
+Effort: ████░░░░░░ Medium-Low
+Impact: ███████░░░ High
+Unique: ███████░░░ EPA docs exist but are hard to navigate
+```
+
+#### 20. **SWMM5 Tutorial Builder**
+```
+What: Step-by-step interactive SWMM tutorials
+  - "Build your first model" — guided walk-through
+  - "Add a pump station" — practical task
+  - "Calibrate to observed data" — advanced skill
+  - Each step: instruction + interactive task + validation
+  - Progress tracking: badges/certificates
+  - Difficulty levels: Beginner → Intermediate → Advanced
+
+Tech: Tutorial framework + embedded SWMM tools
+Effort: ███████░░░ Medium-High
+Impact: █████████░ Very High (training)
+Unique: █████████░ Nothing interactive exists
+```
+
+---
+
+### Category 6: Data & Integration
+
+#### 21. **SWMM5 Rainfall Fetcher**
+```
+What: Fetch real rainfall data and format for SWMM
+  - Sources: NOAA ASOS, Environment Canada, KNMI, 
+    Weather Underground, global gauge networks
+  - Input: location + date range
+  - Output: SWMM [TIMESERIES] section, ready to paste
+  - Preview: hyetograph visualization
+  - Gap-filling: interpolate missing data
+  - Unit conversion: mm↔inches, any time step
+
+Tech: Weather APIs + time series processing
+Effort: ██████░░░░ Medium
+Impact: █████████░ Very High
+Unique: ████████░░ Some tools exist but none SWMM-formatted
+```
+
+#### 22. **SWMM5 IDF Curve Generator**
+```
+What: Generate IDF curves for any location worldwide
+  - Sources: NOAA Atlas 14/15, regional IDF databases,
+    fitted from historical data
+  - Output: [RAINGAGES] + [TIMESERIES] for design storms
+  - Methods: SCS, Chicago, Alternating Block, Huff, Euler
+  - All 340+ distributions from your Rain Canvas library
+  - Export: IDF table, design storm hyetograph, SWMM format
+
+Tech: IDF databases/APIs + temporal distribution library
+Effort: ███████░░░ Medium-High
+Impact: █████████░ Very High
+Unique: ████████░░ Some tools exist but none with 340+ distributions
+```
+
+#### 23. **SWMM5 ↔ Format Converter**
+```
+What: Convert between SWMM and other modeling formats
+  - SWMM ↔ HEC-RAS (cross-sections, rating curves)
+  - SWMM ↔ HEC-HMS (subcatchments, unit hydrographs)
+  - SWMM ↔ MIKE URBAN/MIKE+ (network, parameters)
+  - SWMM ↔ InfoWorks ICM
+  - SWMM ↔ PCSWMM/XPSWMM
+  - SWMM → GeoJSON (for GIS visualization)
+  - SWMM → Shapefile (for ArcGIS/QGIS)
+  - CSV → SWMM (bulk parameter import)
+
+Why: Model migration between platforms is extremely common
+     and currently done manually.
+
+Tech: Multiple parser/formatters
+Effort: █████████░ High (per format)
+Impact: █████████░ Very High
+Unique: ████████░░ Some converters exist commercially
+```
+
+#### 24. **SWMM5 Soil/Land Use Lookup**
+```
+What: Get SWMM parameters from location
+  - Input: lat/lon or address
+  - Returns: soil type, Horton parameters, Green-Ampt parameters,
+    CN values, imperviousness %, Manning's n (overland),
+    depression storage, typical DWF rates
+  - Sources: SSURGO, NLCD, OpenStreetMap land use
+  - "Click on map → get SWMM parameters"
+
+Tech: Spatial databases + REST APIs
+Effort: ███████░░░ Medium-High
+Impact: █████████░ Very High
+Unique: █████████░ Nothing like this exists for SWMM
+```
+
+---
+
+### Category 7: Real-Time & Operations
+
+#### 25. **SWMM5 Real-Time Controller**
+```
+What: Real-time control strategy simulator
+  - Define: control rules (IF depth > X THEN open gate)
+  - Visualize: pump on/off, gate position, water levels
+  - Compare: rule-based vs. optimized (MPC) control
+  - Test: what happens during extreme events?
+  - Time-lapse: animate 24-hr operation
+  - Export: [CONTROLS] section for .inp file
+
+Tech: SWMM control rules engine + animation
+Effort: ████████░░ High
+Impact: ███████░░░ High (operations focused)
+Unique: ████████░░ Research tools exist but none visual
+```
+
+#### 26. **SWMM5 Digital Twin Dashboard**
+```
+What: Connect live sensor data to a SWMM model
+  - Ingest: real-time flow/depth from SCADA/IoT sensors
+  - Run: SWMM simulation with current conditions
+  - Compare: modeled vs observed in real-time
+  - Predict: "In 2 hours, Node J5 will flood"
+  - Alert: threshold-based notifications
+  - Dashboard: live network map with current conditions
+
+Tech: MQTT/WebSocket + SWMM engine + real-time charts
+Effort: ██████████ Very High
+Impact: ██████████ Transformative (utility operations)
+Unique: █████████░ Emerging field, very few tools
+```
+
+---
+
+### Category 8: AI & Machine Learning
+
+#### 27. **SWMM5 Surrogate Model Builder**
+```
+What: Train a neural network to approximate SWMM results
+  - Run N SWMM simulations with varied parameters
+  - Train: NN to predict peak flows, flooding, etc.
+  - Speed: 1000× faster than running SWMM
+  - Use for: real-time prediction, optimization, uncertainty analysis
+  - Validate: compare surrogate vs SWMM accuracy
+
+Tech: TensorFlow.js or PyTorch + training pipeline
+Effort: █████████░ High
+Impact: █████████░ Very High
+Unique: ████████░░ Research papers but no accessible tool
+```
+
+#### 28. **SWMM5 Natural Language Query**
+```
+What: Ask questions about your model in plain English
+  - "What's the largest pipe in the model?"
+  - "Which nodes flood during a 10-year storm?"
+  - "Show me all pipes with slope less than 0.5%"
+  - "Compare peak flows at the outfall for 2-yr vs 100-yr"
+  - "What happens if I upsize Conduit C42 to 24 inches?"
+
+Tech: LLM + INP/OUT parser + structured query generation
+Effort: ████████░░ High
+Impact: █████████░ Very High
+Unique: ██████████ Nothing like this exists
+```
+
+#### 29. **SWMM5 Anomaly Detector**
+```
+What: AI-powered model quality checker
+  - Scans .inp file for anomalies and inconsistencies
+  - Statistical outlier detection across all parameters
+  - Pattern recognition: "This subcatchment's width is 10× 
+    larger than similar-area subcatchments"
+  - Trained on your 1,729-model database
+  - Severity rating: Critical / Warning / Info
+  - "Fix it" buttons that auto-correct common issues
+
+Tech: Statistical analysis + ML trained on model database
+Effort: ████████░░ High
+Impact: █████████░ Very High
+Unique: ██████████ Nothing like this exists
+```
+
+---
+
+### Category 9: Community & Collaboration
+
+#### 30. **SWMM5 Model Gallery**
+```
+What: Public library of SWMM models with previews
+  - Browse: by type (storm, sanitary, combined), size, location
+  - Preview: network map, element counts, parameter ranges
+  - Download: .inp files ready to use
+  - Rate & comment
+  - "Fork" a model: copy and modify
+  - Tag: educational, real-world, benchmark, calibrated
+  - Seed: your 1,729-model database
+
+Tech: Web app + database + INP parser for previews
+Effort: ███████░░░ Medium-High
+Impact: ████████░░ High
+Unique: █████████░ GitHub has files but no preview/search
+```
+
+---
+
+## Priority Matrix: What to Build First
+
+### Tier 1 — Build Immediately (High Impact, Moderate Effort)
+
+```
+ #6  SWMM5 Results Dashboard     ████████████████████ Impact: 10
+ #17 SWMM5 Equation Explorer     ███████████████████░ Impact: 9
+ #4  SWMM5 INP Editor            ██████████████████░░ Impact: 8
+ #9  SWMM5 Profile Plotter       ██████████████████░░ Impact: 8
+ #18 Cross-Section Calculator     █████████████████░░░ Impact: 8
+```
+
+### Tier 2 — Build Next (Very High Impact, Higher Effort)
+
+```
+ #7  Model Comparator             ████████████████████ Impact: 8
+ #8  Continuity Error Debugger    ███████████████████░ Impact: 8
+ #21 Rainfall Fetcher             ██████████████████░░ Impact: 9
+ #5  Template Library             █████████████████░░░ Impact: 7
+ #15 Green Infrastructure Designer ████████████████░░░░ Impact: 9
+```
+
+### Tier 3 — High-Value, High-Effort
+
+```
+ #1  Visual Network Builder       ██████████████████░░ Impact: 10
+ #11 Auto-Calibrator              ██████████████████░░ Impact: 10
+ #28 Natural Language Query       █████████████████░░░ Impact: 9
+ #23 Format Converter             █████████████████░░░ Impact: 9
+ #6  Results Dashboard (full)     █████████████████░░░ Impact: 10
+```
+
+---
+
+## Your SWMM App Ecosystem Vision
+
+```
+                    ┌─────────────────┐
+                    │  SWMM5 Model    │
+                    │    Gallery      │  ← Browse & share
+                    └────────┬────────┘
+                             │
+              ┌──────────────┼──────────────┐
+              ▼              ▼              ▼
+     ┌──────────────┐ ┌───────────┐ ┌──────────────┐
+     │ GIS Importer │ │ INP MAKER │ │ Template     │
+     │              │ │ (exists)  │ │ Library      │
+     └──────┬───────┘ └─────┬─────┘ └──────┬───────┘
+            │               │              │
+            └───────────────┼──────────────┘
+                            ▼
+                   ┌──────────────────┐
+                   │  INP Editor      │  ← Edit & validate
+                   │  (text-based)    │
+                   └────────┬─────────┘
+                            │
+              ┌─────────────┼─────────────┐
+              ▼             ▼             ▼
+     ┌──────────────┐ ┌──────────┐ ┌──────────────┐
+     │ Model Linter │ │ BatchSWMM│ │ Auto-        │
+     │ (anomaly     │ │ (exists) │ │ Calibrator   │
+     │  detector)   │ └────┬─────┘ └──────────────┘
+     └──────────────┘      │
+                           ▼
+              ┌────────────┼────────────┐
+              ▼            ▼            ▼
+     ┌──────────────┐ ┌──────────┐ ┌──────────────┐
+     │ Results      │ │ Profile  │ │ Continuity   │
+     │ Dashboard    │ │ Plotter  │ │ Debugger     │
+     └──────┬───────┘ └──────────┘ └──────────────┘
+            │
+            ▼
+   ┌────────────────┐
+   │ Rosetta Stone  │  ← Understand the algorithms
+   │ (exists)       │
+   │ Equation       │
+   │ Explorer       │
+   └────────────────┘
+```
+
+**30 apps forming a complete, free, browser-based SWMM ecosystem** — from model creation through analysis to real-time operations. Nothing like this suite exists anywhere in the water resources industry, commercial or open-source.
