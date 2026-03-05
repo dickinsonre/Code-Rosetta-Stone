@@ -1145,7 +1145,7 @@ export default function SWMM5CodeViewer() {
               SWMM5 Rosetta Stone
             </div>
             <div style={{ fontSize: 10.5, color: t.textDim, marginTop: 1 }}>
-              EPA SWMM5 Engine Code — Multi-Language Translation Viewer
+              {moduleKeys.length} Modules × {languages.length} Languages — EPA SWMM5 Engine Code
             </div>
           </div>
         </div>
