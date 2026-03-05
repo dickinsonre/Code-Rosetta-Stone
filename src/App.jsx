@@ -533,11 +533,39 @@ const MODULE_GRAPH = {
     { id: "qualrout.c", label: "qualrout.c", category: "Quality", x: 80, y: 370 },
     { id: "massbal.c", label: "massbal.c", category: "Data", x: 80, y: 290 },
     { id: "rdii.c", label: "rdii.c", category: "Hydrology", x: 340, y: 40 },
-    { id: "treatmnt.c", label: "treatmnt.c", category: "Quality", x: 80, y: 450 },
+    { id: "treatmnt.c", label: "treatmnt.c", category: "Quality", x: 80, y: 530 },
     { id: "snow.c", label: "snow.c", category: "Hydrology", x: 340, y: 120 },
     { id: "dwflow.c", label: "dwflow.c", category: "Hydraulics", x: 340, y: 450 },
-    { id: "hotstart.c", label: "hotstart.c", category: "Data", x: 450, y: 450 },
-    { id: "iface.c", label: "iface.c", category: "Data", x: 450, y: 40 },
+    { id: "hotstart.c", label: "hotstart.c", category: "Data", x: 560, y: 530 },
+    { id: "iface.c", label: "iface.c", category: "Data", x: 560, y: 40 },
+    { id: "runoff.c", label: "runoff.c", category: "Hydrology", x: 130, y: 210 },
+    { id: "gage.c", label: "gage.c", category: "Hydrology", x: 60, y: 120 },
+    { id: "landuse.c", label: "landuse.c", category: "Hydrology", x: 250, y: 210 },
+    { id: "surfqual.c", label: "surfqual.c", category: "Quality", x: 80, y: 450 },
+    { id: "inflow.c", label: "inflow.c", category: "Data", x: 560, y: 120 },
+    { id: "culvert.c", label: "culvert.c", category: "Hydraulics", x: 560, y: 280 },
+    { id: "forcmain.c", label: "forcmain.c", category: "Hydraulics", x: 560, y: 370 },
+    { id: "roadway.c", label: "roadway.c", category: "Hydraulics", x: 560, y: 450 },
+    { id: "exfil.c", label: "exfil.c", category: "Hydraulics", x: 450, y: 530 },
+    { id: "lidproc.c", label: "lidproc.c", category: "Hydrology", x: 30, y: 250 },
+    { id: "shape.c", label: "shape.c", category: "Hydraulics", x: 560, y: 210 },
+    { id: "transect.c", label: "transect.c", category: "Hydraulics", x: 560, y: 150 },
+    { id: "toposort.c", label: "toposort.c", category: "Numerical", x: 200, y: 530 },
+    { id: "odesolve.c", label: "odesolve.c", category: "Numerical", x: 270, y: 530 },
+    { id: "findroot.c", label: "findroot.c", category: "Numerical", x: 340, y: 530 },
+    { id: "output.c", label: "output.c", category: "Data", x: 450, y: 610 },
+    { id: "input.c", label: "input.c", category: "Data", x: 340, y: 610 },
+    { id: "swmm5.c", label: "swmm5.c", category: "Data", x: 270, y: 610 },
+    { id: "stats.c", label: "stats.c", category: "Data", x: 130, y: 610 },
+    { id: "report.c", label: "report.c", category: "Data", x: 60, y: 610 },
+    { id: "project.c", label: "project.c", category: "Data", x: 200, y: 610 },
+    { id: "mathexpr.c", label: "mathexpr.c", category: "Numerical", x: 420, y: 530 },
+    { id: "statsrpt.c", label: "statsrpt.c", category: "Data", x: 60, y: 680 },
+    { id: "table.c", label: "table.c", category: "Data", x: 130, y: 680 },
+    { id: "datetime.c", label: "datetime.c", category: "Data", x: 200, y: 680 },
+    { id: "hash.c", label: "hash.c", category: "Data", x: 270, y: 680 },
+    { id: "mempool.c", label: "mempool.c", category: "Data", x: 340, y: 680 },
+    { id: "keywords.c", label: "keywords.c", category: "Data", x: 420, y: 680 },
   ],
   edges: [
     { from: "rain.c", to: "subcatch.c", label: "rainfall" },
@@ -570,18 +598,46 @@ const MODULE_GRAPH = {
     { from: "dwflow.c", to: "dynwave.c", label: "init" },
     { from: "dwflow.c", to: "kinwave.c", label: "init" },
     { from: "iface.c", to: "node.c", label: "inflows" },
+    { from: "gage.c", to: "rain.c", label: "data" },
+    { from: "subcatch.c", to: "runoff.c", label: "surface" },
+    { from: "infil.c", to: "runoff.c", label: "losses" },
+    { from: "landuse.c", to: "surfqual.c", label: "buildup" },
+    { from: "runoff.c", to: "surfqual.c", label: "washoff" },
+    { from: "inflow.c", to: "node.c", label: "external" },
+    { from: "culvert.c", to: "link.c", label: "inlet/outlet" },
+    { from: "forcmain.c", to: "link.c", label: "pressure" },
+    { from: "roadway.c", to: "node.c", label: "overflow" },
+    { from: "exfil.c", to: "link.c", label: "seepage" },
+    { from: "lid.c", to: "lidproc.c", label: "layers" },
+    { from: "shape.c", to: "xsect.c", label: "shapes" },
+    { from: "transect.c", to: "xsect.c", label: "irregular" },
+    { from: "odesolve.c", to: "gwater.c", label: "integration" },
+    { from: "findroot.c", to: "dwflow.c", label: "bisection" },
+    { from: "toposort.c", to: "routing.c", label: "order" },
+    { from: "swmm5.c", to: "routing.c", label: "step" },
+    { from: "swmm5.c", to: "input.c", label: "read" },
+    { from: "swmm5.c", to: "output.c", label: "write" },
+    { from: "swmm5.c", to: "report.c", label: "report" },
+    { from: "stats.c", to: "report.c", label: "data" },
+    { from: "massbal.c", to: "stats.c", label: "tracking" },
+    { from: "mathexpr.c", to: "treatmnt.c", label: "formulas" },
+    { from: "stats.c", to: "statsrpt.c", label: "summary" },
+    { from: "table.c", to: "routing.c", label: "curves" },
+    { from: "keywords.c", to: "input.c", label: "tokens" },
+    { from: "hash.c", to: "project.c", label: "lookup" },
+    { from: "mempool.c", to: "project.c", label: "alloc" },
   ],
 };
 
-const catColors = { Hydraulics: "#61afef", Hydrology: "#98c379", Quality: "#c678dd", Operations: "#e5c07b", Data: "#56b6c2" };
+const catColors = { Hydraulics: "#61afef", Hydrology: "#98c379", Quality: "#c678dd", Operations: "#e5c07b", Data: "#56b6c2", Numerical: "#d19a66" };
 
 function ModuleDependencyDiagram({ t, onClickModule }) {
   const scale = 1.2;
-  const W = 560 * scale, H = 520 * scale;
+  const W = 660 * scale, H = 750 * scale;
 
   return (
     <div style={{ overflowX: "auto", padding: "0 20px" }}>
-      <svg width={W} height={H} viewBox={`0 0 ${560} ${520}`} style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
+      <svg width={W} height={H} viewBox={`0 0 ${660} ${750}`} style={{ display: "block", margin: "0 auto", maxWidth: "100%" }}>
         <defs>
           <marker id="arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
             <polygon points="0 0, 8 3, 0 6" fill={t.textDim} />
@@ -1012,7 +1068,7 @@ export default function SWMM5CodeViewer() {
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,
-            }}>{moduleKeys.length} of 25+ engine modules</span>
+            }}>{moduleKeys.length} engine modules</span>
             <span style={{
               fontSize: 12, color: t.textDim, padding: "4px 10px",
               borderRadius: 6, background: t.notesBg, border: `1px solid ${t.border}`,

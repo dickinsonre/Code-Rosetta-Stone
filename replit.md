@@ -5,13 +5,14 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Six top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "SWMManywhere" (embedded urban drainage synthesizer via iframe), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
-- Twenty-two SWMM5 modules organized by engineering priority:
-  - Hydraulics: routing.c (Dynamic Wave Routing), dynwave.c (Dynamic Wave Solver), flowrout.c (Flow Routing Dispatch), kinwave.c (Kinematic Wave Routing), xsect.c (Cross-Section Geometry), link.c (Conduit Hydraulics), node.c (Junction & Storage Nodes), dwflow.c (Steady/Normal Flow Initialization)
-  - Hydrology: subcatch.c (Subcatchment Runoff), infil.c (Infiltration Models), lid.c (LID/Green Infrastructure), gwater.c (Groundwater Flow), climate.c (Climate/Evaporation Processing), rdii.c (Rainfall-Dependent I&I), snow.c (Snowpack/Snowmelt)
-  - Water Quality: qualrout.c (Water Quality Routing), treatmnt.c (Water Quality Treatment)
-  - Operations: controls.c (Rule-Based Controls)
-  - Data Processing: rain.c (Rainfall Processing), massbal.c (Mass Balance Checking), hotstart.c (Simulation State Save/Restore), iface.c (Interface File Handling)
+- Five top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
+- Fifty SWMM5 modules organized by engineering category:
+  - Hydraulics: routing.c, dynwave.c, flowrout.c, kinwave.c, xsect.c, link.c, node.c, dwflow.c, culvert.c, forcmain.c, roadway.c, exfil.c, shape.c, transect.c
+  - Hydrology: subcatch.c, infil.c, lid.c, gwater.c, climate.c, rdii.c, snow.c, runoff.c, gage.c, landuse.c, lidproc.c
+  - Water Quality: qualrout.c, treatmnt.c, surfqual.c
+  - Operations: controls.c
+  - Numerical: odesolve.c, findroot.c, mathexpr.c, toposort.c
+  - Data Processing: rain.c, massbal.c, hotstart.c, iface.c, inflow.c, output.c, input.c, report.c, project.c, stats.c, statsrpt.c, table.c, datetime.c, hash.c, mempool.c, keywords.c, swmm5.c
 - 23 languages organized in tiers:
   - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
   - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal
@@ -24,22 +25,23 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Line-by-line correspondence highlighting (hover a line to highlight same line in both panels)
 - Code search across panels with match highlighting and count display
 - "Try Online" playground links per language (Godbolt, Rust Playground, Go Playground, etc.)
-- Module dependency diagram (SVG graph showing how 22 modules interconnect, clickable to navigate)
+- Module dependency diagram (SVG graph showing how 50 modules interconnect, clickable to navigate)
 - Copy-to-clipboard per code panel (with execCommand fallback)
 - Responsive mobile layout (panels stack vertically below 900px)
 - Enriched module descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links
+- Contextual navigation links from modules to related apps (INP MAKER, Simulation Engine, Rain Canvas Studio)
 - Landing/About section with project overview and EPA SWMM5 link
 - Search/Filter to find modules by concept, equation, tag, or description
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
-- Per-language-pair translation notes (253 pairs covering all 23 languages)
+- Per-language-pair translation notes (253 pairs covering all 23 languages, enriched for 5 high-paradigm-distance pairs)
 - All module/language counts are dynamic (no hardcoded numbers)
 - Version stamp in footer (v2.0 — March 2026)
 
 ## Project Architecture
 - **Framework**: React + Vite
 - **Structure**: 
-  - `src/modules.js` — All module data (code samples for 23 languages × 22 modules, metadata, languages array, 253 translation notes)
-  - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app
+  - `src/modules.js` — All module data (code samples for 23 languages × 50 modules, metadata, languages array, 253 translation notes)
+  - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app, MODULE_GRAPH with 50 modules
   - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 13 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
   - `src/appIdeas.js` — Data for 13 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, TypeScript, MATLAB, C#, Java)
   - `src/apps/MicroEngine.jsx` — C Micro-Engine: interactive SWMM simulation with canvas network visualization
@@ -71,4 +73,5 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Share buttons use standard LinkedIn/Twitter intent URLs (no API keys needed)
 - Translation notes use sorted language-pair keys (e.g., "c-rust", "python-julia") looked up via [left, right].sort().join("-")
 - MicroGPTs served as standalone HTML files from public/ directory via Vite, embedded as iframes with sub-tab navigation
+- MODULE_GRAPH includes 6 categories: Hydraulics, Hydrology, Quality, Operations, Data, Numerical
 - No external dependencies beyond React and Vite
