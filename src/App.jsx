@@ -883,6 +883,13 @@ export default function SWMM5CodeViewer() {
           Rosetta Stone
         </button>
         <button
+          className={`app-tab ${activeTab === "engine" ? "active" : ""}`}
+          onClick={() => setActiveTab("engine")}
+        >
+          <span style={{ fontSize: 15 }}>{"\u2699\uFE0F"}</span>
+          SWMM5 Engines
+        </button>
+        <button
           className={`app-tab ${activeTab === "swmmapps" ? "active" : ""}`}
           onClick={() => setActiveTab("swmmapps")}
         >
@@ -895,13 +902,6 @@ export default function SWMM5CodeViewer() {
         >
           <span style={{ fontSize: 15 }}>{"\uD83E\uDDE0"}</span>
           MicroGPTs
-        </button>
-        <button
-          className={`app-tab ${activeTab === "engine" ? "active" : ""}`}
-          onClick={() => setActiveTab("engine")}
-        >
-          <span style={{ fontSize: 15 }}>{"\u2699\uFE0F"}</span>
-          SWMM5 Engines
         </button>
         <button
           className={`app-tab ${activeTab === "pyswmm" ? "active" : ""}`}
