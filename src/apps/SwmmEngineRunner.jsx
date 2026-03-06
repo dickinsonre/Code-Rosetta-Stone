@@ -20,6 +20,75 @@ const ENGINES = [
     impact: "Production-grade simulations. Regulatory compliance. Reference results.",
   },
   {
+    id: "pyswmm-swmm5",
+    name: "PySWMM Engine",
+    lang: "Python",
+    icon: "\uD83D\uDC0D",
+    color: "#3776ab",
+    status: "concept",
+    version: "concept",
+    desc: "PySWMM-powered engine with Pythonic step-by-step control. Real-time monitoring, rule-based control, and direct access to all SWMM objects during simulation. The most popular Python interface for SWMM5.",
+    effort: "1 week",
+    impact: "Step-by-step simulation control. Real-time sensor feedback. Python scripting.",
+    code: `# PySWMM Engine \u2014 Pythonic SWMM5 Control
+# pip install pyswmm
+
+from pyswmm import Simulation, Nodes, Links
+
+# Basic simulation
+with Simulation('model.inp') as sim:
+    for step in sim:
+        # Access every object at every timestep
+        node_j1 = Nodes(sim)["J1"]
+        link_c1 = Links(sim)["C1"]
+        
+        print(f"Time: {sim.current_time}")
+        print(f"  J1 depth: {node_j1.depth:.3f} ft")
+        print(f"  C1 flow:  {link_c1.flow:.3f} CFS")
+
+# Real-Time Control (RTC) \u2014 PySWMM's superpower
+with Simulation('model.inp') as sim:
+    j1 = Nodes(sim)["J1"]
+    orifice = Links(sim)["OR1"]
+    
+    for step in sim:
+        # Sensor-actuator feedback loop
+        if j1.depth > 4.0:
+            orifice.target_setting = 1.0   # fully open
+        elif j1.depth < 1.0:
+            orifice.target_setting = 0.1   # nearly closed
+        else:
+            orifice.target_setting = j1.depth / 4.0  # proportional
+
+# Monitoring callbacks
+with Simulation('model.inp') as sim:
+    node_depths = []
+    link_flows = []
+    
+    for step in sim:
+        node_depths.append({
+            n.nodeid: n.depth 
+            for n in Nodes(sim)
+        })
+        link_flows.append({
+            l.linkid: l.flow 
+            for l in Links(sim)
+        })
+    
+    # Results are native Python dicts \u2192 pandas/numpy ready
+    import pandas as pd
+    df = pd.DataFrame(node_depths)
+    df.plot(title="Node Depths Over Time")
+
+# PySWMM + SWMM5 Rosetta Stone:
+#   The C engine code you see in the Rosetta Stone
+#   is exactly what PySWMM calls under the hood.
+#   PySWMM wraps swmm5.c \u2192 routing.c \u2192 dynwave.c \u2192 node.c \u2192 link.c
+#
+# Install: pip install pyswmm
+# Docs: https://pyswmm.readthedocs.io`,
+  },
+  {
     id: "rust-swmm5",
     name: "Rust SWMM5 WASM Engine",
     lang: "Rust",
