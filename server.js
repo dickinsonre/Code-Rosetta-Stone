@@ -11,31 +11,45 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = 3001;
 const GO_ENGINE_PORT = 3002;
+const PY_ENGINE_PORT = 3003;
+const C_ENGINE_PORT = 3004;
+const CPP_ENGINE_PORT = 3005;
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
 
 const goBinary = path.join(__dirname, 'swmm5-go', 'swmm5-go');
-let goProcess = null;
+const cBinary = path.join(__dirname, 'swmm5-c', 'swmm5-c');
+const cppBinary = path.join(__dirname, 'swmm5-cpp', 'swmm5-cpp');
+const pyScript = path.join(__dirname, 'swmm5-py', 'swmm5_engine.py');
 
-function startGoEngine() {
-  if (!existsSync(goBinary)) {
-    console.log('Go SWMM5 engine binary not found, skipping');
-    return;
+let goProcess = null;
+let pyProcess = null;
+let cProcess = null;
+let cppProcess = null;
+
+function startChildEngine(name, cmd, args, envOverrides) {
+  const checkPath = args.length > 0 ? args[0] : cmd;
+  if (!existsSync(checkPath)) {
+    console.log(`${name} not found at ${checkPath}, skipping`);
+    return null;
   }
-  goProcess = spawn(goBinary, [], {
-    env: { ...process.env, GO_ENGINE_PORT: String(GO_ENGINE_PORT) },
+  const proc = spawn(cmd, args, {
+    env: { ...process.env, ...envOverrides },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  goProcess.stdout.on('data', d => console.log('[Go Engine]', d.toString().trim()));
-  goProcess.stderr.on('data', d => console.error('[Go Engine ERR]', d.toString().trim()));
-  goProcess.on('exit', (code) => {
-    console.log(`Go engine exited with code ${code}`);
-    goProcess = null;
+  proc.stdout.on('data', d => console.log(`[${name}]`, d.toString().trim()));
+  proc.stderr.on('data', d => console.error(`[${name} ERR]`, d.toString().trim()));
+  proc.on('exit', (code) => {
+    console.log(`${name} exited with code ${code}`);
   });
+  return proc;
 }
 
-startGoEngine();
+goProcess = startChildEngine('Go Engine', goBinary, [], { GO_ENGINE_PORT: String(GO_ENGINE_PORT) });
+pyProcess = startChildEngine('Python Engine', 'python3', [pyScript], { PY_ENGINE_PORT: String(PY_ENGINE_PORT) });
+if (existsSync(cBinary)) cProcess = startChildEngine('C Engine', cBinary, [], { C_ENGINE_PORT: String(C_ENGINE_PORT) });
+if (existsSync(cppBinary)) cppProcess = startChildEngine('C++ Engine', cppBinary, [], { CPP_ENGINE_PORT: String(CPP_ENGINE_PORT) });
 
 const storage = multer.diskStorage({
   destination: uploadDir,
@@ -110,7 +124,7 @@ app.post('/api/run-swmm', upload.single('inpFile'), (req, res) => {
   });
 });
 
-app.post('/api/run-swmm-go', upload.single('inpFile'), (req, res) => {
+function proxyToEngine(engineName, enginePort, req, res) {
   if (!req.file) {
     return res.status(400).json({ error: 'No .inp file uploaded' });
   }
@@ -126,38 +140,54 @@ app.post('/api/run-swmm-go', upload.single('inpFile'), (req, res) => {
     const postData = inpText;
     const options = {
       hostname: '127.0.0.1',
-      port: GO_ENGINE_PORT,
+      port: enginePort,
       path: '/simulate',
       method: 'POST',
       headers: { 'Content-Type': 'text/plain', 'Content-Length': Buffer.byteLength(postData) },
-      timeout: 30000,
+      timeout: 60000,
     };
 
-    const goReq = http.request(options, (goRes) => {
+    const engineReq = http.request(options, (engineRes) => {
       let body = '';
-      goRes.on('data', chunk => { body += chunk; });
-      goRes.on('end', () => {
+      engineRes.on('data', chunk => { body += chunk; });
+      engineRes.on('end', () => {
         try {
           const result = JSON.parse(body);
           res.json(result);
         } catch (e) {
-          res.status(500).json({ error: 'Invalid response from Go engine' });
+          res.status(500).json({ error: 'Invalid response from ' + engineName });
         }
       });
     });
 
-    goReq.on('error', (err) => {
-      res.status(500).json({ error: 'Go engine not available: ' + err.message });
+    engineReq.on('error', (err) => {
+      res.status(500).json({ error: engineName + ' not available: ' + err.message });
     });
 
-    goReq.on('timeout', () => {
-      goReq.destroy();
-      res.status(500).json({ error: 'Go engine timed out' });
+    engineReq.on('timeout', () => {
+      engineReq.destroy();
+      res.status(500).json({ error: engineName + ' timed out' });
     });
 
-    goReq.write(postData);
-    goReq.end();
+    engineReq.write(postData);
+    engineReq.end();
   });
+}
+
+app.post('/api/run-swmm-go', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Go engine', GO_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-python', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Python engine', PY_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-c', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('C engine', C_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-cpp', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('C++ engine', CPP_ENGINE_PORT, req, res);
 });
 
 app.listen(PORT, '0.0.0.0', () => {

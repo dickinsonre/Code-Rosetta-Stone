@@ -946,6 +946,241 @@ func BatchSimulate(models []string) []*Results {
 //     -F "model=@city_model.inp" | jq '.results.nodes.J1.peak_depth'`,
   },
   {
+    id: "python-swmm5",
+    name: "Pure Python Engine",
+    lang: "Python",
+    icon: "\uD83D\uDC0D",
+    color: "#3776ab",
+    status: "live",
+    version: "v1.0",
+    desc: "Real standalone SWMM5 engine written in pure Python — no EPA bindings, no swmm-toolkit. INP parser, Horton infiltration, dynamic wave routing, and full .rpt report generation using only Python stdlib. Runs as an HTTP server on port 3003.",
+    effort: "Ready now — real pure Python engine",
+    impact: "Fifth real engine. Pure Python, zero dependencies. Easiest to read and modify.",
+    code: `# swmm5-py \u2014 Pure Python SWMM5 Engine
+# No dependencies. Just Python stdlib.
+#
+# Features:
+#   - Full INP parser (all sections)
+#   - Horton infiltration model
+#   - Dynamic wave routing (Manning's equation)
+#   - Cross-section geometry (circular, rectangular)
+#   - .rpt report generation
+#   - HTTP server on port 3003
+
+from http.server import HTTPServer, BaseHTTPRequestHandler
+import json, math, time
+
+class SwmmModel:
+    """Pure Python SWMM5 simulation engine."""
+    
+    def __init__(self, inp_text):
+        self.nodes = []
+        self.links = []
+        self.subcatchments = []
+        self.parse(inp_text)
+    
+    def parse(self, text):
+        """Parse EPA SWMM5 .inp file format."""
+        section = ""
+        for line in text.split("\\n"):
+            line = line.strip()
+            if not line or line.startswith(";"):
+                continue
+            if line.startswith("["):
+                section = line.strip("[] ").upper()
+                continue
+            # Parse each section...
+    
+    def simulate(self):
+        """Run dynamic wave routing simulation."""
+        dt = self.options.routing_step
+        elapsed = 0.0
+        while elapsed < self.options.total_duration:
+            self.compute_runoff(dt, elapsed)
+            self.route_flow(dt, elapsed)
+            elapsed += dt
+        return self.generate_rpt()
+    
+    def horton_infil(self, inf, rainfall, dt):
+        """Horton infiltration: f(t) = fc + (f0-fc)*e^(-kt)"""
+        rate = min(inf.current_rate, rainfall)
+        decay = math.exp(-inf.decay * dt / 3600.0)
+        inf.current_rate = inf.min_rate + \\
+            (inf.current_rate - inf.min_rate) * decay
+        return rate
+
+# HTTP Server
+class Handler(BaseHTTPRequestHandler):
+    def do_POST(self):
+        body = self.rfile.read(
+            int(self.headers["Content-Length"])
+        ).decode()
+        model = SwmmModel(body)
+        rpt = model.simulate()
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps({
+            "success": True, "rpt": rpt
+        }).encode())
+
+HTTPServer(("127.0.0.1", 3003), Handler).serve_forever()`,
+  },
+  {
+    id: "c-standalone-swmm5",
+    name: "C Standalone Engine",
+    lang: "C",
+    icon: "\u2699\uFE0F",
+    color: "#555555",
+    status: "live",
+    version: "v1.0",
+    desc: "Standalone C SWMM5 engine — our own implementation compiled with GCC, distinct from the EPA codebase. 30KB native binary with POSIX socket HTTP server. INP parser, Horton infiltration, Manning's equation routing, and .rpt report generation.",
+    effort: "Ready now — real standalone C engine",
+    impact: "Sixth real engine. Tiny 30KB binary. Raw C with manual memory management.",
+    code: `/* swmm5-c \u2014 Standalone C SWMM5 Engine
+ * Build: gcc -O2 -o swmm5-c swmm5_engine.c -lm
+ * 30KB binary, POSIX sockets, zero dependencies.
+ *
+ * Features:
+ *   - Full INP parser
+ *   - Horton infiltration
+ *   - Dynamic wave routing (Manning's equation)
+ *   - Cross-section geometry
+ *   - .rpt report generation
+ *   - HTTP server on port 3004
+ */
+
+#include <stdio.h>
+#include <math.h>
+#include <sys/socket.h>
+
+#define MAX_NODES 500
+#define GRAVITY   32.174
+
+typedef struct {
+    char id[64];
+    double invert_elev, max_depth, depth, head;
+    double inflow, outflow, peak_depth;
+} Node;
+
+typedef struct {
+    char id[64];
+    double length, roughness, flow, velocity;
+    double peak_flow, peak_velocity;
+} Link;
+
+/* Horton infiltration: f(t) = fc + (f0-fc)*e^(-kt) */
+double horton_infil(InfilData *inf, double rain, double dt) {
+    double rate = fmin(inf->current_rate, rain);
+    double decay = exp(-inf->decay * dt / 3600.0);
+    inf->current_rate = inf->min_rate +
+        (inf->current_rate - inf->min_rate) * decay;
+    return rate;
+}
+
+/* Manning's equation: Q = (1.49/n) * A * R^(2/3) * S^(1/2) */
+double manning_flow(Link *lk, double area, double hrad,
+                    double slope) {
+    double sign = slope > 0 ? 1.0 : -1.0;
+    return sign * (1.49 / lk->roughness) * area *
+           pow(hrad, 2.0/3.0) * sqrt(fabs(slope));
+}
+
+/* HTTP server using raw POSIX sockets */
+int main(void) {
+    int fd = socket(AF_INET, SOCK_STREAM, 0);
+    /* bind, listen, accept loop... */
+    /* Parse INP, simulate, return JSON RPT */
+}`,
+  },
+  {
+    id: "cpp-swmm5",
+    name: "C++ OOP Engine",
+    lang: "C++",
+    icon: "\uD83D\uDD27",
+    color: "#00599C",
+    status: "live",
+    version: "v1.0",
+    desc: "Object-oriented C++ SWMM5 engine compiled with G++. 75KB native binary using C++17 features: std::unordered_map, std::vector, RAII, classes with encapsulation. Clean OOP design distinct from both EPA C and our standalone C engine.",
+    effort: "Ready now — real C++ OOP engine",
+    impact: "Seventh real engine. OOP design. C++17 STL containers. RAII memory safety.",
+    code: `// swmm5-cpp \u2014 Object-Oriented C++ SWMM5 Engine
+// Build: g++ -O2 -std=c++17 -o swmm5-cpp swmm5_engine.cpp -lm
+// 75KB binary with full OOP design.
+
+#include <iostream>
+#include <vector>
+#include <unordered_map>
+#include <cmath>
+
+class SwmmModel {
+    struct Node {
+        std::string id, type;
+        double invert_elev, max_depth, depth, head;
+        double inflow, outflow, peak_depth, peak_hgl;
+    };
+    
+    struct Link {
+        std::string id, from_node, to_node;
+        double length, roughness, flow, velocity;
+        double peak_flow, peak_velocity, max_depth_frac;
+    };
+    
+    Options options;
+    std::vector<Node> nodes;
+    std::vector<Link> links;
+    std::vector<Subcatchment> subcatchments;
+    std::unordered_map<std::string, int> node_map;
+
+public:
+    void parse(const std::string &inp_text) {
+        std::istringstream stream(inp_text);
+        std::string line, section;
+        while (std::getline(stream, line)) {
+            // Parse each section...
+        }
+    }
+    
+    int simulate() {
+        double dt = options.routing_step;
+        double elapsed = 0;
+        int steps = 0;
+        while (elapsed < options.total_duration) {
+            computeRunoff(dt, elapsed);
+            routeFlow(dt, elapsed);
+            elapsed += dt; steps++;
+        }
+        return steps;
+    }
+    
+    std::string generateRpt(int steps, double wall_ms) {
+        std::ostringstream rpt;
+        rpt << "SWMM5-C++ v1.0\\n";
+        // ... generate full .rpt report
+        return rpt.str();
+    }
+
+private:
+    double hortonInfil(InfilData &inf, double rain, double dt) {
+        double rate = std::min(inf.current_rate, rain);
+        inf.current_rate = inf.min_rate +
+            (inf.current_rate - inf.min_rate) *
+            std::exp(-inf.decay * dt / 3600.0);
+        return rate;
+    }
+    
+    double xsectArea(Xsect *xs, double depth) {
+        if (xs->type == "CIRCULAR") {
+            double r = xs->geom1 / 2.0, y = depth - r;
+            double theta = 2.0 * std::acos(
+                std::clamp(-y / r, -1.0, 1.0));
+            return r * r * (theta - std::sin(theta)) / 2.0;
+        }
+        return depth * xs->geom2;  // rectangular
+    }
+};`,
+  },
+  {
     id: "ruby-swmm5",
     name: "Ruby SWMM5 Engine",
     lang: "Ruby",
@@ -3086,12 +3321,25 @@ export default function SwmmEngineRunner({ theme: t }) {
           setError('Rust WASM engine error: ' + wasmErr.message);
           setStatus('');
         }
-      } else if (selectedEngine === 'go-swmm5') {
+      } else if (['go-swmm5', 'python-swmm5', 'c-standalone-swmm5', 'cpp-swmm5'].includes(selectedEngine)) {
+        const engineApiMap = {
+          'go-swmm5': '/api/run-swmm-go',
+          'python-swmm5': '/api/run-swmm-python',
+          'c-standalone-swmm5': '/api/run-swmm-c',
+          'cpp-swmm5': '/api/run-swmm-cpp',
+        };
+        const engineLabel = {
+          'go-swmm5': 'native Go binary',
+          'python-swmm5': 'pure Python engine',
+          'c-standalone-swmm5': 'standalone C binary',
+          'cpp-swmm5': 'C++ OOP binary',
+        };
+
         const blob = new Blob([inpContent], { type: 'text/plain' });
         const formData = new FormData();
         formData.append('inpFile', blob, fileName || 'model.inp');
 
-        const resp = await fetch('/api/run-swmm-go', {
+        const resp = await fetch(engineApiMap[selectedEngine], {
           method: 'POST',
           body: formData,
         });
@@ -3099,9 +3347,9 @@ export default function SwmmEngineRunner({ theme: t }) {
         const data = await resp.json();
         if (data.success && data.rpt) {
           setRptContent(data.rpt);
-          setStatus('Simulation completed successfully via ' + activeEngine.name + ' (native Go binary)');
+          setStatus('Simulation completed successfully via ' + activeEngine.name + ' (' + engineLabel[selectedEngine] + ')');
         } else {
-          setError(data.error || 'Go engine simulation failed');
+          setError(data.error || activeEngine.name + ' simulation failed');
           setStatus('');
         }
       } else {
