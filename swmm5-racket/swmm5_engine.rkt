@@ -149,8 +149,8 @@
   (set-options-total-duration! (model-opts m) (parse-duration (options-start-date (model-opts m)) (options-end-date (model-opts m))))
   m)
 
-(define (get-rainfall m gage-id elapsed)
-  (define g (findf (lambda (g) (equal? (gage-id g) gage-id)) (model-gages m)))
+(define (get-rainfall m gid elapsed)
+  (define g (findf (lambda (g) (equal? (gage-id g) gid)) (model-gages m)))
   (if (not g) 0
     (let ([tsd (hash-ref (model-timeseries m) (gage-source-name g) #f)])
       (if (or (not tsd) (null? (ts-times tsd))) 0

@@ -386,20 +386,30 @@ defmodule SwmmEngine do
   def handle_client(socket) do
     data = read_http(socket)
     req = to_string(data)
-    resp = cond do
-      String.starts_with?(req, "GET /health") ->
-        json = ~s({"engine":"SWMM5-Elixir","status":"ok","version":"v1.0","language":"Elixir"})
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(json)}\r\n\r\n#{json}"
-      String.starts_with?(req, "POST /simulate") ->
-        [_headers, body] = String.split(req, "\r\n\r\n", parts: 2)
-        t0 = :os.system_time(:millisecond)
-        m = parse_inp(body)
-        {steps, _elapsed, m} = simulate(m)
-        wall_ms = :os.system_time(:millisecond) - t0
-        rpt = generate_rpt(m, steps, wall_ms / 1.0)
-        json = ~s({"success":true,"rpt":"#{escape_json(rpt)}"})
-        "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(json)}\r\n\r\n#{json}"
-      true -> "HTTP/1.1 404 Not Found\r\n\r\n"
+    resp = try do
+      cond do
+        String.contains?(req, "GET /health") ->
+          json = ~s({"engine":"SWMM5-Elixir","status":"ok","version":"v1.0","language":"Elixir"})
+          "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(json)}\r\n\r\n#{json}"
+        String.contains?(req, "POST /simulate") ->
+          body = case String.split(req, "\r\n\r\n", parts: 2) do
+            [_h, b] -> b
+            _ -> ""
+          end
+          t0 = :os.system_time(:millisecond)
+          m = parse_inp(body)
+          {steps, _elapsed, m} = simulate(m)
+          wall_ms = (:os.system_time(:millisecond) - t0) * 1.0
+          rpt = generate_rpt(m, steps, wall_ms)
+          json = ~s({"success":true,"rpt":"#{escape_json(rpt)}"})
+          "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(json)}\r\n\r\n#{json}"
+        true -> "HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\n\r\n"
+      end
+    rescue
+      e ->
+        IO.puts("ERROR in handle_client: #{inspect(e)}")
+        err_json = ~s({"success":false,"error":"#{escape_json(inspect(e))}"})
+        "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nContent-Length: #{byte_size(err_json)}\r\n\r\n#{err_json}"
     end
     :gen_tcp.send(socket, resp)
     :gen_tcp.close(socket)
@@ -413,7 +423,7 @@ defmodule SwmmEngine do
 
   defp accept_loop(listen) do
     {:ok, socket} = :gen_tcp.accept(listen)
-    try do handle_client(socket) rescue _ -> :ok end
+    handle_client(socket)
     accept_loop(listen)
   end
 end

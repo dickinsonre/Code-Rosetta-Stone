@@ -3,7 +3,8 @@ import { modules, languages, translationNotes } from "./modules.js";
 import AppShowcase from "./AppShowcase.jsx";
 import SwmmEngineRunner from "./apps/SwmmEngineRunner.jsx";
 import SwmmCodeViewer from "./apps/SwmmCodeViewer.jsx";
-
+import AiChat from "./apps/AiChat.jsx";
+import EpanetRosettaStone from "./EpanetRosettaStone.jsx";
 export const playgroundUrls = {
   c: "https://godbolt.org/",
   rust: "https://play.rust-lang.org/",
@@ -744,6 +745,7 @@ export default function SWMM5CodeViewer() {
   const [highlightedLine, setHighlightedLine] = useState(-1);
   const [codeSearch, setCodeSearch] = useState("");
   const [showDepDiagram, setShowDepDiagram] = useState(false);
+  const [showChat, setShowChat] = useState(false);
 
   const leftScrollRef = useRef(null);
   const rightScrollRef = useRef(null);
@@ -893,6 +895,10 @@ export default function SWMM5CodeViewer() {
           color: ${t.accent}; border-bottom-color: ${t.accent};
           background: ${t.modActiveBg};
         }
+        @keyframes chatSlideIn {
+          from { opacity: 0; transform: translateY(20px) scale(0.95); }
+          to { opacity: 1; transform: translateY(0) scale(1); }
+        }
         * { box-sizing: border-box; }
         ::-webkit-scrollbar { width: 6px; height: 6px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -973,6 +979,19 @@ export default function SWMM5CodeViewer() {
         >
           <span style={{ fontSize: 15 }}>{"\uD83D\uDCA7"}</span>
           HydroCouple
+        </button>
+        <button
+          className={`app-tab ${activeTab === "epanet" ? "active" : ""}`}
+          onClick={() => setActiveTab("epanet")}
+        >
+          <span style={{
+            width: 20, height: 20, borderRadius: 5,
+            background: "linear-gradient(135deg, #0077b6 0%, #00b4d8 100%)",
+            display: "inline-flex", alignItems: "center", justifyContent: "center",
+            fontSize: 10, fontWeight: 700, color: "#fff",
+            fontFamily: "'JetBrains Mono', monospace",
+          }}>EN</span>
+          EPANET
         </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
@@ -1088,6 +1107,74 @@ export default function SWMM5CodeViewer() {
 
       {/* SWMM Apps Tab */}
       {activeTab === "swmmapps" && <AppShowcase theme={t} />}
+
+      {/* EPANET Tab */}
+      {activeTab === "epanet" && <EpanetRosettaStone theme={t} />}
+
+      {/* Floating AI Chat */}
+      {showChat && (
+        <div style={{
+          position: "fixed", bottom: 80, right: 24,
+          width: isMobile ? "calc(100vw - 32px)" : 420,
+          height: isMobile ? "calc(100vh - 120px)" : "70vh",
+          maxHeight: 700,
+          borderRadius: 16,
+          border: `1px solid ${t.border}`,
+          background: t.bg,
+          boxShadow: `0 8px 40px ${t.accent}22, 0 2px 12px rgba(0,0,0,0.3)`,
+          zIndex: 1000,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          animation: "chatSlideIn 0.25s ease-out",
+        }}>
+          <div style={{
+            padding: "10px 16px",
+            borderBottom: `1px solid ${t.border}`,
+            background: t.panelHeader,
+            display: "flex", alignItems: "center", gap: 8,
+            borderRadius: "16px 16px 0 0",
+            flexShrink: 0,
+          }}>
+            <span style={{ fontSize: 16 }}>{"\uD83E\uDD16"}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: t.text, fontFamily: "'JetBrains Mono', monospace" }}>
+              SWMM5 / EPANET AI
+            </span>
+            <button
+              onClick={() => setShowChat(false)}
+              style={{
+                marginLeft: "auto", background: "transparent", border: "none",
+                color: t.textDim, cursor: "pointer", fontSize: 18, padding: "0 4px",
+                lineHeight: 1,
+              }}
+            >&times;</button>
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <AiChat theme={t} embedded />
+          </div>
+        </div>
+      )}
+      <button
+        onClick={() => setShowChat(prev => !prev)}
+        style={{
+          position: "fixed", bottom: 20, right: 24,
+          width: 52, height: 52, borderRadius: "50%",
+          background: showChat
+            ? t.border
+            : `linear-gradient(135deg, ${t.accent} 0%, ${t.accentAlt || t.accent} 100%)`,
+          border: "none",
+          color: "#fff",
+          fontSize: 22,
+          cursor: "pointer",
+          boxShadow: showChat ? "none" : `0 4px 16px ${t.accent}44`,
+          zIndex: 1001,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          transition: "all 0.2s",
+        }}
+        title={showChat ? "Close chat" : "AI Assistant"}
+      >
+        {showChat ? "\u2715" : "\uD83E\uDD16"}
+      </button>
 
       {/* Rosetta Stone Tab Content */}
       {activeTab === "rosetta" && <>

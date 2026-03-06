@@ -127,10 +127,10 @@
                        (setf (gethash (first toks) (model-timeseries m)) new-ts) new-ts))))
          (loop for i from 1 below n by 2
            when (< (1+ i) n) do
-             (let ((tv (handler-case (let ((v (read-from-string (nth i t)))) (coerce v 'double-float))
-                         (error () (/ (parse-time-str (nth i t)) 3600d0)))))
+             (let ((tv (handler-case (let ((v (read-from-string (nth i toks)))) (coerce v 'double-float))
+                         (error () (/ (parse-time-str (nth i toks)) 3600d0)))))
                (setf (tseries-times ts) (append (tseries-times ts) (list tv)))
-               (setf (tseries-vals ts) (append (tseries-vals ts) (list (safe-float (nth (1+ i) t))))))))))))
+               (setf (tseries-vals ts) (append (tseries-vals ts) (list (safe-float (nth (1+ i) toks))))))))))))
 
 (defun get-rainfall (m gage-id elapsed)
   (let ((g (find gage-id (model-gages m) :key #'gage-id :test #'string=)))

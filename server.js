@@ -1,10 +1,11 @@
 import express from 'express';
 import multer from 'multer';
 import { execFile, spawn } from 'child_process';
-import { readFile, readFileSync, unlink, mkdirSync, existsSync } from 'fs';
+import { readFile, readFileSync, unlink, mkdirSync, existsSync, readdirSync } from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import http from 'http';
+import Anthropic from '@anthropic-ai/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -454,6 +455,89 @@ app.get('/api/engine-source/:lang', (req, res) => {
     if (err) return res.status(500).json({ error: 'Could not read source' });
     res.type('text/plain').send(data);
   });
+});
+
+const anthropic = new Anthropic({
+  apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+  baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+});
+
+function gatherCodeContext() {
+  const dirs = readdirSync(__dirname, { withFileTypes: true })
+    .filter(d => d.isDirectory() && d.name.startsWith('swmm5-'))
+    .map(d => d.name);
+  const snippets = [];
+  for (const dir of dirs) {
+    const files = readdirSync(path.join(__dirname, dir)).filter(f =>
+      /\.(c|cpp|rs|go|py|js|ts|java|rb|pl|lua|kt|scala|nim|zig|dart|tcl|rkt|exs|f90|R|ml|hs|pas|lisp|adb)$/.test(f)
+    );
+    for (const f of files) {
+      try {
+        const content = readFileSync(path.join(__dirname, dir, f), 'utf8');
+        if (content.length < 50000) {
+          snippets.push(`--- ${dir}/${f} (${content.split('\n').length} lines) ---\n${content.substring(0, 3000)}${content.length > 3000 ? '\n... (truncated)' : ''}`);
+        }
+      } catch {}
+    }
+  }
+  return snippets.join('\n\n');
+}
+
+let cachedCodeContext = null;
+function getCodeContext() {
+  if (!cachedCodeContext) cachedCodeContext = gatherCodeContext();
+  return cachedCodeContext;
+}
+
+app.use(express.json({ limit: '1mb' }));
+
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { messages } = req.body;
+    if (!messages || !Array.isArray(messages)) {
+      return res.status(400).json({ error: 'messages array required' });
+    }
+
+    const codeContext = getCodeContext();
+    const systemPrompt = `You are the SWMM5 & EPANET Rosetta Stone AI assistant. You have deep knowledge of:
+- EPA SWMM5 (Storm Water Management Model) — hydraulics, hydrology, water quality
+- EPA EPANET — pressurized pipe network hydraulic/water quality modeling
+- This project: an interactive multi-language code comparison tool showing SWMM5 algorithms in 37 languages and EPANET algorithms in 8 languages
+- All the engine implementations (C, Rust, Go, Python, JavaScript, TypeScript, Java, Ruby, Perl, Lua, Kotlin, Scala, Nim, Zig, Dart, Tcl, Racket, Elixir, Fortran, R, OCaml, Haskell, Pascal, Common Lisp, Ada)
+
+Here is a summary of all engine source code in this project:
+${codeContext}
+
+Answer questions about the code, algorithms, SWMM5/EPANET concepts, or help users understand the implementations. Be specific and reference actual code when relevant. Keep answers concise but thorough.`;
+
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    const stream = anthropic.messages.stream({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 4096,
+      system: systemPrompt,
+      messages: messages.map(m => ({ role: m.role, content: m.content })),
+    });
+
+    for await (const event of stream) {
+      if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        res.write(`data: ${JSON.stringify({ content: event.delta.text })}\n\n`);
+      }
+    }
+
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Chat API error:', error);
+    if (res.headersSent) {
+      res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+      res.end();
+    } else {
+      res.status(500).json({ error: error.message });
+    }
+  }
 });
 
 app.listen(PORT, '0.0.0.0', () => {

@@ -1,129 +1,51 @@
 # SWMM5 Rosetta Stone
 
 ## Overview
-An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 37 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, C#, MATLAB, R, Delphi/Pascal, TypeScript, CUDA, WebAssembly/WAT, Mojo, Java, Nim, Ada, Chapel, Swift, Kotlin, Ruby, AutoLISP, Common Lisp, Clojure, Scheme, Hy, VBA, Lua, Tcl, Haskell, Scala, Dart, Elixir, and OCaml.
+The SWMM5 Rosetta Stone project is an interactive, multi-language code comparison viewer for the EPA Storm Water Management Model (SWMM5) and EPA EPANET engine algorithms. Its primary purpose is to provide a comprehensive resource for understanding how these water modeling algorithms are implemented across 37 programming languages for SWMM5 and 23 for EPANET. The project aims to consolidate and present a vast array of code implementations, interactive applications, and AI assistance in a single, accessible platform. This project serves as a valuable educational and development tool for environmental engineers, hydrologists, and software developers working with water infrastructure modeling.
 
-## Current State
-- Fully functional single-page React application with tabbed interface
-- Eight top-level tabs: "Rosetta Stone" (code comparison), "SWMM5 Engines" (upload .inp files and run SWMM5 simulations via 14 real + 26 live + 1 concept engine, view .rpt reports), "SWMM5 Code" (browse full source code for all 11 real engine implementations), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
-- Fifty SWMM5 modules organized by engineering category:
-  - Hydraulics: routing.c, dynwave.c, flowrout.c, kinwave.c, xsect.c, link.c, node.c, dwflow.c, culvert.c, forcmain.c, roadway.c, exfil.c, shape.c, transect.c
-  - Hydrology: subcatch.c, infil.c, lid.c, gwater.c, climate.c, rdii.c, snow.c, runoff.c, gage.c, landuse.c, lidproc.c
-  - Water Quality: qualrout.c, treatmnt.c, surfqual.c
-  - Operations: controls.c
-  - Numerical: odesolve.c, findroot.c, mathexpr.c, toposort.c
-  - Data Processing: rain.c, massbal.c, hotstart.c, iface.c, inflow.c, output.c, input.c, report.c, project.c, stats.c, statsrpt.c, table.c, datetime.c, hash.c, mempool.c, keywords.c, swmm5.c
-- 37 languages organized in tiers:
-  - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
-  - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal, Ruby
-  - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
-  - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
-  - Tier 4 (Lisp family + scripting): AutoLISP, Common Lisp, Clojure, Scheme, Hy, VBA, Lua, Tcl, Haskell, Scala, Dart, Elixir, OCaml
-- SWMM5 Engines tab with 41 engines total:
-  - 14 Real engines: EPA SWMM5 (C/Python backend), JavaScript (browser-native), Rust/WASM (140KB browser binary), Go (native 8.6MB binary on port 3002), Pure Python (stdlib-only on port 3003), C standalone (30KB binary on port 3004), C++ OOP (75KB binary on port 3005), TypeScript/Bun (port 3006), Rust native (505KB binary on port 3007), Perl (port 3008), Ruby (TCPServer on port 3009), Lua (CGI stdin/stdout), Java (ServerSocket on port 3011)
-  - 26 Live engines (EPA C proxy with rebranding): Julia, CUDA GPU, MATLAB, WAT/WASM, Nim, Delphi, R, Zig, Kotlin, Swift, Mojo, Ada, Chapel, C#, Fortran, AutoLISP, Common Lisp, Clojure, Scheme/Racket, Hy, VBA, Tcl, Haskell, Scala, Dart, Elixir, OCaml
-  - 1 Concept engine: PySWMM
-- SWMM5 Code tab: Browse complete source code for all 11 standalone engine implementations (6,793 total lines across C, C++, Rust, Go, Python, JavaScript, TypeScript, Java, Ruby, Perl, Lua)
-- MicroGPTs tab with 6 sub-tabs: Manning's Equation, Partial-Flow, RTK/RDII, Hydrology (Green-Ampt/Horton/NLR/SCS), Groundwater, IDF & Muskingum
-- Custom syntax highlighting with token-based stashing to prevent regex conflicts
-- 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
-- Synchronized scrolling between code panels
-- Line-by-line correspondence highlighting (hover a line to highlight same line in both panels)
-- Code search across panels with match highlighting and count display
-- "Try Online" playground links per language (Godbolt, Rust Playground, Go Playground, etc.)
-- Module dependency diagram (SVG graph showing how 50 modules interconnect, clickable to navigate)
-- Copy-to-clipboard per code panel (with execCommand fallback)
-- Responsive mobile layout (panels stack vertically below 900px)
-- Enriched module descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links
-- Contextual navigation links from modules to related apps (INP MAKER, Simulation Engine, Rain Canvas Studio)
-- Landing/About section with project overview and EPA SWMM5 link
-- Search/Filter to find modules by concept, equation, tag, or description
-- Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
-- Per-language-pair translation notes (300+ pairs covering all 37 languages)
-- All module/language counts are dynamic (no hardcoded numbers)
-- Version stamp in footer (v2.0 — March 2026)
+## User Preferences
+I prefer iterative development with clear, modular code. Please use functional programming patterns where appropriate. Before implementing major changes or new features, I would like to review the proposed approach. I appreciate detailed explanations of complex solutions.
 
-## Project Architecture
-- **Framework**: React + Vite
-- **Structure**: 
-  - `src/modules.js` — All module data (code samples for 37 languages × 50 modules, metadata, languages array, 300+ translation notes)
-  - `src/App.jsx` — UI components, themes, syntax highlighting for 37 languages, main app, MODULE_GRAPH with 50 modules
-  - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 13 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
-  - `src/appIdeas.js` — Data for 13 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, TypeScript, MATLAB, C#, Java)
-  - `src/apps/MicroEngine.jsx` — C Micro-Engine: interactive SWMM simulation with canvas network visualization
-  - `src/apps/SwmmLint.jsx` — Rust Linter: .inp file validator with 10+ rules, split-panel editor/results
-  - `src/apps/ScenarioOrchestrator.jsx` — Python Orchestrator: parameter sweep UI with sensitivity charts
-  - `src/apps/HpcSolver.jsx` — Fortran HPC: animated parallel speedup benchmark visualization
-  - `src/apps/UncertaintyLab.jsx` — Julia UQ Lab: Monte Carlo simulation with exceedance probability curves
-  - `src/apps/NetworkVisualizer.jsx` — JavaScript Visualizer: animated network with flow/depth colors, timeline scrubber
-  - `src/apps/ApiServer.jsx` — Go API Server: interactive REST endpoint explorer with simulated responses
-  - `src/apps/WasmEngine.jsx` — Zig WASM Engine: browser-based SWMM solver with performance metrics
-  - `src/apps/CrossSectionCalc.jsx` — C++ Cross-Section Calculator: interactive geometry for 4 pipe shapes with real-time property display
-  - `src/apps/ModelDashboard.jsx` — TypeScript Dashboard: tabbed model inspector with node/link tables and simulation results
-  - `src/apps/HydrographPlotter.jsx` — MATLAB Hydrograph Plotter: SCS design storm + unit hydrograph runoff computation
-  - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
-  - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
-  - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
-  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 41 engine options (14 real + 26 live + 1 concept), upload .inp files, run simulations, view/download .rpt reports
-  - `src/apps/SwmmCodeViewer.jsx` — SWMM5 Code tab: browse full source code for all 11 real engine implementations with search, line numbers, copy
-  - `src/engines/swmm5-js.js` — JavaScript SWMM5 engine: INP parser, Horton infiltration, dynamic wave routing, .rpt generation (runs in browser)
-  - `src/engines/wasm/swmm5_rs.js` — Rust WASM engine JS bindings (generated by wasm-bindgen)
-  - `src/engines/wasm/swmm5_rs_bg.wasm` — Compiled Rust WASM binary (140KB)
-  - `swmm5-rs/` — Rust SWMM5 engine source (lib.rs, project.rs, input.rs, xsect.rs, infil.rs, subcatch.rs, routing.rs, report.rs)
-  - `swmm5-go/` — Go SWMM5 engine source (main.go) — real standalone engine, compiled to 8.6MB native binary
-  - `swmm5-go/swmm5-go` — Compiled Go binary, started by server.js as child process on port 3002
-  - `swmm5-py/` — Pure Python SWMM5 engine (swmm5_engine.py) — stdlib-only, HTTP server on port 3003
-  - `swmm5-c/` — Standalone C SWMM5 engine (swmm5_engine.c) — 30KB binary, POSIX sockets, port 3004
-  - `swmm5-c/swmm5-c` — Compiled C binary
-  - `swmm5-cpp/` — C++ OOP SWMM5 engine (swmm5_engine.cpp) — 75KB binary, C++17, port 3005
-  - `swmm5-cpp/swmm5-cpp` — Compiled C++ binary
-  - `swmm5-ts/` — TypeScript/Bun SWMM5 engine (swmm5_engine.ts) — Bun runtime, port 3006
-  - `swmm5-rust-native/` — Rust native SWMM5 engine (src/main.rs) — 505KB binary, TcpListener HTTP, port 3007
-  - `swmm5-rust-native/target/release/swmm5-rust-native` — Compiled Rust binary
-  - `swmm5-perl/` — Perl SWMM5 engine (swmm5_engine.pl) — IO::Socket::INET, port 3008
-  - `swmm5-ruby/` — Ruby SWMM5 engine (swmm5_engine.rb) — TCPServer HTTP, port 3009
-  - `swmm5-lua/` — Lua SWMM5 engine (swmm5_engine.lua) — CGI-style stdin/stdout (no socket library needed)
-  - `swmm5-java/` — Java SWMM5 engine (SwmmEngine.java) — ServerSocket HTTP, port 3011
-  - `swmm5-java/SwmmEngine.class` — Compiled Java bytecode
-  - `server.js` — Express backend API for running SWMM5 simulations (EPA C via Python, Go/Python/C/C++/TS/Rust/Perl/Ruby/Java via port proxies, Lua via CGI spawn)
-  - `run_swmm.py` — Python script that executes SWMM5 simulations using swmm-toolkit solver
-  - `public/user1-5.inp` — Sample SWMM5 models (58-208 nodes), `public/Greenville_all_SWMM5_Features.inp` — full-featured model
-  - `src/main.jsx` — Entry point
-- **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
-- **Port**: 5000 (Vite dev server), 3001 (Express backend API), 3002 (Go engine), 3003 (Python engine), 3004 (C engine), 3005 (C++ engine), 3006 (TypeScript/Bun engine), 3007 (Rust native engine), 3008 (Perl engine), 3009 (Ruby engine), 3011 (Java engine)
-- **Deployment**: Vite frontend + Express backend + 10 engine child processes (all started via npm run dev)
+## System Architecture
+The application is a single-page React application built with Vite. It features a tabbed interface for different functionalities, including code comparison ("Rosetta Stone", "EPANET"), engine execution ("SWMM5 Engines"), code browsing ("SWMM5 Code"), interactive applications ("SWMM Apps"), neural network trainers ("MicroGPTs"), and an AI assistant ("AI Chat").
 
-## Key Technical Decisions
-- Custom syntax highlighter using token placeholder approach (`%%TOK%%`) to prevent comment/string/keyword regex patterns from interfering with each other
-- Module data extracted to separate `src/modules.js` file with tags array for search support
-- Theme system uses a `themes` object with dark/light variants, all colors driven by theme tokens
-- Scroll sync uses ratio-based approach with requestAnimationFrame lock to prevent feedback loops
-- Clipboard API with execCommand fallback for non-secure contexts
-- Search filters modules by name, description, category, equations, inputs/outputs, and tags
-- Share buttons use standard LinkedIn/Twitter intent URLs (no API keys needed)
-- Translation notes use sorted language-pair keys (e.g., "c-rust", "python-julia") looked up via [left, right].sort().join("-")
-- MicroGPTs served as standalone HTML files from public/ directory via Vite, embedded as iframes with sub-tab navigation
-- MODULE_GRAPH includes 6 categories: Hydraulics, Hydrology, Quality, Operations, Data, Numerical
-- SWMM5 Engines tab: 14 real engines (EPA C, JS browser, Rust/WASM, Go native, Pure Python, C standalone, C++ OOP, TypeScript/Bun, Rust native, Perl, Ruby, Lua, Java), 26 proxy engines (route to EPA C with rebranding), 1 concept (PySWMM)
-- Engine status badges: "REAL" (orange) for standalone engines with own code, "LIVE" (green) for EPA C proxies, "CONCEPT" for roadmap items
-- All real engines share the same architecture: INP parser, Horton infiltration, Manning's equation routing, .rpt report generation
-- Go engine compiled with go-1.25, runs as HTTP server on port 3002, spawned by server.js as child process
-- Python engine uses only stdlib (http.server, json, math), runs on port 3003
-- C engine compiled with GCC -O2, uses POSIX sockets for HTTP, runs on port 3004 (30KB binary)
-- C++ engine compiled with G++ -std=c++17, OOP design with classes/STL containers, runs on port 3005 (75KB binary)
-- TypeScript engine runs on Bun v1.2.16 runtime, full type interfaces, port 3006
-- Rust native engine compiled with rustc 1.88.0, 505KB binary, TcpListener-based HTTP, port 3007
-- Perl engine uses IO::Socket::INET, Time::HiRes for microsecond timing, regex INP parser, port 3008
-- Ruby engine uses TCPServer for HTTP serving, blocks/iterators for data processing, port 3009
-- Lua engine uses CGI-style stdin/stdout (LuaSocket not linking in Nix), spawned per-request by server.js
-- Java engine uses ServerSocket for HTTP, GraalVM 19, compiled to .class bytecode, port 3011
-- SWMM5 Code tab: fetches source files via /api/engine-source/:lang endpoint, displays with line numbers, search, copy
-- server.js uses a reusable proxyToEngine() function to forward requests to all engine child processes
-- Rust WASM engine compiled with rustup 1.88.0 + wasm-pack, installed at ~/. not in workspace (to avoid Vite file watcher overload)
-- Vite config includes `assetsInclude: ['**/*.wasm']` for WASM file handling
-- Backend dependencies: express, multer (file upload handling)
-- Python dependencies: swmm-toolkit (EPA SWMM5 engine bindings)
-- Rust dependencies (swmm5-rs): wasm-bindgen (JS interop)
-- Go dependencies: none (stdlib only)
-- C/C++ dependencies: none (stdlib + POSIX only)
-- No other external dependencies beyond React and Vite
+**UI/UX Decisions:**
+- **Layout:** Responsive mobile layout (panels stack vertically below 900px).
+- **Theming:** 6 color themes (Dark, Light, UF Gators, Auburn, Oregon State, EPA) with colors driven by theme tokens.
+- **Code Visualization:** Custom syntax highlighting, synchronized scrolling between code panels, line-by-line correspondence highlighting on hover, and code search with match highlighting.
+- **Navigation:** Module dependency diagrams (SVG graph), contextual navigation links to related apps.
+
+**Technical Implementations & Feature Specifications:**
+- **Code Comparison:** Displays 50 SWMM5 modules across 37 languages and 25 EPANET modules across 23 languages. Modules are categorized (Hydraulics, Hydrology, Water Quality, Operations, Numerical, Data Processing). The EPANET tab uses the same horizontal layout as the Rosetta Stone tab with LEFT/RIGHT language selectors, synchronized scrolling, code search, and module dependency diagrams.
+- **SWMM5 Engines:** Provides an interface to run SWMM5 simulations using 41 different engine implementations (14 real, 26 live proxies, 1 concept). Users can upload `.inp` files and view `.rpt` reports. Real engines include implementations in C, Rust, Python, Go, JavaScript, C++, TypeScript, Perl, Ruby, Lua, and Java.
+- **SWMM5 Code Browser:** Allows browsing of full source code for 11 standalone engine implementations with search and line numbers.
+- **SWMM Apps:** Showcases 13 language-native SWMM app concepts with interactive components.
+- **MicroGPTs:** Integrates 6 embedded neural network trainers for various SWMM equations (e.g., Manning's Equation, Hydrology).
+- **AI Chat:** A Claude-powered AI assistant accessible via a floating icon in the bottom-right corner (available on all tabs). Opens as an overlay panel with streaming responses and markdown rendering.
+- **Module Information:** Enriched descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links.
+- **Search & Filter:** Functionality to find modules by concept, equation, tag, or description.
+- **Translation Notes:** Provides notes for over 300 language pairs.
+
+**System Design Choices:**
+- **Data Structure:** Module data, including code samples and metadata, is managed in `src/modules.js` and `src/epanetModules.js`.
+- **Backend:** An Express.js backend (`server.js`) handles API requests, including running SWMM5 simulations, proxying requests to various language-specific engine processes, and managing the AI chat.
+- **Engine Execution:** Real engines are implemented as separate executables or scripts, spawned as child processes by the Express backend. These engines run on dedicated ports (e.g., Go on 3002, Python on 3003). Proxy engines leverage the EPA C engine.
+- **WASM Integration:** Rust engine compiled to WebAssembly for browser-native execution.
+- **Frontend Framework:** React with Vite for development and bundling.
+
+## External Dependencies
+- **Backend:**
+    - `express`: Web framework for Node.js.
+    - `multer`: Middleware for handling `multipart/form-data`, primarily for file uploads.
+    - `@anthropic-ai/sdk`: For interacting with Claude AI (via Replit AI Integrations).
+    - `openai`: For Replit AI Integrations.
+- **Python (for `swmm-toolkit` engine execution):**
+    - `swmm-toolkit`: Bindings for the EPA SWMM5 engine.
+- **Rust (for `swmm5-rs` WASM engine):**
+    - `wasm-bindgen`: For JavaScript interoperability.
+- **AI Services:**
+    - Claude (Anthropic): Used for the AI Chat functionality via Replit AI Integrations.
+- **Embedded Explorers:**
+    - PySWMM Explorer (via iframe)
+    - SWMManywhere Explorer (via iframe)
+    - HydroCouple Explorer (via iframe)
