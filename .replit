@@ -4,7 +4,7 @@ expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["wasm-pack", "lua52Packages.luasocket"]
+packages = ["wasm-pack", "lua52Packages.luasocket", "gfortran", "zig", "nim", "ghc", "tcl", "scala", "kotlin", "dart", "elixir", "ocaml", "R", "fpc", "sbcl", "racket", "gnat"]
 
 [workflows]
 runButton = "Project"
