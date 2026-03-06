@@ -172,16 +172,20 @@ public:
             } else if (section == "XSECTIONS" && tokens.size() >= 3) {
                 Xsect xs;
                 xs.id = tokens[0]; xs.type = toUpper(tokens[1]);
-                xs.geom1 = std::stod(tokens[2]);
-                if (tokens.size() > 3) try { xs.geom2 = std::stod(tokens[3]); } catch (...) {}
-                if (xs.type == "CIRCULAR") {
-                    xs.a_full = M_PI * std::pow(xs.geom1 / 2.0, 2);
-                    xs.r_full = xs.geom1 / 4.0;
+                if (xs.type == "IRREGULAR") {
+                    xs.geom1 = 1.0; xs.a_full = 1.0; xs.r_full = 0.25;
                 } else {
-                    double w = xs.geom2 > 0 ? xs.geom2 : xs.geom1;
-                    xs.a_full = xs.geom1 * w;
-                    double p = 2.0 * xs.geom1 + 2.0 * w;
-                    xs.r_full = p > 0 ? xs.a_full / p : 0;
+                    xs.geom1 = std::stod(tokens[2]);
+                    if (tokens.size() > 3) try { xs.geom2 = std::stod(tokens[3]); } catch (...) {}
+                    if (xs.type == "CIRCULAR") {
+                        xs.a_full = M_PI * std::pow(xs.geom1 / 2.0, 2);
+                        xs.r_full = xs.geom1 / 4.0;
+                    } else {
+                        double w = xs.geom2 > 0 ? xs.geom2 : xs.geom1;
+                        xs.a_full = xs.geom1 * w;
+                        double p = 2.0 * xs.geom1 + 2.0 * w;
+                        xs.r_full = p > 0 ? xs.a_full / p : 0;
+                    }
                 }
                 auto it = link_map.find(xs.id);
                 if (it != link_map.end()) {

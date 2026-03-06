@@ -129,8 +129,15 @@ sub parse_inp {
                 max_depth_frac => 0, full_depth => 0, full_area => 0,
             };
         } elsif ($section eq "XSECTIONS" && @t >= 3) {
+            my $tp = uc($t[1]);
+            my ($g1, $g2);
+            if ($tp eq "IRREGULAR") {
+                $g1 = 1.0; $g2 = 0;
+            } else {
+                $g1 = $t[2] + 0; $g2 = ($t[3] || 0) + 0;
+            }
             my $xs = {
-                id => $t[0], type => uc($t[1]), geom1 => $t[2] + 0, geom2 => ($t[3] || 0) + 0,
+                id => $t[0], type => $tp, geom1 => $g1, geom2 => $g2,
                 a_full => 0, r_full => 0,
             };
             if ($xs->{type} eq "CIRCULAR") {

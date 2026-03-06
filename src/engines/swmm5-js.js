@@ -251,13 +251,15 @@ function parseInp(text) {
 
       case 'XSECTIONS':
         if (tokens.length >= 3) {
+          const xShape = tokens[1].toUpperCase();
+          const isIrregular = xShape === 'IRREGULAR';
           project.xsections[tokens[0]] = {
-            shape: tokens[1].toUpperCase(),
-            geom1: parseFloat(tokens[2]),
-            geom2: tokens[3] ? parseFloat(tokens[3]) : 0,
-            geom3: tokens[4] ? parseFloat(tokens[4]) : 0,
-            geom4: tokens[5] ? parseFloat(tokens[5]) : 0,
-            barrels: tokens[6] ? parseInt(tokens[6]) : 1,
+            shape: xShape,
+            geom1: isIrregular ? 1.0 : parseFloat(tokens[2]) || 0,
+            geom2: isIrregular ? 0 : (tokens[3] ? parseFloat(tokens[3]) : 0),
+            geom3: isIrregular ? 0 : (tokens[4] ? parseFloat(tokens[4]) : 0),
+            geom4: isIrregular ? 0 : (tokens[5] ? parseFloat(tokens[5]) : 0),
+            barrels: isIrregular ? 1 : (tokens[6] ? parseInt(tokens[6]) : 1),
           };
           if (project.conduits[tokens[0]]) {
             project.conduits[tokens[0]].xsect = project.xsections[tokens[0]];

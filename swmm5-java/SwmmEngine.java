@@ -150,16 +150,21 @@ public class SwmmEngine {
                 case "XSECTIONS":
                     if (t.length >= 3) {
                         Xsect xs = new Xsect();
-                        xs.id = t[0]; xs.type = t[1].toUpperCase(); xs.geom1 = dbl(t[2]);
-                        xs.geom2 = t.length > 3 ? dbl(t[3]) : 0;
-                        if (xs.type.equals("CIRCULAR")) {
-                            xs.aFull = PI * Math.pow(xs.geom1 / 2, 2);
-                            xs.rFull = xs.geom1 / 4;
+                        xs.id = t[0]; xs.type = t[1].toUpperCase();
+                        if (xs.type.equals("IRREGULAR")) {
+                            xs.geom1 = 1.0; xs.geom2 = 0; xs.aFull = 1.0; xs.rFull = 0.25;
                         } else {
-                            double w = xs.geom2 > 0 ? xs.geom2 : xs.geom1;
-                            xs.aFull = xs.geom1 * w;
-                            double p = 2 * xs.geom1 + 2 * w;
-                            xs.rFull = p > 0 ? xs.aFull / p : 0;
+                            xs.geom1 = dbl(t[2]);
+                            xs.geom2 = t.length > 3 ? dbl(t[3]) : 0;
+                            if (xs.type.equals("CIRCULAR")) {
+                                xs.aFull = PI * Math.pow(xs.geom1 / 2, 2);
+                                xs.rFull = xs.geom1 / 4;
+                            } else {
+                                double w = xs.geom2 > 0 ? xs.geom2 : xs.geom1;
+                                xs.aFull = xs.geom1 * w;
+                                double p = 2 * xs.geom1 + 2 * w;
+                                xs.rFull = p > 0 ? xs.aFull / p : 0;
+                            }
                         }
                         for (Link lk : m.links)
                             if (lk.id.equals(xs.id)) { lk.fullDepth = xs.geom1; lk.fullArea = xs.aFull; break; }

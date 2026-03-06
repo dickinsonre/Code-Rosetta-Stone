@@ -117,9 +117,13 @@ def parse_inp(text)
       }
     when 'XSECTIONS'
       next unless tokens.length >= 3
-      g1 = tokens[2].to_f
-      g2 = (tokens[3] || 0).to_f
       tp = tokens[1].upcase
+      if tp == 'IRREGULAR'
+        g1 = 1.0; g2 = 0.0
+      else
+        g1 = tokens[2].to_f
+        g2 = (tokens[3] || 0).to_f
+      end
       if tp == 'CIRCULAR'
         af = PI * (g1 / 2.0) ** 2
         rf = g1 / 4.0

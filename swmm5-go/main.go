@@ -481,8 +481,14 @@ func parseInp(text string) *Project {
 
                 case "XSECTIONS":
                         if len(tokens) >= 3 {
-                                geom1, _ := strconv.ParseFloat(tokens[2], 64)
-                                xs := &XSection{Shape: strings.ToUpper(tokens[1]), Geom1: geom1, Barrels: 1}
+                                shape := strings.ToUpper(tokens[1])
+                                var geom1 float64
+                                if shape == "IRREGULAR" {
+                                        geom1 = 1.0
+                                } else {
+                                        geom1, _ = strconv.ParseFloat(tokens[2], 64)
+                                }
+                                xs := &XSection{Shape: shape, Geom1: geom1, Barrels: 1}
                                 if len(tokens) > 3 {
                                         xs.Geom2, _ = strconv.ParseFloat(tokens[3], 64)
                                 }

@@ -220,12 +220,16 @@ class SwmmModel {
           });
         } break;
         case "XSECTIONS": if (tokens.length >= 3) {
+          const xType = tokens[1].toUpperCase();
           const xs: XsectData = {
-            id: tokens[0], type: tokens[1].toUpperCase(),
-            geom1: parseFloat(tokens[2]), geom2: parseFloat(tokens[3]) || 0,
+            id: tokens[0], type: xType,
+            geom1: xType === "IRREGULAR" ? 1.0 : (parseFloat(tokens[2]) || 0),
+            geom2: xType === "IRREGULAR" ? 0 : (parseFloat(tokens[3]) || 0),
             aFull: 0, rFull: 0,
           };
-          if (xs.type === "CIRCULAR") {
+          if (xType === "IRREGULAR") {
+            xs.aFull = 1.0; xs.rFull = 0.25;
+          } else if (xs.type === "CIRCULAR") {
             xs.aFull = Math.PI * (xs.geom1 / 2) ** 2;
             xs.rFull = xs.geom1 / 4;
           } else {

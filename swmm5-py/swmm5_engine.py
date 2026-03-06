@@ -365,32 +365,40 @@ def parse_inp(text):
             if len(tokens) >= 3:
                 xs = Xsect()
                 xs.type = tokens[1].upper()
-                xs.geom1 = float(tokens[2])
-                if len(tokens) > 3:
-                    try:
-                        xs.geom2 = float(tokens[3])
-                    except ValueError:
-                        pass
-                if len(tokens) > 4:
-                    try:
-                        xs.geom3 = float(tokens[4])
-                    except ValueError:
-                        pass
-                if len(tokens) > 5:
-                    try:
-                        xs.barrels = int(float(tokens[5]))
-                    except ValueError:
-                        pass
-                if xs.type == "CIRCULAR":
-                    xs.a_full = math.pi * (xs.geom1 / 2.0) ** 2
-                    xs.r_full = xs.geom1 / 4.0
-                elif xs.type in ("RECT_CLOSED", "RECT_OPEN"):
-                    xs.a_full = xs.geom1 * xs.geom2
-                    perim = 2.0 * xs.geom1 + 2.0 * xs.geom2
-                    xs.r_full = xs.a_full / perim if perim > 0 else 0
+                if xs.type == "IRREGULAR":
+                    xs.geom1 = 1.0
+                    xs.a_full = 1.0
+                    xs.r_full = 0.25
                 else:
-                    xs.a_full = math.pi * (xs.geom1 / 2.0) ** 2
-                    xs.r_full = xs.geom1 / 4.0
+                    try:
+                        xs.geom1 = float(tokens[2])
+                    except ValueError:
+                        xs.geom1 = 1.0
+                    if len(tokens) > 3:
+                        try:
+                            xs.geom2 = float(tokens[3])
+                        except ValueError:
+                            pass
+                    if len(tokens) > 4:
+                        try:
+                            xs.geom3 = float(tokens[4])
+                        except ValueError:
+                            pass
+                    if len(tokens) > 5:
+                        try:
+                            xs.barrels = int(float(tokens[5]))
+                        except ValueError:
+                            pass
+                    if xs.type == "CIRCULAR":
+                        xs.a_full = math.pi * (xs.geom1 / 2.0) ** 2
+                        xs.r_full = xs.geom1 / 4.0
+                    elif xs.type in ("RECT_CLOSED", "RECT_OPEN"):
+                        xs.a_full = xs.geom1 * xs.geom2
+                        perim = 2.0 * xs.geom1 + 2.0 * xs.geom2
+                        xs.r_full = xs.a_full / perim if perim > 0 else 0
+                    else:
+                        xs.a_full = math.pi * (xs.geom1 / 2.0) ** 2
+                        xs.r_full = xs.geom1 / 4.0
                 model.xsects[tokens[0]] = xs
 
         elif section == "TIMESERIES":

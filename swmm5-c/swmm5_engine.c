@@ -322,16 +322,20 @@ static void parse_inp(Model *m, const char *text) {
             Xsect *xs = &m->xsects[m->n_xsects++];
             strncpy(xs->id, t[0], MAX_ID - 1);
             strncpy(xs->type, t[1], 15);
-            xs->geom1 = atof(t[2]);
-            if (nt > 3) xs->geom2 = atof(t[3]);
-            if (strcasecmp(xs->type, "CIRCULAR") == 0) {
-                xs->a_full = M_PI * (xs->geom1 / 2.0) * (xs->geom1 / 2.0);
-                xs->r_full = xs->geom1 / 4.0;
+            if (strcasecmp(xs->type, "IRREGULAR") == 0) {
+                xs->geom1 = 1.0; xs->a_full = 1.0; xs->r_full = 0.25;
             } else {
-                double w = xs->geom2 > 0 ? xs->geom2 : xs->geom1;
-                xs->a_full = xs->geom1 * w;
-                double p = 2.0 * xs->geom1 + 2.0 * w;
-                xs->r_full = p > 0 ? xs->a_full / p : 0;
+                xs->geom1 = atof(t[2]);
+                if (nt > 3) xs->geom2 = atof(t[3]);
+                if (strcasecmp(xs->type, "CIRCULAR") == 0) {
+                    xs->a_full = M_PI * (xs->geom1 / 2.0) * (xs->geom1 / 2.0);
+                    xs->r_full = xs->geom1 / 4.0;
+                } else {
+                    double w = xs->geom2 > 0 ? xs->geom2 : xs->geom1;
+                    xs->a_full = xs->geom1 * w;
+                    double p = 2.0 * xs->geom1 + 2.0 * w;
+                    xs->r_full = p > 0 ? xs->a_full / p : 0;
+                }
             }
             for (int j = 0; j < m->n_links; j++) {
                 if (strcmp(m->links[j].id, xs->id) == 0) {

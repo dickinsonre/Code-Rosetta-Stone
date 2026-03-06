@@ -210,9 +210,12 @@ fn parse_inp(text: &str) -> Model {
                 });
             }
             "XSECTIONS" if tokens.len() >= 3 => {
-                let g1: f64 = tokens[2].parse().unwrap_or(1.0);
-                let g2: f64 = tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0);
                 let tp = tokens[1].to_uppercase();
+                let (g1, g2) = if tp == "IRREGULAR" {
+                    (1.0_f64, 0.0_f64)
+                } else {
+                    (tokens[2].parse().unwrap_or(1.0), tokens.get(3).and_then(|s| s.parse().ok()).unwrap_or(0.0))
+                };
                 let (af, rf) = if tp == "CIRCULAR" {
                     (std::f64::consts::PI * (g1 / 2.0).powi(2), g1 / 4.0)
                 } else {
