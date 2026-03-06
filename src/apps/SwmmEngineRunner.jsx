@@ -2,6 +2,11 @@ import React, { useState, useRef, useCallback } from 'react';
 import { runSwmm5JS } from '../engines/swmm5-js.js';
 
 const SAMPLE_MODELS = [
+  { name: "User1 — Steep Urban (CMS)", file: "/user1.inp", desc: "58 subcatchments, 59 junctions, 59 conduits — steep slopes (up to 200%), CMS units, 7-hour dynamic wave simulation" },
+  { name: "User2 — Storage Network (CFS)", file: "/user2.inp", desc: "17 subcatchments, 43 junctions, 28 storage units, 83 conduits — tabular storage curves, 36-hour dynamic wave routing" },
+  { name: "User3 — Dual Drainage (CMS)", file: "/user3.inp", desc: "168 subcatchments, 130 storage units, 134 conduits — large dual-drainage network, CMS units, 6-hour storm" },
+  { name: "User4 — Large Urban (CFS)", file: "/user4.inp", desc: "112 subcatchments, 208 junctions, 209 conduits — large urban watershed, 24-hour dynamic wave simulation, 5,000+ lines" },
+  { name: "User5 — Complex Drainage (CFS)", file: "/user5.inp", desc: "145 subcatchments, 197 junctions, 271 conduits, 2 storage units — complex storm drainage, variable time step" },
   { name: "Greenville (All Features)", file: "/Greenville_all_SWMM5_Features.inp", desc: "Full-featured Greenville model with LID usage, Green-Ampt infiltration, dynamic wave routing — 14,000+ lines" },
 ];
 
