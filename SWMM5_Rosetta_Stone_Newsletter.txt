@@ -1,0 +1,210 @@
+THE SWMM5 ROSETTA STONE: 2,425 CODE TRANSLATIONS OF EPA'S WATER MODELS ACROSS 37 PROGRAMMING LANGUAGES
+A LinkedIn Newsletter
+
+
+WHAT IF YOU COULD READ THE EPA'S STORMWATER ENGINE IN ANY PROGRAMMING LANGUAGE?
+
+The EPA Storm Water Management Model (SWMM5) is the most widely used stormwater simulation engine in the world. It drives regulatory compliance, infrastructure planning, and flood risk modeling across thousands of municipalities. EPANET, its companion, is the gold standard for pressurized water distribution network analysis. Both are written in C — a language that, while performant, creates a barrier for the majority of today's engineers and developers who work in Python, JavaScript, Julia, Rust, Go, or dozens of other modern languages.
+
+The SWMM5 Rosetta Stone project removes that barrier entirely. It is a free, open, interactive web application that presents every core algorithm from both EPA engines — translated into up to 37 programming languages — side by side, with synchronized scrolling, syntax highlighting, and AI-powered assistance.
+
+The numbers: 50 SWMM5 engine modules across 37 languages. 25 EPANET modules across 23 languages. That is 2,425 individual code translations, all accessible from a single browser tab.
+
+
+THE PROBLEM THIS SOLVES
+
+Environmental engineering has a translation problem. The algorithms that govern how stormwater moves through pipes, how pollutants decay in water networks, and how pumps and valves respond to changing conditions are well-understood mathematically. But they live inside C codebases that are decades old, tightly coupled, and difficult for non-C programmers to study or extend.
+
+A graduate student working in Python who wants to understand how SWMM5's dynamic wave routing works has to read C pointer arithmetic, manual memory management, and struct-based data handling. A Rust developer building a new hydraulic modeling tool has to mentally translate C idioms into ownership and borrowing patterns. A data scientist in Julia who wants to validate a machine learning model against the EPA reference implementation has to bridge two very different programming paradigms.
+
+The Rosetta Stone makes all of this immediate. Select any module, pick any two languages, and read the same algorithm expressed in both — with the same variable names, the same control flow, and the same equations.
+
+
+50 SWMM5 ENGINE MODULES: THE COMPLETE PICTURE
+
+The application covers every module in the SWMM5 engine, organized into seven categories:
+
+Hydraulics (14 modules): The core of SWMM5's flow routing. This includes dynamic wave routing (dynwave.c), the flow routing dispatcher (flowrout.c), conduit hydraulics (link.c), kinematic wave routing (kinwave.c), pressurized force main flow (forcmain.c), culvert inlet/outlet control (culvert.c), roadway overtopping (roadway.c), cross-section geometry (xsect.c), normalized cross-section shapes (shape.c), irregular channel transects (transect.c), steady/normal flow initialization (dwflow.c), the main routing controller (routing.c), junction and storage nodes (node.c), and surface runoff generation (runoff.c).
+
+Hydrology (12 modules): Everything upstream of the pipe network. Subcatchment runoff (subcatch.c), infiltration models including Horton, Green-Ampt, and SCS Curve Number (infil.c), LID/green infrastructure simulation (lid.c, lidproc.c), rainfall processing (rain.c), rain gauge management (gage.c), groundwater flow (gwater.c), climate and evaporation processing (climate.c), snowpack and snowmelt (snow.c), rainfall-dependent inflow and infiltration (rdii.c), external inflow handling (inflow.c), and land use and pollutant buildup (landuse.c).
+
+Water Quality (3 modules): Pollutant transport and treatment. Water quality routing (qualrout.c), surface water quality and washoff (surfqual.c), and water quality treatment (treatmnt.c).
+
+Numerical Methods (4 modules): The mathematical infrastructure. ODE solver using Runge-Kutta methods (odesolve.c), root finding via bisection and Ridder's method (findroot.c), mathematical expression parsing (mathexpr.c), and topological sorting of the network graph (toposort.c).
+
+Data Processing (15 modules): Input, output, and project management. INP file parsing (input.c), binary output file writing (output.c), simulation report generation (report.c), statistics collection (stats.c), statistics reporting (statsrpt.c), project data management (project.c), lookup tables and curves (table.c), date/time utilities (datetime.c), rule-based controls (controls.c), mass balance checking (massbal.c), simulation state save/restore (hotstart.c), interface file handling (iface.c), keyword/token lookup (keywords.c), hash tables (hash.c), memory pool allocation (mempool.c), and the main simulation API (swmm5.c).
+
+Operations (1 module): Conduit exfiltration modeling (exfil.c).
+
+Quality Assurance (1 module): Mass balance checking ensures conservation laws are satisfied throughout the simulation.
+
+Each module entry includes a description, category badge, difficulty rating, the governing equations (such as Manning's equation, the Saint-Venant equations, or Horton's infiltration model), and lists of inputs and outputs.
+
+
+25 EPANET MODULES: PRESSURIZED NETWORK ANALYSIS
+
+The EPANET section covers the EPA's pressurized water distribution network model with the same depth:
+
+Core Solver (3 modules): The Global Gradient Algorithm hydraulic solver (hydraul.c) — the heart of EPANET — along with the sparse matrix solver (smatrix.c) using Cholesky LLT factorization, and minimum degree ordering (genmmd.c) for fill-in minimization.
+
+Network Elements (6 modules): Pipe head loss computation supporting Hazen-Williams, Darcy-Weisbach with Colebrook-White iteration, and Chezy-Manning formulas (pipe.c). Pump modeling with H = A - B*Q^C curves and energy calculations (pump.c). Valve modeling covering PRV, PSV, FCV, TCV, and GPV types (valve.c). Tank level tracking with volume-area curves and mixing models (tank.c). Junction demand and head computation with emitter flows (node.c). Time pattern interpolation and multiplier lookups (pattern.c).
+
+Water Quality (3 modules): Lagrangian water quality transport (quality.c), bulk and wall decay kinetics with chlorine reaction modeling (qualreact.c), and quality segment advection through the pipe network (qualroute.c).
+
+Controls (2 modules): Rule-based controls with IF-THEN-ELSE evaluation (rules.c) and simple time/level controls for pumps and valves (controls.c).
+
+Parser/IO (4 modules): INP file parser with section-based tokenization (input.c), binary output writer with time step results serialization (output.c), text report generation with statistics summary (report.c), and input file read/write utilities (inpfile.c).
+
+Infrastructure (5 modules): Project data structure initialization (project.c), hash table for fast node/link ID lookup (hash.c), memory pool allocator (mempool.c), core type definitions for Node, Link, Pump, Valve, Tank, Pattern, and Curve objects (types.c), and the main API for opening, solving hydraulics, solving quality, and closing (epanet.c).
+
+Numerical (2 modules): Direct linear solver with LU decomposition and pivoting (linsolve.c), and Newton-Raphson iteration manager with convergence checking, line search, and damping (newton.c).
+
+The EPANET tab uses the same horizontal layout as the SWMM5 Rosetta Stone — side-by-side code panels with synchronized scrolling, LEFT/RIGHT language selectors, module dependency diagrams, and code search.
+
+
+37 LANGUAGES FOR SWMM5: FROM C TO OCAML
+
+The SWMM5 Rosetta Stone covers an extraordinary breadth of programming languages, each chosen to represent a different programming paradigm, performance tier, or community:
+
+Systems Languages: C (the EPA reference), Rust (memory-safe systems programming), C++ (OOP systems design), Zig (simple systems language), Nim (Python-like systems language), Ada (safety-critical systems).
+
+Scientific Computing: Python, Julia, MATLAB, R, Fortran, Chapel (parallel scientific computing), Mojo (Python-superset for AI/ML performance).
+
+Web and Application Languages: JavaScript, TypeScript, Java, Kotlin, Swift, Go, C#, Dart, Ruby.
+
+Functional Languages: Haskell, Scala, Elixir, OCaml, Clojure, Common Lisp, Scheme, Hy (Lisp on Python).
+
+Legacy and Domain-Specific: Fortran (still used extensively in numerical computing), Delphi (Object Pascal), VBA (Excel/Office automation), AutoLISP (AutoCAD scripting), Tcl (Tool Command Language).
+
+Low-Level: CUDA (GPU parallel computing), WAT/WASM (WebAssembly text format for browser-native execution), Lua (embedded scripting).
+
+For EPANET, 23 languages are supported: C, Rust, Python, Julia, MATLAB, JavaScript, Go, Fortran, TypeScript, C++, C#, Java, Kotlin, Swift, Zig, Nim, Ruby, Scala, Dart, Haskell, OCaml, Lua, and Elixir.
+
+
+THE SIDE-BY-SIDE COMPARISON EXPERIENCE
+
+The core interaction model is intentionally simple: pick a module, pick two languages, and read. The interface provides:
+
+Synchronized Scrolling: As you scroll through the left panel, the right panel scrolls in lockstep. Line-by-line correspondence is maintained so that line 47 in the C version aligns with line 47 in the Rust version. Hovering over a line highlights its counterpart in the other panel.
+
+Code Search: A search bar lets you find specific functions, variables, or equations across both panels simultaneously. Match counts are displayed, and matches are highlighted in-place within the code.
+
+Module Dependency Diagrams: An interactive SVG graph shows how modules depend on each other — which modules call which, and how data flows through the engine. This is invaluable for understanding the architecture of SWMM5 and EPANET as complete systems, not just isolated algorithms.
+
+Module Information Panels: Each module displays its category badge, difficulty rating (Beginner, Intermediate, Advanced), the governing equations in mathematical notation, lists of inputs and outputs, and links to related resources in the SWMM5 ecosystem.
+
+Language Dot Indicators: Each language button shows a colored dot matching the language's conventional color (Rust's copper, Python's blue, Go's cyan, etc.), making it easy to visually identify and switch between languages.
+
+Six Color Themes: Dark, Light, UF Gators, Auburn, Oregon State, and EPA — each with carefully chosen tokens for syntax highlighting, backgrounds, and UI elements.
+
+
+41 SWMM5 ENGINE IMPLEMENTATIONS: RUN SIMULATIONS IN ANY LANGUAGE
+
+Beyond reading code, the application lets you run actual SWMM5 simulations using 41 different engine implementations. Upload a standard .inp file and get back a .rpt report — from engines written in C, Rust, Python, Go, JavaScript, C++, TypeScript, Perl, Ruby, Lua, Java, and more.
+
+14 of these are real, standalone engines — fully functional implementations that parse INP files, run the simulation, and generate reports:
+
+1. EPA SWMM5 (C Engine) — The official EPA engine accessed via Python swmm-toolkit bindings. Industry standard for regulatory compliance.
+2. PySWMM Engine — PySWMM-powered with step-by-step control. Real-time monitoring and rule-based control during simulation.
+3. Rust SWMM5 WASM Engine — 140KB WebAssembly binary that runs directly in the browser. Zero server dependencies.
+4. Go Native Engine — 8.6MB native binary with sub-millisecond simulation times. Runs as an HTTP server on port 3002.
+5. Pure Python Engine — Written in pure Python with zero dependencies. No EPA bindings. The easiest engine to read, modify, and learn from.
+6. C Standalone Engine — Our own C implementation, distinct from the EPA codebase. 30KB native binary with a POSIX socket HTTP server.
+7. C++ OOP Engine — Object-oriented design using C++17 features. 75KB binary with RAII memory safety.
+8. TypeScript/Bun Engine — Type-safe with full interfaces for every SWMM5 object type. Runs on the Bun runtime for maximum scripting-language speed.
+9. Rust Native Engine — The fastest engine in the collection. 505KB binary, zero dependencies, pure stdlib.
+10. Perl Engine — Regex-powered INP parser with hash-based data structures.
+11. Ruby Engine — Idiomatic Ruby with class-based design and built-in WEBrick HTTP serving.
+12. Lua Engine — Lightweight 200KB footprint, perfect for embedded systems.
+13. Java Engine — Enterprise-grade with full OOP design, runs on the JVM.
+14. Julia Engine — JIT-compiled for near-C speed. Native uncertainty quantification via Distributions.jl.
+
+26 additional engines operate as live proxies — they accept your .inp file, process it through the EPA C reference engine, and return results. This demonstrates the API surface of each language even when a full standalone implementation is still in development.
+
+1 engine is a concept implementation — the CUDA GPU engine, demonstrating how massively parallel GPU computing could accelerate stormwater simulation.
+
+
+13 LANGUAGE-NATIVE SWMM APPLICATIONS
+
+The SWMM Apps tab showcases interactive applications built in different programming languages, each demonstrating how SWMM5 concepts translate into working software across paradigms. These are not just code snippets — they are functional demonstrations of language-native approaches to stormwater modeling.
+
+
+6 NEURAL NETWORK TRAINERS (MicroGPTs)
+
+The MicroGPTs tab integrates six embedded neural network trainers that learn SWMM5 equations from data:
+
+Manning's Equation MicroGPT: Trains a neural network to approximate V = (1/n) * R^(2/3) * S^(1/2) — the fundamental open-channel flow equation used throughout SWMM5's hydraulic routing.
+
+Partial-Flow MicroGPT: Learns the relationship between depth-to-diameter ratio and flow-to-full-flow ratio for circular pipes — the normalized flow curves that SWMM5 uses for partially filled conduit calculations.
+
+RTK Hydrology MicroGPT: Trains on SWMM5's unit hydrograph method for rainfall-dependent inflow and infiltration, learning the R (fraction), T (time to peak), and K (recession) parameters.
+
+These trainers demonstrate that the mathematical relationships inside SWMM5 can be learned by neural networks — opening the door to ML-accelerated simulation, surrogate modeling, and real-time control applications.
+
+
+AI-POWERED ASSISTANT
+
+A Claude-powered AI assistant is available on every tab via a floating chat icon in the bottom-right corner. It provides context-aware answers about SWMM5 algorithms, EPANET hydraulics, code translation questions, and water infrastructure modeling concepts. The assistant streams responses in real-time with full markdown rendering, making it useful for both quick lookups and extended technical discussions.
+
+
+EMBEDDED EXPLORERS
+
+Three embedded explorer interfaces provide additional interactive analysis tools:
+
+PySWMM Explorer: Interactive exploration of the PySWMM Python package for SWMM5 analysis and control.
+
+SWMManywhere Explorer: Exploration of the SWMManywhere tool for automated stormwater network generation from geospatial data.
+
+HydroCouple Explorer: Investigation of the HydroCouple component-based modeling framework for coupled hydrological-hydraulic simulation.
+
+
+TECHNICAL ARCHITECTURE
+
+The application is built as a single-page React application served by Vite, with an Express.js backend handling API requests, engine execution, and AI chat. The architecture is designed for responsiveness and modularity:
+
+Frontend: React with Vite for fast hot-module replacement during development. Custom syntax highlighting engine (not a third-party library) that understands the token patterns of all 37 languages. Responsive design with panels stacking vertically below 900px viewport width.
+
+Backend: Express.js server managing file uploads via Multer, spawning engine processes on dedicated ports (Go on 3002, Python on 3003, C on 3004, and so on through port 3019), and proxying AI chat requests through the Anthropic Claude API.
+
+Data Architecture: All 2,425 code translations are stored as JavaScript template literals in two module files (modules.js for SWMM5, epanetModules.js for EPANET). Each module entry contains the code for every language plus metadata including category, difficulty, description, equations, inputs, and outputs. This flat data structure enables instant client-side filtering, search, and language switching with zero network requests.
+
+WebAssembly Integration: The Rust SWMM5 engine is compiled to a 140KB .wasm binary that runs entirely in the browser — no server round-trip needed. Upload an .inp file and get results computed locally in your browser tab.
+
+
+WHO THIS IS FOR
+
+Environmental Engineers: Read the algorithms that govern your daily modeling work in the language you're most comfortable with. Understand exactly what SWMM5 and EPANET are computing at each time step.
+
+Hydrology and Hydraulics Researchers: Compare algorithm implementations across languages to validate your own work. Use the AI assistant to explore edge cases and numerical behavior.
+
+Software Developers: Building the next generation of water infrastructure tools? Start from working implementations in your language of choice instead of translating from C.
+
+Computer Science Students: The codebase is a masterclass in how the same algorithm looks different — and the same — across programming paradigms. Functional vs imperative, garbage-collected vs manually managed, statically typed vs dynamic.
+
+University Instructors: The MATLAB engine and the code comparison tool together create a powerful teaching platform. Students can set breakpoints inside the SWMM5 engine, modify parameters, and see results in real time.
+
+Municipal Water Utilities: Understand what's inside the black box of the modeling software your infrastructure decisions depend on.
+
+
+BY THE NUMBERS
+
+- 2,425 total code translations
+- 50 SWMM5 engine modules
+- 25 EPANET engine modules
+- 37 programming languages for SWMM5
+- 23 programming languages for EPANET
+- 41 SWMM5 engine implementations (14 real, 26 live proxies, 1 concept)
+- 13 language-native SWMM applications
+- 6 neural network trainers
+- 3 embedded explorers
+- 6 color themes
+- 1 AI assistant available on every tab
+
+
+TRY IT NOW
+
+The SWMM5 Rosetta Stone is live and free to use. Every algorithm, every language, every module — accessible from your browser. No installation. No account required. No paywall.
+
+If you work with stormwater, water distribution, or hydraulic modeling — or if you're simply curious about how a 50-module simulation engine looks in Haskell, AutoLISP, or WebAssembly — this is for you.
+
+#SWMM5 #EPANET #WaterModeling #Stormwater #HydraulicEngineering #OpenSource #Programming #EnvironmentalEngineering #WaterInfrastructure #CodeComparison #RosettaStone #Python #Rust #Julia #JavaScript #CivilEngineering #Hydrology #WaterQuality #EPA #UrbanDrainage #ClimateResilience #GreenInfrastructure
