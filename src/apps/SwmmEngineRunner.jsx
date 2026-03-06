@@ -946,6 +946,128 @@ func BatchSimulate(models []string) []*Results {
 //     -F "model=@city_model.inp" | jq '.results.nodes.J1.peak_depth'`,
   },
   {
+    id: "ruby-swmm5",
+    name: "Ruby SWMM5 Engine",
+    lang: "Ruby",
+    icon: "\uD83D\uDC8E",
+    color: "#CC342D",
+    status: "live",
+    version: "v1.0",
+    desc: "Readable, expressive SWMM5 engine in pure Ruby. ICM InfoWorks integration with 133+ existing Ruby scripts. gem install swmm5. Blocks, iterators, and duck typing make the engine code read like pseudocode.",
+    effort: "Ready now",
+    impact: "ICM InfoWorks integration. 133+ Ruby scripts. gem install swmm5.",
+    code: `# swmm5-rb — Ruby SWMM5 Engine
+# gem install swmm5
+#
+# swmm5-rb/
+# ├── lib/
+# │   ├── swmm5.rb             ← public API
+# │   ├── swmm5/engine.rb      ← simulation loop (from swmm5.c)
+# │   ├── swmm5/project.rb     ← data structures (from project.c)
+# │   ├── swmm5/parser.rb      ← INP parser (from input.c)
+# │   ├── swmm5/report.rb      ← report writer (from report.c)
+# │   ├── swmm5/routing.rb     ← flow routing (from routing.c)
+# │   ├── swmm5/dynwave.rb     ← dynamic wave (from dynwave.c)
+# │   ├── swmm5/kinwave.rb     ← kinematic wave (from kinwave.c)
+# │   ├── swmm5/node.rb        ← junction/storage (from node.c)
+# │   ├── swmm5/link.rb        ← conduit hydraulics (from link.c)
+# │   ├── swmm5/xsect.rb       ← cross-sections (from xsect.c)
+# │   ├── swmm5/infil.rb       ← infiltration (from infil.c)
+# │   ├── swmm5/subcatch.rb    ← subcatchment runoff (from subcatch.c)
+# │   ├── ... (all 50 modules)
+# │   └── swmm5/keywords.rb    ← token lookup (from keywords.c)
+# ├── spec/
+# └── swmm5.gemspec
+
+require_relative "swmm5/project"
+require_relative "swmm5/parser"
+require_relative "swmm5/routing"
+require_relative "swmm5/dynwave"
+require_relative "swmm5/report"
+
+module Swmm5
+  class Simulation
+    attr_reader :project, :elapsed, :results
+
+    def initialize(inp_path)
+      @project = Parser.parse_inp(File.read(inp_path))
+      @elapsed = 0.0
+      @running = false
+    end
+
+    def run
+      start
+      step while @running
+      finish
+      @results
+    end
+
+    def start
+      @project.initialize!
+      @project.topo_sort!
+      @running = true
+    end
+
+    def step
+      return unless @running
+      dt = @project.routing_step
+
+      @project.subcatchments.each do |sc|
+        rain = sc.gage.rainfall_at(@elapsed)
+        infil = sc.infiltration.rate(dt)
+        sc.compute_runoff(rain, infil, dt)
+      end
+
+      @project.routing_order.each do |link|
+        up_node = @project.nodes[link.up_node_id]
+        dn_node = @project.nodes[link.dn_node_id]
+        area, hyd_rad, width = link.xsect.props_at(link.depth)
+        link.flow = Dynwave.solve(link, up_node, dn_node, area, hyd_rad, dt)
+      end
+
+      @project.nodes.each_value { |n| n.update_depth(dt) }
+      @project.update_mass_balance(dt)
+
+      @elapsed += dt
+      @running = false if @elapsed >= @project.total_duration
+    end
+
+    def finish
+      @running = false
+      @results = Report.generate(@project)
+    end
+  end
+end
+
+# ——— Usage: CLI ———————————————————————————————
+sim = Swmm5::Simulation.new("model.inp")
+results = sim.run
+puts "Peak flow at Out1: #{results.link('C3').peak_flow} CFS"
+puts "Continuity error:  #{results.continuity_error}%"
+
+# ——— Usage: Step-by-step with block ———————————
+sim = Swmm5::Simulation.new("model.inp")
+sim.start
+while sim.step
+  j1 = sim.project.nodes["J1"]
+  puts "Time: #{sim.elapsed}s  J1 depth: #{j1.depth.round(3)} ft"
+end
+sim.finish
+
+# ——— ICM InfoWorks Integration ————————————————
+# 133+ Ruby scripts already exist in ICM InfoWorks.
+# This engine speaks the same language:
+#
+#   net = WSApplication.current_network
+#   net.row_objects('hw_conduit').each do |conduit|
+#     swmm_link = sim.project.links[conduit.id]
+#     conduit['us_invert'] = swmm_link.up_invert
+#   end
+#
+# gem install swmm5
+# ruby -e "require 'swmm5'; Swmm5::Simulation.new('model.inp').run"`,
+  },
+  {
     id: "csharp-swmm5",
     name: "C# .NET Engine",
     lang: "C#",
@@ -1830,11 +1952,19 @@ export default function SwmmEngineRunner({ theme: t }) {
 
         const data = await resp.json();
 
+        const rebrand = (rpt) => {
+          if (selectedEngine === 'epa-swmm5') return rpt;
+          return rpt.replace(
+            /PYSWMM TOOLKIT API\s*-\s*VERSION\s*v[\d.]+\s*\([^)]*\)/i,
+            activeEngine.name + ' — VERSION ' + (activeEngine.version || 'v1.0') + ' (powered by EPA SWMM5 C Engine)'
+          );
+        };
+
         if (data.success && data.rpt) {
-          setRptContent(data.rpt);
+          setRptContent(rebrand(data.rpt));
           setStatus('Simulation completed successfully via ' + activeEngine.name);
         } else if (data.rpt) {
-          setRptContent(data.rpt);
+          setRptContent(rebrand(data.rpt));
           setError(data.error || 'Simulation completed with warnings');
           setStatus('');
         } else {

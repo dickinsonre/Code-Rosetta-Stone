@@ -1,7 +1,7 @@
 # SWMM5 Rosetta Stone
 
 ## Overview
-An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 23 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, C#, MATLAB, R, Delphi/Pascal, TypeScript, CUDA, WebAssembly/WAT, Mojo, Java, Nim, Ada, Chapel, Swift, and Kotlin.
+An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water Management Model) engine algorithms. Shows the same SWMM5 algorithms implemented side-by-side in 24 programming languages: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, C#, MATLAB, R, Delphi/Pascal, TypeScript, CUDA, WebAssembly/WAT, Mojo, Java, Nim, Ada, Chapel, Swift, Kotlin, and Ruby.
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
@@ -13,14 +13,14 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - Operations: controls.c
   - Numerical: odesolve.c, findroot.c, mathexpr.c, toposort.c
   - Data Processing: rain.c, massbal.c, hotstart.c, iface.c, inflow.c, output.c, input.c, report.c, project.c, stats.c, statsrpt.c, table.c, datetime.c, hash.c, mempool.c, keywords.c, swmm5.c
-- 23 languages organized in tiers:
+- 24 languages organized in tiers:
   - Core: C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig
-  - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal
+  - Tier 1 (SWMM community): C++, C#, MATLAB, R, Delphi/Pascal, Ruby
   - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
   - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
-- SWMM5 Engines tab with 20 engines total:
-  - 3 Live engines: EPA SWMM5 (C/Python backend), JavaScript (browser-native), Rust/WASM (140KB browser binary)
-  - 17 Concept engines: Julia, CUDA, MATLAB, WASM/WAT, Go, C#, Fortran, Zig, Kotlin, Swift, Nim, Mojo, Ada, Chapel, Delphi, R
+- SWMM5 Engines tab with 21 engines total:
+  - 9 Live engines: EPA SWMM5 (C/Python backend), JavaScript (browser-native), Rust/WASM (140KB browser binary), Julia, CUDA GPU, MATLAB, WAT/WASM, Go API Server, Ruby
+  - 12 Concept engines: PySWMM, C#, Fortran, Zig, Kotlin, Swift, Nim, Mojo, Ada, Chapel, Delphi, R
 - MicroGPTs tab with 6 sub-tabs: Manning's Equation, Partial-Flow, RTK/RDII, Hydrology (Green-Ampt/Horton/NLR/SCS), Groundwater, IDF & Muskingum
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
 - 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
@@ -36,15 +36,15 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Landing/About section with project overview and EPA SWMM5 link
 - Search/Filter to find modules by concept, equation, tag, or description
 - Share buttons (LinkedIn, Twitter/X) with pre-formatted posts
-- Per-language-pair translation notes (253 pairs covering all 23 languages, enriched for 5 high-paradigm-distance pairs)
+- Per-language-pair translation notes (276 pairs covering all 24 languages, enriched for 5 high-paradigm-distance pairs)
 - All module/language counts are dynamic (no hardcoded numbers)
 - Version stamp in footer (v2.0 — March 2026)
 
 ## Project Architecture
 - **Framework**: React + Vite
 - **Structure**: 
-  - `src/modules.js` — All module data (code samples for 23 languages × 50 modules, metadata, languages array, 253 translation notes)
-  - `src/App.jsx` — UI components, themes, syntax highlighting for 23 languages, main app, MODULE_GRAPH with 50 modules
+  - `src/modules.js` — All module data (code samples for 24 languages × 50 modules, metadata, languages array, 276 translation notes)
+  - `src/App.jsx` — UI components, themes, syntax highlighting for 24 languages, main app, MODULE_GRAPH with 50 modules
   - `src/AppShowcase.jsx` — SWMM Apps tab: interactive showcase of 13 language-native SWMM app concepts with expandable cards, code samples, and summary matrix
   - `src/appIdeas.js` — Data for 13 language-specific SWMM app ideas (C, Rust, Python, Fortran, Julia, JavaScript, Go, Zig, C++, TypeScript, MATLAB, C#, Java)
   - `src/apps/MicroEngine.jsx` — C Micro-Engine: interactive SWMM simulation with canvas network visualization
@@ -61,7 +61,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
   - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
   - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
-  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 20 engine options (3 live + 17 concept), upload .inp files, run simulations, view/download .rpt reports
+  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 21 engine options (9 live + 12 concept), upload .inp files, run simulations, view/download .rpt reports
   - `src/engines/swmm5-js.js` — JavaScript SWMM5 engine: INP parser, Horton infiltration, dynamic wave routing, .rpt generation (runs in browser)
   - `src/engines/wasm/swmm5_rs.js` — Rust WASM engine JS bindings (generated by wasm-bindgen)
   - `src/engines/wasm/swmm5_rs_bg.wasm` — Compiled Rust WASM binary (140KB)

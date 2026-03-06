@@ -27,6 +27,7 @@ const playgroundUrls = {
   chapel: "https://ato.pxl.se/run?lang=chapel",
   swift: "https://swiftfiddle.com/",
   kotlin: "https://play.kotlinlang.org/",
+  ruby: "https://try.ruby-lang.org/",
 };
 
 // ─── Code Samples (moved to modules.js) ─────────────────────────────
@@ -57,6 +58,7 @@ const keywordSets = {
   chapel: /\b(proc|var|const|ref|param|type|record|class|module|use|import|return|if|else|for|in|while|do|forall|coforall|begin|on|real|int|bool|string|domain|range|config|iter|yield|sync|atomic|serial|reduce|scan|writeln)\b/g,
   swift: /\b(struct|class|func|var|let|return|if|else|for|in|while|import|self|Self|init|mutating|public|private|static|guard|switch|case|default|nil|true|false|Double|Int|Float|String|Bool|Array|protocol|extension|override|throws|try|catch|inout)\b/g,
   kotlin: /\b(class|data|fun|val|var|return|if|else|for|in|while|when|import|package|this|super|object|companion|override|open|abstract|interface|private|public|internal|protected|null|true|false|Double|Int|Float|String|Boolean|Long|is|as|try|catch|throw|constructor)\b/g,
+  ruby: /\b(class|module|def|end|return|if|else|elsif|unless|for|in|while|do|begin|rescue|ensure|raise|yield|block_given|require|require_relative|include|extend|attr_accessor|attr_reader|attr_writer|self|super|nil|true|false|puts|print|lambda|proc|case|when|then|until|break|next|retry|redo|and|or|not|defined)\b/g,
 };
 
 const commentPatterns = {
@@ -83,6 +85,7 @@ const commentPatterns = {
   chapel: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   swift: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   kotlin: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  ruby: /(#.*$|=begin[\s\S]*?=end)/gm,
 };
 
 const stringPattern = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;

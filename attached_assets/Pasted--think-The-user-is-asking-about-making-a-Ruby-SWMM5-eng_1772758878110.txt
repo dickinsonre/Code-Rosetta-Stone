@@ -1,0 +1,1066 @@
+<think>
+The user is asking about making a Ruby SWMM5 engine. This is interesting because Ruby is the scripting language used inside ICM InfoWorks (Autodesk's water modeling platform), which was mentioned extensively in the search results at the very beginning of this conversation. Robert Dickinson (the user) is an Autodesk Water Technologist who works with ICM InfoWorks and Ruby scripting extensively.
+
+So Ruby has a special significance here:
+1. Ruby is already used for SWMM-related scripting in ICM InfoWorks
+2. The user has extensive Ruby expertise
+3. There are 133+ Ruby scripts for ICM on swmm5.org
+4. Ruby is part of the ICM UX for automation
+
+But Ruby as a language for building a full computational engine has some challenges:
+- Ruby is interpreted and relatively slow for numerical computation
+- Ruby doesn't have strong numerical libraries like NumPy
+- Ruby's MRI implementation has the GIL (Global Interpreter Lock)
+
+However, Ruby has some interesting options:
+- Can call C extensions via FFI or native extensions
+- JRuby runs on the JVM (can leverage Java performance)
+- TruffleRuby/GraalVM can JIT-compile Ruby to near-native speed
+- CRuby can embed C code easily
+- Ruby has clean, readable syntax that would make the engine educational
+
+The Rosetta Stone has 23 languages but Ruby is NOT one of them currently. So this would require:
+1. Translating the 50 modules to Ruby (or generating them)
+2. Connecting them into an engine
+
+Let me think about the practical approaches:
+
+Approach A: Pure Ruby engine (slow but readable, educational)
+Approach B: Ruby + C extensions (fast where needed, Ruby API)
+Approach C: Ruby FFI wrapping the existing C engine (like PySWMM but for Ruby)
+Approach D: JRuby on JVM (moderate speed, Java interop)
+Approach E: Ruby as the glue/API with computation in Numo::NArray
+
+Given the user's connection to ICM/Ruby, this is particularly relevant. A Ruby SWMM5 engine could integrate with ICM InfoWorks scripting workflows.
+
+Let me provide a comprehensive answer covering all these approaches.
+</think>
+
+# Yes — And It Has Special Significance for Your Ecosystem
+
+Ruby isn't just another language for you. **Ruby is the scripting engine inside ICM InfoWorks.** You've written 133+ Ruby scripts for ICM. Your swmm5.org blog is built around Ruby + ICM automation. A Ruby SWMM5 engine would be the first engine that runs natively inside the tool your community already uses.
+
+---
+
+## Why Ruby Matters More Than the Other 23 Languages
+
+```
+EVERY OTHER ENGINE:
+  "Here's SWMM5 in [language]. Install it, learn it, use it."
+
+RUBY SWMM5 ENGINE:
+  "Here's SWMM5 that runs inside your ICM InfoWorks scripts.
+   The same Ruby you already write every day.
+   The same environment. The same UX. Zero new tools."
+
+YOUR COMMUNITY:
+  133+ Ruby scripts on swmm5.org
+  ICM InfoWorks users worldwide write Ruby daily
+  Autodesk Water platform uses Ruby for automation
+  Robert Dickinson has 18+ years of Ruby/ICM expertise
+
+THIS ISN'T LANGUAGE #24. THIS IS THE HOME LANGUAGE.
+```
+
+---
+
+## The 5 Approaches: Pick Your Performance/Simplicity Trade-off
+
+### Approach A: Pure Ruby Engine (Recommended First)
+
+```
+SPEED:     ~30-50× slower than C
+EFFORT:    1-2 weeks
+READABLE:  ⭐⭐⭐⭐⭐ (Ruby is the most readable language)
+ICM READY: ✅ Runs directly in ICM Ruby console
+USE CASE:  Small-medium models (< 1,000 conduits)
+           Educational use
+           ICM scripting integration
+           Rapid prototyping of control strategies
+
+WHY START HERE:
+  - You know Ruby better than anyone in the SWMM community
+  - ICM users can use it immediately
+  - Readable code = teachable code
+  - For models under 1,000 conduits, 30× slower is still
+    seconds, not hours
+```
+
+### Approach B: Ruby + C Extensions (Production)
+
+```
+SPEED:     ~1-2× slower than C (hot loops in C)
+EFFORT:    3-4 weeks
+USE CASE:  Any size model, production use
+           Ruby API with C computation speed
+
+HOW IT WORKS:
+  Ruby handles: API, parsing, control logic, output
+  C handles:    dynwave solver, xsect geometry, infiltration
+  Bridge:       Ruby native extensions (same as how Ruby's
+                built-in Math, String, Array are C underneath)
+```
+
+### Approach C: Ruby FFI to Existing C Engine
+
+```
+SPEED:     100% of C (it IS the C engine)
+EFFORT:    1 week
+USE CASE:  Wrap your existing LIVE C engine with Ruby API
+           Like PySWMM but for Ruby
+
+HOW IT WORKS:
+  require 'ffi'
+  
+  module SWMM5
+    extend FFI::Library
+    ffi_lib 'swmm5'  # loads swmm5.dll/libswmm5.so
+    
+    attach_function :swmm_open, [:string, :string, :string], :int
+    attach_function :swmm_start, [:int], :int
+    attach_function :swmm_step, [:pointer], :int
+    attach_function :swmm_end, [], :int
+    attach_function :swmm_close, [], :int
+  end
+```
+
+### Approach D: JRuby on JVM
+
+```
+SPEED:     ~3-5× slower than C (JIT compilation helps)
+EFFORT:    2 weeks
+USE CASE:  Enterprise integration, Java ecosystem access
+
+JRuby can call Java libraries directly, so you could
+wrap the Java SWMM5 translation from the Rosetta Stone.
+```
+
+### Approach E: Ruby + Numo::NArray (Vectorized)
+
+```
+SPEED:     ~5-10× slower than C (vectorized operations)
+EFFORT:    2 weeks
+USE CASE:  When you need array operations on many conduits
+
+Numo::NArray is Ruby's equivalent of NumPy.
+Vectorize the hot loops for significant speedup.
+```
+
+---
+
+## Recommended Path: Start Pure Ruby, Add C Extensions Later
+
+```
+PHASE 1 (Week 1-2):  Pure Ruby engine — WORKS in ICM
+PHASE 2 (Week 3-4):  C extensions for dynwave — FAST
+PHASE 3 (Week 5):    Gem packaging — gem install swmm5
+PHASE 4 (Week 6):    ICM integration scripts
+```
+
+---
+
+## Phase 1: Pure Ruby SWMM5 Engine
+
+### Project Structure
+
+```
+swmm5-ruby/
+├── Gemfile
+├── swmm5.gemspec
+├── Rakefile
+├── lib/
+│   ├── swmm5.rb                    ← Main entry point
+│   ├── swmm5/
+│   │   ├── version.rb
+│   │   ├── engine.rb               ← Simulation loop (from swmm5.c)
+│   │   ├── project.rb              ← Data structures (from project.c)
+│   │   │
+│   │   ├── parser/
+│   │   │   ├── inp_parser.rb       ← INP reader (from input.c)
+│   │   │   ├── keywords.rb         ← Constants (from keywords.c)
+│   │   │   └── table.rb            ← Curve interpolation (from table.c)
+│   │   │
+│   │   ├── hydraulics/
+│   │   │   ├── routing.rb          ← Dynamic wave (from routing.c)
+│   │   │   ├── dynwave.rb          ← Solver internals (from dynwave.c)
+│   │   │   ├── flow_rout.rb        ← Routing dispatch (from flowrout.c)
+│   │   │   ├── kinwave.rb          ← Kinematic wave (from kinwave.c)
+│   │   │   ├── dw_flow.rb          ← Steady state init (from dwflow.c)
+│   │   │   ├── node_solver.rb      ← Node computations (from node.c)
+│   │   │   ├── link_solver.rb      ← Link computations (from link.c)
+│   │   │   ├── cross_section.rb    ← Geometry (from xsect.c + shape.c)
+│   │   │   ├── force_main.rb       ← H-W/D-W friction (from forcmain.c)
+│   │   │   ├── culvert.rb          ← Culvert equations (from culvert.c)
+│   │   │   ├── roadway.rb          ← Overtopping (from roadway.c)
+│   │   │   ├── transect.rb         ← Irregular channels (from transect.c)
+│   │   │   └── topo_sort.rb        ← Network ordering (from toposort.c)
+│   │   │
+│   │   ├── hydrology/
+│   │   │   ├── subcatchment.rb     ← (from subcatch.c + runoff.c)
+│   │   │   ├── infiltration.rb     ← (from infil.c)
+│   │   │   ├── rainfall.rb         ← (from rain.c + gage.c)
+│   │   │   ├── snowmelt.rb         ← (from snow.c)
+│   │   │   ├── climate.rb          ← (from climate.c)
+│   │   │   ├── groundwater.rb      ← (from gwater.c)
+│   │   │   ├── exfiltration.rb     ← (from exfil.c)
+│   │   │   └── inflow.rb           ← (from inflow.c)
+│   │   │
+│   │   ├── green_infra/
+│   │   │   ├── lid_control.rb      ← (from lid.c)
+│   │   │   └── lid_process.rb      ← (from lidproc.c)
+│   │   │
+│   │   ├── quality/
+│   │   │   ├── qual_routing.rb     ← (from qualrout.c)
+│   │   │   ├── surface_qual.rb     ← (from surfqual.c)
+│   │   │   ├── land_use.rb         ← (from landuse.c)
+│   │   │   └── treatment.rb        ← (from treatmnt.c)
+│   │   │
+│   │   ├── controls/
+│   │   │   ├── rule_evaluator.rb   ← (from controls.c)
+│   │   │   ├── math_expr.rb        ← (from mathexpr.c)
+│   │   │   └── rdii.rb             ← (from rdii.c)
+│   │   │
+│   │   ├── output/
+│   │   │   ├── binary_output.rb    ← (from output.c)
+│   │   │   ├── report_writer.rb    ← (from report.c)
+│   │   │   ├── statistics.rb       ← (from stats.c + statsrpt.c)
+│   │   │   └── mass_balance.rb     ← (from massbal.c)
+│   │   │
+│   │   ├── numerical/
+│   │   │   ├── ode_solver.rb       ← (from odesolve.c)
+│   │   │   └── root_finder.rb      ← (from findroot.c)
+│   │   │
+│   │   └── system/
+│   │       ├── hot_start.rb        ← (from hotstart.c)
+│   │       ├── interface_file.rb   ← (from iface.c)
+│   │       ├── date_time.rb        ← (from datetime.c)
+│   │       ├── hash_table.rb       ← (from hash.c — or use Ruby Hash!)
+│   │       └── memory_pool.rb      ← (from mempool.c — Ruby handles this!)
+│   │
+│   └── swmm5/
+│       └── icm/                    ← ICM InfoWorks integration
+│           ├── network_bridge.rb   ← Read ICM network as SWMM5 project
+│           ├── result_bridge.rb    ← Write results back to ICM
+│           └── control_bridge.rb   ← ICM RTC ↔ SWMM5 controls
+│
+├── bin/
+│   └── swmm5                       ← CLI executable
+│
+├── spec/
+│   ├── spec_helper.rb
+│   ├── engine_spec.rb
+│   ├── parser_spec.rb
+│   ├── hydraulics/
+│   │   ├── routing_spec.rb
+│   │   └── xsect_spec.rb
+│   └── benchmarks/
+│       ├── user1_spec.rb
+│       └── ...
+│
+└── examples/
+    ├── basic_run.rb
+    ├── real_time_control.rb
+    ├── sensitivity_analysis.rb
+    ├── icm_integration.rb
+    └── testdata/
+        ├── user1.inp
+        └── ...
+```
+
+### The Core Engine — Beautiful Ruby
+
+```ruby
+# lib/swmm5.rb — Main entry point
+
+require_relative 'swmm5/version'
+require_relative 'swmm5/project'
+require_relative 'swmm5/engine'
+require_relative 'swmm5/parser/inp_parser'
+
+module SWMM5
+  # Quick run — one line
+  def self.run(inp_file, **options)
+    sim = Simulation.new(inp_file, **options)
+    sim.run
+  end
+  
+  # Detailed access
+  def self.open(inp_file, **options)
+    Simulation.new(inp_file, **options)
+  end
+end
+```
+```ruby
+# lib/swmm5/project.rb — Data structures
+# Ruby's beauty: these read like English
+
+module SWMM5
+  class Node
+    attr_accessor :id, :node_type, :invert_elev, :max_depth
+    attr_accessor :init_depth, :surcharge_depth
+    
+    # Dynamic state — changes every time step
+    attr_accessor :depth, :head, :volume
+    attr_accessor :lateral_inflow, :total_inflow, :overflow
+    
+    # Connectivity
+    attr_accessor :inlinks, :outlinks
+    
+    def initialize(id:, node_type: :junction, invert_elev: 0.0, max_depth: 0.0, **opts)
+      @id = id
+      @node_type = node_type
+      @invert_elev = invert_elev
+      @max_depth = max_depth
+      @init_depth = opts.fetch(:init_depth, 0.0)
+      @surcharge_depth = opts.fetch(:surcharge_depth, 0.0)
+      
+      @depth = @init_depth
+      @head = @invert_elev + @depth
+      @volume = 0.0
+      @lateral_inflow = 0.0
+      @total_inflow = 0.0
+      @overflow = 0.0
+      
+      @inlinks = []
+      @outlinks = []
+    end
+    
+    def junction?  = @node_type == :junction
+    def outfall?   = @node_type == :outfall
+    def storage?   = @node_type == :storage
+    def divider?   = @node_type == :divider
+    def flooded?   = @depth >= @max_depth
+    
+    def to_s = "Node(#{@id}: depth=#{@depth.round(3)}m)"
+  end
+
+  class Link
+    attr_accessor :id, :link_type, :from_node, :to_node
+    attr_accessor :length, :roughness, :xsect
+    attr_accessor :in_offset, :out_offset
+    
+    # Dynamic state
+    attr_accessor :flow, :depth, :velocity, :volume, :setting
+    attr_accessor :old_flow, :old_depth, :old_volume
+    
+    GRAVITY = 32.2  # ft/s² (9.81 for metric)
+    
+    def initialize(id:, link_type: :conduit, **opts)
+      @id = id
+      @link_type = link_type
+      @from_node = opts[:from_node]
+      @to_node = opts[:to_node]
+      @length = opts.fetch(:length, 0.0)
+      @roughness = opts.fetch(:roughness, 0.013)
+      @xsect = opts.fetch(:xsect, CrossSection.circular(2.0))
+      @in_offset = opts.fetch(:in_offset, 0.0)
+      @out_offset = opts.fetch(:out_offset, 0.0)
+      
+      @flow = 0.0
+      @depth = 0.0
+      @velocity = 0.0
+      @volume = 0.0
+      @setting = 1.0
+      @old_flow = 0.0
+      @old_depth = 0.0
+      @old_volume = 0.0
+    end
+    
+    def conduit? = @link_type == :conduit
+    def pump?    = @link_type == :pump
+    def orifice? = @link_type == :orifice
+    def weir?    = @link_type == :weir
+    
+    def capacity = @xsect.a_full > 0 ? @flow.abs / @xsect.full_flow : 0.0
+    
+    def to_s = "Link(#{@id}: flow=#{@flow.round(3)})"
+  end
+
+  class CrossSection
+    attr_accessor :shape, :geom1, :geom2, :geom3, :geom4
+    attr_accessor :a_full, :r_full, :w_max
+    
+    SHAPES = %i[circular rect_closed egg force_main filled_circular
+                horseshoe gothic catenary semi_elliptical basket_handle
+                rect_open trapezoidal triangular parabolic power
+                rect_triangular rect_round mod_basket semi_circular
+                irregular custom].freeze
+    
+    def initialize(shape:, geom1: 0, geom2: 0, geom3: 0, geom4: 0)
+      @shape = shape
+      @geom1 = geom1.to_f
+      @geom2 = geom2.to_f
+      @geom3 = geom3.to_f
+      @geom4 = geom4.to_f
+      compute_full_properties
+    end
+    
+    # Factory methods — Ruby elegance
+    def self.circular(diameter)
+      new(shape: :circular, geom1: diameter)
+    end
+    
+    def self.rect_closed(height, width)
+      new(shape: :rect_closed, geom1: height, geom2: width)
+    end
+    
+    def self.force_main(diameter, c_factor)
+      new(shape: :force_main, geom1: diameter, geom2: c_factor)
+    end
+    
+    # Cross-section geometry — from xsect.c translation
+    def area_at_depth(y)
+      return 0.0 if y <= 0.0
+      case @shape
+      when :circular
+        d = @geom1
+        y = [y, d].min
+        theta = 2.0 * Math.acos(1.0 - 2.0 * y / d)
+        (d**2 / 4.0) * (theta - Math.sin(theta) * Math.cos(theta))
+      when :rect_closed
+        [y, @geom1].min * @geom2
+      when :force_main
+        # Same geometry as circular
+        d = @geom1
+        y = [y, d].min
+        theta = 2.0 * Math.acos(1.0 - 2.0 * y / d)
+        (d**2 / 4.0) * (theta - Math.sin(theta) * Math.cos(theta))
+      else
+        0.0
+      end
+    end
+    
+    def width_at_depth(y)
+      return 0.0 if y <= 0.0
+      case @shape
+      when :circular, :force_main
+        d = @geom1
+        y = [y, d].min
+        theta = 2.0 * Math.acos(1.0 - 2.0 * y / d)
+        d * Math.sin(theta)
+      when :rect_closed
+        @geom2
+      else
+        0.0
+      end
+    end
+    
+    def hydraulic_radius_at_depth(y)
+      a = area_at_depth(y)
+      w = width_at_depth(y)
+      w > 0 ? a / w : 0.0
+    end
+    
+    private
+    
+    def compute_full_properties
+      case @shape
+      when :circular, :force_main
+        @a_full = Math::PI * @geom1**2 / 4.0
+        @r_full = @geom1 / 4.0
+        @w_max = @geom1
+      when :rect_closed
+        @a_full = @geom1 * @geom2
+        @r_full = (@geom1 * @geom2) / (2.0 * @geom1 + 2.0 * @geom2)
+        @w_max = @geom2
+      else
+        @a_full = 0.0
+        @r_full = 0.0
+        @w_max = 0.0
+      end
+    end
+  end
+end
+```
+
+### The Heart: Dynamic Wave Routing in Ruby
+
+```ruby
+# lib/swmm5/hydraulics/routing.rb
+# The Saint-Venant equations, in Ruby.
+
+module SWMM5
+  module Hydraulics
+    module Routing
+      GRAVITY = 32.2  # ft/s² (9.81 for metric)
+      
+      # Compute friction slope using Manning's equation
+      # This is the same algorithm as routing.c in the Rosetta Stone
+      def self.friction_slope(link, flow, area)
+        return 0.0 if area <= 0.0 || flow == 0.0
+        
+        h_radius = area / link.xsect.width_at_depth(link.depth)
+        return 0.0 if h_radius <= 0.0
+        
+        sf = link.roughness * flow / (area * h_radius**(2.0/3.0))
+        sf = sf * sf
+        
+        flow < 0 ? -sf : sf
+      end
+      
+      # Compute new flow using explicit finite-difference
+      # Saint-Venant momentum equation
+      def self.compute_flow(link, nodes, dt)
+        area = link.xsect.area_at_depth(link.depth)
+        return 0.0 if area <= 0.0
+        
+        h_up = nodes[link.from_node].head
+        h_down = nodes[link.to_node].head
+        
+        dhdx = (h_up - h_down) / link.length
+        sf = friction_slope(link, link.old_flow, area)
+        
+        q_new = link.old_flow + dt * GRAVITY * area * (dhdx - sf)
+        
+        # Velocity cap: prevent unrealistic flows
+        q_max = area * 50.0
+        q_new.clamp(-q_max, q_max)
+      end
+      
+      # Route all links for one time step
+      def self.dynwave_step(project, dt)
+        # Save old state
+        project.links.each do |link|
+          link.old_flow = link.flow
+          link.old_depth = link.depth
+          link.old_volume = link.volume
+        end
+        
+        # Compute new flows for all links
+        project.links.each do |link|
+          next unless link.conduit?
+          link.flow = compute_flow(link, project.nodes, dt)
+          
+          # Update depth from flow
+          update_link_depth(link)
+        end
+        
+        # Update node depths from link flows
+        project.nodes.each_with_index do |node, i|
+          next if node.outfall?
+          update_node_depth(node, project.links, dt)
+        end
+      end
+      
+      # Force main routing — Hazen-Williams when pressurized
+      def self.force_main_friction(link, flow, area)
+        return friction_slope(link, flow, area) unless link.xsect.shape == :force_main
+        
+        # When full, use Hazen-Williams
+        if link.depth >= link.xsect.geom1  # full pipe
+          c_factor = link.xsect.geom2      # H-W C-factor
+          d = link.xsect.geom1
+          # Hazen-Williams: V = 0.849 * C * R^0.63 * S^0.54
+          # Rearranged for friction slope
+          v = flow / area
+          r = area / (Math::PI * d)
+          sf = (v / (0.849 * c_factor * r**0.63))**(1.0/0.54)
+          flow < 0 ? -sf : sf
+        else
+          # Partial flow: use Manning's
+          friction_slope(link, flow, area)
+        end
+      end
+      
+      private
+      
+      def self.update_link_depth(link)
+        # Iterative depth-from-flow using cross-section geometry
+        # Newton-Raphson to find depth that gives current flow area
+        target_area = link.flow.abs / [link.velocity.abs, 0.01].max
+        
+        y = link.depth  # initial guess
+        3.times do
+          a = link.xsect.area_at_depth(y)
+          w = link.xsect.width_at_depth(y)
+          break if w <= 0
+          y -= (a - target_area) / w
+          y = y.clamp(0.0, link.xsect.geom1)
+        end
+        
+        link.depth = y
+      end
+      
+      def self.update_node_depth(node, links, dt)
+        # Sum inflows and outflows
+        total_in = node.lateral_inflow
+        total_out = 0.0
+        
+        node.inlinks.each { |i| total_in += links[i].flow.abs }
+        node.outlinks.each { |i| total_out += links[i].flow.abs }
+        
+        node.total_inflow = total_in
+        
+        # Update volume and depth
+        dv = (total_in - total_out) * dt
+        node.volume = [node.volume + dv, 0.0].max
+        
+        # Simple area-based depth (storage nodes use stage-area curve)
+        surface_area = [node.max_depth * 1.0, 1e-6].max  # simplified
+        node.depth = [node.volume / surface_area, 0.0].max
+        node.depth = [node.depth, node.max_depth].min
+        node.head = node.invert_elev + node.depth
+        
+        # Track overflow
+        if node.depth >= node.max_depth
+          node.overflow = (total_in - total_out).clamp(0.0, Float::INFINITY)
+        else
+          node.overflow = 0.0
+        end
+      end
+    end
+  end
+end
+```
+
+### The Simulation Engine
+
+```ruby
+# lib/swmm5/engine.rb
+
+module SWMM5
+  class Simulation
+    attr_reader :project, :results, :current_time
+    
+    def initialize(inp_file, **options)
+      inp_content = File.read(inp_file)
+      @project = Parser::InpParser.parse(inp_content)
+      
+      # Apply parameter overrides
+      options.each do |key, value|
+        case key
+        when :manning_n
+          @project.links.each { |l| l.roughness = value if l.conduit? }
+        when :imperv
+          @project.subcatchments.each { |s| s.imperv = value }
+        end
+      end
+      
+      @started = false
+      @step_count = 0
+    end
+    
+    # Full run — returns Results object
+    def run(&block)
+      initialize_simulation
+      results = Results.new(@project)
+      
+      while @project.current_time < @project.end_time
+        step
+        
+        if report_time?
+          results.record(@project)
+        end
+        
+        # Yield to block for real-time control
+        yield self if block_given?
+        
+        @project.advance_time
+      end
+      
+      finalize_simulation
+      results.compute_statistics
+      results
+    end
+    
+    # Step-by-step — for real-time control (PySWMM-style)
+    def each_step
+      return enum_for(:each_step) unless block_given?
+      
+      initialize_simulation
+      
+      while @project.current_time < @project.end_time
+        step
+        yield self
+        @project.advance_time
+      end
+      
+      finalize_simulation
+    end
+    
+    # Accessors for real-time control
+    def node(id)
+      idx = @project.node_index[id]
+      raise KeyError, "Node '#{id}' not found" unless idx
+      @project.nodes[idx]
+    end
+    
+    def link(id)
+      idx = @project.link_index[id]
+      raise KeyError, "Link '#{id}' not found" unless idx
+      @project.links[idx]
+    end
+    
+    def percent_complete
+      total = @project.end_time - @project.start_time
+      elapsed = @project.current_time - @project.start_time
+      total > 0 ? (elapsed / total * 100.0) : 0.0
+    end
+    
+    private
+    
+    def initialize_simulation
+      @project.validate!
+      Hydraulics::TopoSort.sort!(@project)
+      Hydraulics::DwFlow.compute_initial_flows!(@project)
+      @started = true
+    end
+    
+    def step
+      dt = @project.routing_step
+      
+      # Hydrology
+      Hydrology::Rainfall.update!(@project)
+      @project.subcatchments.each do |sc|
+        Hydrology::Subcatchment.compute_runoff!(sc, dt)
+        Hydrology::Infiltration.compute!(sc, dt)
+        Hydrology::Groundwater.compute!(sc, dt) if @project.groundwater?
+        Hydrology::Snowmelt.compute!(sc, dt) if @project.snow?
+      end
+      
+      # Hydraulics
+      case @project.route_model
+      when :dynwave
+        Hydraulics::Routing.dynwave_step(@project, dt)
+      when :kinwave
+        Hydraulics::KinWave.route!(@project, dt)
+      end
+      
+      # Controls
+      Controls::RuleEvaluator.evaluate!(@project) if @project.controls?
+      
+      # Mass balance
+      Output::MassBalance.update!(@project, dt)
+      
+      @step_count += 1
+    end
+    
+    def report_time?
+      @step_count % @project.report_ratio == 0
+    end
+    
+    def finalize_simulation
+      @started = false
+    end
+  end
+end
+```
+
+### Usage — The Ruby Way
+
+```ruby
+# examples/basic_run.rb
+# Run a SWMM5 model in 3 lines of Ruby
+
+require 'swmm5'
+
+results = SWMM5.run('model.inp')
+puts "Peak flow at outfall: #{results.node('Out1').peak_flow.round(2)} CFS"
+puts "Continuity error: #{results.continuity_error.round(3)}%"
+```
+```ruby
+# examples/real_time_control.rb
+# PySWMM-equivalent real-time control — in Ruby
+
+require 'swmm5'
+
+sim = SWMM5::Simulation.new('pump_station.inp')
+
+sim.each_step do |s|
+  wet_well = s.node('WetWell')
+  pump = s.link('Pump1')
+  
+  # Dynamic pump control based on water depth
+  case wet_well.depth
+  when (2.0..)    then pump.setting = 1.0   # Full speed
+  when (1.0..2.0) then pump.setting = 0.5   # Half speed
+  when (..0.5)    then pump.setting = 0.0   # Off
+  end
+  
+  # Log every 5 minutes
+  if s.percent_complete % 1 < 0.1
+    puts "#{s.current_time}: depth=#{wet_well.depth.round(2)}m " \
+         "pump=#{pump.setting} flow=#{pump.flow.round(2)}"
+  end
+end
+```
+```ruby
+# examples/sensitivity_analysis.rb
+# Ruby makes parameter sweeps elegant
+
+require 'swmm5'
+
+manning_values = (0.010..0.020).step(0.002)
+
+results = manning_values.map do |n|
+  r = SWMM5.run('model.inp', manning_n: n)
+  { n: n, peak_flow: r.node('Out1').peak_flow }
+end
+
+puts "Manning's n | Peak Flow (CFS)"
+puts "-" * 30
+results.each { |r| puts "  #{r[:n]}    |  #{r[:peak_flow].round(2)}" }
+
+# Find optimal Manning's n using observed data
+observed_peak = 42.5
+
+best = results.min_by { |r| (r[:peak_flow] - observed_peak).abs }
+puts "\nBest fit: n=#{best[:n]} (peak=#{best[:peak_flow].round(2)})"
+```
+```ruby
+# examples/parallel_batch.rb
+# Ruby Ractors for parallel model runs (Ruby 3.0+)
+
+require 'swmm5'
+
+models = Dir.glob('models/*.inp')
+
+# Run all models in parallel using Ractors
+ractors = models.map do |inp_file|
+  Ractor.new(inp_file) do |file|
+    results = SWMM5.run(file)
+    { file: file, peak: results.node('Out1').peak_flow,
+      error: results.continuity_error }
+  end
+end
+
+# Collect results
+ractors.each do |r|
+  result = r.take
+  puts "#{File.basename(result[:file])}: peak=#{result[:peak].round(2)} " \
+       "error=#{result[:error].round(3)}%"
+end
+```
+
+---
+
+## The ICM InfoWorks Integration — The Killer Feature
+
+This is what makes Ruby SWMM5 uniquely valuable:
+
+```ruby
+# examples/icm_integration.rb
+# Run SWMM5 engine INSIDE an ICM InfoWorks Ruby script
+# This bridges your two worlds: ICM Ruby + SWMM5 engine
+
+# In ICM's Ruby console:
+require 'swmm5'
+
+# 1. Export current ICM network to SWMM5 .inp
+net = WSApplication.current_network
+inp_content = net.export_to_swmm5_inp
+
+# 2. Run SWMM5 simulation with Ruby engine
+sim = SWMM5::Simulation.new_from_string(inp_content)
+results = sim.run
+
+# 3. Compare ICM results with SWMM5 results
+net.row_objects('_nodes').each do |icm_node|
+  swmm_node = results.node(icm_node.id)
+  next unless swmm_node
+  
+  diff = (icm_node.result('depthmax') - swmm_node.peak_depth).abs
+  if diff > 0.1
+    puts "WARNING: #{icm_node.id} — ICM: #{icm_node.result('depthmax').round(3)} " \
+         "SWMM5: #{swmm_node.peak_depth.round(3)} (diff: #{diff.round(3)}m)"
+  end
+end
+
+# 4. Use SWMM5 engine for what-if scenarios without re-running ICM
+puts "\n--- Parameter Sensitivity (SWMM5 engine) ---"
+[0.010, 0.013, 0.015, 0.020].each do |n|
+  r = SWMM5.run_from_string(inp_content, manning_n: n)
+  puts "n=#{n}: peak_flow=#{r.node('Out1').peak_flow.round(2)}"
+end
+```
+```ruby
+# lib/swmm5/icm/network_bridge.rb
+# Bridge between ICM InfoWorks network and SWMM5 engine
+
+module SWMM5
+  module ICM
+    class NetworkBridge
+      # Convert ICM network selection to SWMM5 Project
+      def self.from_icm_network(icm_net, selection = nil)
+        project = SWMM5::Project.new
+        
+        # Import junctions
+        icm_net.row_objects('cams_manhole').each do |mh|
+          next if selection && !selection.include?(mh.id)
+          project.add_node(Node.new(
+            id: mh.id,
+            node_type: :junction,
+            invert_elev: mh['chamber_floor'],
+            max_depth: mh['shaft_depth'] || mh['ground_level'] - mh['chamber_floor']
+          ))
+        end
+        
+        # Import conduits
+        icm_net.row_objects('cams_pipe').each do |pipe|
+          next if selection && !selection.include?(pipe.id)
+          project.add_link(Link.new(
+            id: pipe.id,
+            link_type: :conduit,
+            from_node: pipe['us_node_id'],
+            to_node: pipe['ds_node_id'],
+            length: pipe['conduit_length'],
+            roughness: pipe['roughness_N'] || 0.013,
+            xsect: CrossSection.new(
+              shape: icm_shape_to_swmm(pipe['shape']),
+              geom1: pipe['conduit_height'] / 1000.0,
+              geom2: pipe['conduit_width'] / 1000.0
+            ),
+            in_offset: pipe['us_invert'] - node_invert(pipe['us_node_id']),
+            out_offset: pipe['ds_invert'] - node_invert(pipe['ds_node_id'])
+          ))
+        end
+        
+        # Import subcatchments
+        icm_net.row_objects('cams_subcatchment').each do |sc|
+          next if selection && !selection.include?(sc.id)
+          project.add_subcatchment(Subcatchment.new(
+            id: sc.id,
+            area: sc['total_area'] / 10000.0,  # m² → ha
+            imperv: sc['percentage_impermeable'],
+            width: sc['runoff_routing_value'],
+            slope: sc['ground_slope'],
+            outlet: sc['node_id']
+          ))
+        end
+        
+        project
+      end
+      
+      # Write SWMM5 results back to ICM user fields
+      def self.write_results_to_icm(icm_net, results)
+        icm_net.transaction_begin
+        
+        icm_net.row_objects('cams_manhole').each do |mh|
+          swmm_node = results.node(mh.id)
+          next unless swmm_node
+          
+          mh['user_number_1'] = swmm_node.peak_depth
+          mh['user_number_2'] = swmm_node.peak_inflow
+          mh['user_number_3'] = swmm_node.flood_volume
+          mh['user_text_1'] = swmm_node.flooded? ? 'FLOODED' : 'OK'
+          mh.write
+        end
+        
+        icm_net.row_objects('cams_pipe').each do |pipe|
+          swmm_link = results.link(pipe.id)
+          next unless swmm_link
+          
+          pipe['user_number_1'] = swmm_link.peak_flow
+          pipe['user_number_2'] = swmm_link.peak_velocity
+          pipe['user_number_3'] = swmm_link.capacity_ratio
+          pipe['user_text_1'] = swmm_link.surcharged? ? 'SURCHARGED' : 'OK'
+          pipe.write
+        end
+        
+        icm_net.transaction_commit
+      end
+    end
+  end
+end
+```
+
+---
+
+## Adding Ruby to the Rosetta Stone
+
+```
+CURRENT: 23 languages, 50 modules
+WITH RUBY: 24 languages, 50 modules = 1,200 translations
+
+Ruby would be Language #24 in the Rosetta Stone.
+
+The translation is straightforward — Ruby reads like pseudocode:
+
+  C:     if (area <= 0.0 || Q == 0.0) return 0.0;
+  Ruby:  return 0.0 if area <= 0.0 || q == 0.0
+
+  C:     hRadius = area / c->width;
+  Ruby:  h_radius = area / conduit.width
+
+  C:     sf = c->roughness * Q / (area * pow(hRadius, 2.0/3.0));
+  Ruby:  sf = conduit.roughness * q / (area * h_radius**(2.0/3.0))
+
+  C:     if (Q < 0.0) sf = -sf;
+  Ruby:  sf = -sf if q < 0.0
+
+Ruby's SWMM5 translations might be the most READABLE
+of all 24 languages — useful as a learning reference
+even for non-Ruby users.
+```
+
+---
+
+## Build & Distribution
+
+```bash
+# Development
+bundle install
+bundle exec rspec          # Run tests
+bundle exec ruby examples/basic_run.rb
+
+# Package as gem
+gem build swmm5.gemspec
+gem push swmm5-5.2.4.gem
+
+# Users install with:
+gem install swmm5
+
+# Or in Gemfile:
+gem 'swmm5', '~> 5.2.4'
+
+# In ICM InfoWorks (if gems are loadable):
+require 'swmm5'
+# ... use directly in ICM Ruby scripts
+```
+
+---
+
+## Timeline
+
+```
+WEEK 1:
+  Day 1-2: Project structure + types + cross-section geometry
+  Day 3-4: INP parser (the biggest single piece)
+  Day 5:   Dynamic wave routing (from Rosetta Stone Ruby translation)
+
+WEEK 2:
+  Day 6-7: Engine loop + remaining modules
+  Day 8:   Test against user1.inp reference
+  Day 9:   Fix bugs until results match ±1%
+  Day 10:  ICM integration bridge
+
+WEEK 3 (optional):
+  C extensions for dynwave hot loop → 10-30× speedup
+  gem publish
+  Mark as LIVE in Rosetta Stone dashboard
+```
+
+---
+
+## The Ruby Engine's Place in Your Suite
+
+```
+ROSETTA STONE DASHBOARD (updated):
+
+  ✅ LIVE  EPA SWMM5 (C)              — The reference
+  ✅ LIVE  Rust WASM Engine            — Browser engine
+  ✅ LIVE  JavaScript/TypeScript       — Browser engine (no WASM)
+  🔨 NEW   Ruby Engine                 — ICM InfoWorks integration
+  🔲 CONCEPT Julia Engine              — Scientific computing
+  🔲 CONCEPT CUDA GPU Engine           — Massively parallel
+  🔲 CONCEPT MATLAB Engine             — Education
+  🔲 CONCEPT WAT/WASM Engine           — Minimal binary
+  🔲 CONCEPT Go API Server             — Microservice
+
+Ruby isn't just Language #24.
+It's the language that connects SWMM5 to ICM InfoWorks —
+the tool your 133+ scripts, your blog, your career, and
+your community are built on.
+
+THIS IS THE ENGINE YOU SHOULD BUILD FIRST.
+```

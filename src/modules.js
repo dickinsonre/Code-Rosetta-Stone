@@ -1154,6 +1154,46 @@ data class Conduit(
         return Qnew.coerceIn(-qMax, qMax)
     }
 }`,
+    ruby: `# routing.rb — Dynamic Wave Routing
+# SWMM5 Engine in Ruby — Saint-Venant Equation Solver
+# Simplified explicit finite-difference scheme for
+# unsteady flow routing through drainage conduits
+
+GRAVITY = 32.2  # ft/s²
+
+class Conduit
+  attr_accessor :length, :roughness, :a_full, :width
+
+  def initialize(length:, roughness:, a_full:, width:)
+    @length    = length
+    @roughness = roughness
+    @a_full    = a_full
+    @width     = width
+  end
+
+  def friction_slope(q, area)
+    return 0.0 if area <= 0.0 || q == 0.0
+
+    h_radius = area / @width
+    sf_base  = @roughness * q /
+               (area * h_radius**(2.0 / 3.0))
+    sf = sf_base * sf_base
+
+    q < 0.0 ? -sf : sf
+  end
+
+  def get_flow(q_old, area, h_up, h_down, dt)
+    return 0.0 if area <= 0.0
+
+    dhdx = (h_up - h_down) / @length
+    sf   = friction_slope(q_old, area)
+
+    q_new = q_old + dt * GRAVITY * area * (dhdx - sf)
+
+    q_max = area * 50.0
+    q_new.clamp(-q_max, q_max)
+  end
+end`,
   },
   "dynwave.c — Dynamic Wave Solver": {
     category: "Hydraulics",
@@ -2771,6 +2811,67 @@ data class Link(
         else 0.0
     }
 }`,
+    ruby: `# dynwave.rb — Dynamic Wave Solver
+# SWMM5 Engine in Ruby — Saint-Venant Equation Solver
+# Solves full momentum equation using explicit
+# finite-difference scheme for unsteady conduit flow
+
+GRAVITY = 32.174  # ft/s²
+
+class Link
+  attr_accessor :length, :roughness, :a_full, :r_full,
+                :flow, :new_flow, :velocity, :froude
+
+  def initialize(length:, roughness:, a_full:, r_full:, flow:)
+    @length    = length
+    @roughness = roughness
+    @a_full    = a_full
+    @r_full    = r_full
+    @flow      = flow
+    @new_flow  = 0.0
+    @velocity  = 0.0
+    @froude    = 0.0
+  end
+
+  def friction_slope(area, vel)
+    return 0.0 if area <= 0.0
+
+    rh = @r_full * (area / @a_full)
+    return 0.0 if rh <= 0.0
+
+    nv = @roughness * vel.abs
+    (nv * nv) / rh**(4.0 / 3.0)
+  end
+
+  def update_flow(h1, h2, a1, a2, dt)
+    a_avg = 0.5 * (a1 + a2)
+    if a_avg <= 0.0
+      @new_flow = 0.0
+      return
+    end
+
+    vel = @flow / a_avg
+    sf  = friction_slope(a_avg, vel)
+
+    head_grad = GRAVITY * a_avg * (h1 - h2) / @length
+    fric_term = GRAVITY * a_avg * sf
+    fric_term = -fric_term if @flow < 0.0
+
+    conv_term = @flow * @flow.abs /
+                (a_avg * @length) * (a2 - a1)
+
+    dq = (head_grad - fric_term - conv_term) * dt
+    @new_flow = @flow + dq
+
+    q_max = @a_full * 25.0
+    @new_flow = @new_flow.clamp(-q_max, q_max)
+
+    @velocity = @new_flow / a_avg
+    depth = a_avg / @a_full * (2.0 * @r_full)
+    @froude = depth > 0.0 ?
+      @velocity.abs / Math.sqrt(GRAVITY * depth) : 0.0
+  end
+end`,
   },
   "flowrout.c — Flow Routing Dispatch": {
     category: "Hydraulics",
@@ -4343,6 +4444,64 @@ data class RoutingParams(
         }
     }
 }`,
+    ruby: `# flowrout.rb — Flow Routing Dispatch
+# SWMM5 Engine in Ruby — Routing Method Dispatcher
+# Dispatches flow calculations to steady, kinematic
+# wave, or dynamic wave routing methods
+
+module RoutingMethod
+  STEADY_FLOW = :steady_flow
+  KINWAVE     = :kinwave
+  DYNWAVE     = :dynwave
+end
+
+class RoutingParams
+  attr_reader :area, :radius, :roughness, :slope,
+              :length, :q_in, :q_out, :q_lat
+
+  def initialize(area:, radius:, roughness:, slope:,
+                 length:, q_in:, q_out:, q_lat:)
+    @area      = area
+    @radius    = radius
+    @roughness = roughness
+    @slope     = slope
+    @length    = length
+    @q_in      = q_in
+    @q_out     = q_out
+    @q_lat     = q_lat
+  end
+
+  def steady_flow
+    return 0.0 if @area <= 0.0 || @slope <= 0.0
+
+    (1.0 / @roughness) * @area *
+      @radius**(2.0 / 3.0) *
+      Math.sqrt(@slope)
+  end
+
+  def kinwave_flow(dt)
+    return 0.0 if @area <= 0.0
+
+    celerity = (5.0 / 3.0) * @q_in / @area
+    celerity = 0.01 if celerity <= 0.0
+
+    courant = [celerity * dt / @length, 1.0].min
+
+    q_new = @q_out +
+      courant * (@q_in - @q_out) +
+      @q_lat * @length
+
+    [q_new, 0.0].max
+  end
+
+  def route(method, dt)
+    case method
+    when RoutingMethod::STEADY_FLOW then steady_flow
+    when RoutingMethod::KINWAVE    then kinwave_flow(dt)
+    when RoutingMethod::DYNWAVE    then @q_in
+    end
+  end
+end`,
   },
   "subcatch.c — Subcatchment Runoff": {
     category: "Hydrology",
@@ -5868,6 +6027,63 @@ class Subcatch(params: SubcatchParams) {
         }
     }
 }`,
+    ruby: `# subcatch.rb — Subcatchment Runoff
+# SWMM5 Engine in Ruby — Nonlinear Reservoir Surface Runoff
+# Models rainfall-runoff using Manning's equation for
+# pervious and impervious sub-areas of a subcatchment
+
+class Subcatch
+  attr_accessor :area, :width, :slope, :n_imperv,
+                :n_perv, :d_store_imperv, :d_store_perv,
+                :pct_imperv, :depth
+
+  def initialize(area:, width:, slope:, n_imperv:,
+                 n_perv:, d_store_imperv:, d_store_perv:,
+                 pct_imperv:)
+    @area            = area
+    @width           = width
+    @slope           = slope
+    @n_imperv        = n_imperv
+    @n_perv          = n_perv
+    @d_store_imperv  = d_store_imperv
+    @d_store_perv    = d_store_perv
+    @pct_imperv      = pct_imperv
+    @depth           = 0.0
+  end
+
+  def get_runoff(depth, n_mannings, d_store)
+    excess = depth - d_store
+    return 0.0 if excess <= 0.0
+
+    alpha = @width * Math.sqrt(@slope) / n_mannings
+    return 0.0 if alpha <= 0.0
+
+    alpha * excess**(5.0 / 3.0)
+  end
+
+  def route(rain, evap, infil, dt)
+    q_imperv = get_runoff(@depth, @n_imperv,
+                          @d_store_imperv)
+    q_perv   = get_runoff(@depth, @n_perv,
+                          @d_store_perv)
+
+    q_total = @pct_imperv * q_imperv +
+              (1.0 - @pct_imperv) * q_perv
+
+    @depth = self.class.calc_depth(
+      @depth, @area, rain, evap,
+      infil * (1.0 - @pct_imperv), q_total, dt)
+
+    q_total
+  end
+
+  def self.calc_depth(depth, area, rain, evap,
+                      infil, runoff, dt)
+    d_new = depth +
+      (rain - evap - infil - runoff) * dt / area
+    [d_new, 0.0].max
+  end
+end`,
   },
   "infil.c — Infiltration Models": {
     category: "Hydrology",
@@ -7239,6 +7455,58 @@ fun cnInfiltration(rainfall: Double,
              (rainfall - Ia + S)
     return rainfall - Pe
 }`,
+    ruby: `# infil.rb — Infiltration Models
+# SWMM5 Engine in Ruby — Horton, Green-Ampt, SCS-CN
+# Three methods to compute how rainfall infiltrates
+# into soil versus becoming surface runoff
+
+class Horton
+  attr_reader :f0, :f_inf, :decay
+
+  def initialize(f0:, f_inf:, decay:)
+    @f0    = f0
+    @f_inf = f_inf
+    @decay = decay
+  end
+
+  def infiltration(t)
+    @f_inf + (@f0 - @f_inf) * Math.exp(-@decay * t)
+  end
+end
+
+class GreenAmpt
+  attr_reader :ks, :psi, :theta_d
+  attr_accessor :cum_infil
+
+  def initialize(ks:, psi:, theta_d:, cum_infil: 0.001)
+    @ks        = ks
+    @psi       = psi
+    @theta_d   = theta_d
+    @cum_infil = cum_infil
+  end
+
+  def infiltration(rainfall, dt)
+    @cum_infil = 0.001 if @cum_infil <= 0.0
+
+    f = @ks * (1.0 + @psi * @theta_d / @cum_infil)
+    f = [f, rainfall].min
+
+    @cum_infil += f * dt
+    f
+  end
+end
+
+def self.cn_infiltration(rainfall, cn)
+  return 0.0 if cn <= 0.0 || cn >= 100.0
+
+  s  = (1000.0 / cn) - 10.0
+  ia = 0.2 * s
+
+  return rainfall if rainfall <= ia
+
+  pe = (rainfall - ia)**2.0 / (rainfall - ia + s)
+  rainfall - pe
+end`,
   },
   "lid.c — LID/Green Infrastructure": {
     category: "Hydrology",
@@ -8895,6 +9163,71 @@ data class LidUnit(
         return max(overflow, 0.0)
     }
 }`,
+    ruby: `# lid.rb — LID/Green Infrastructure Controls
+# SWMM5 Engine in Ruby — Low Impact Development
+# Models bioretention, permeable pavement, infiltration
+# trenches, and vegetated swales with layered water balance
+
+module LidType
+  BIO_CELL     = :bio_cell
+  PERM_PAVE    = :perm_pave
+  INFIL_TRENCH = :infil_trench
+  VEG_SWALE    = :veg_swale
+end
+
+class LidLayer
+  attr_reader :depth, :void_frac, :conductivity
+
+  def initialize(depth:, void_frac:, conductivity:)
+    @depth        = depth
+    @void_frac    = void_frac
+    @conductivity = conductivity
+  end
+end
+
+class LidUnit
+  attr_reader :type, :surface, :soil, :storage,
+              :drain_coeff, :drain_exp
+
+  def initialize(type:, surface:, soil:, storage:,
+                 drain_coeff:, drain_exp:)
+    @type        = type
+    @surface     = surface
+    @soil        = soil
+    @storage     = storage
+    @drain_coeff = drain_coeff
+    @drain_exp   = drain_exp
+  end
+
+  def soil_perc(soil_moist, storage_depth)
+    deficit = @soil.void_frac - soil_moist
+    return 0.0 if deficit <= 0.0
+
+    max_storage = @storage.depth * @storage.void_frac
+    return 0.0 if storage_depth >= max_storage
+
+    @soil.conductivity *
+      (1.0 + @soil.depth * deficit /
+       (soil_moist + 0.001))
+  end
+
+  def drain_flow(storage_depth)
+    return 0.0 if @drain_coeff <= 0.0
+    return 0.0 if storage_depth <= 0.0
+
+    @drain_coeff * storage_depth**@drain_exp
+  end
+
+  def get_runoff(rainfall, surf_depth, soil_moist,
+                 storage_depth, dt)
+    sp = soil_perc(soil_moist, storage_depth)
+    surf_inflow  = [rainfall - sp, 0.0].max
+    surf_capacity = @surface.depth * @surface.void_frac
+    overflow = surf_depth + surf_inflow * dt -
+               surf_capacity
+    [overflow, 0.0].max
+  end
+end`,
   },
   "link.c — Conduit Hydraulics": {
     category: "Hydraulics",
@@ -11311,6 +11644,95 @@ data class Xsect(
         return (yLo + yHi) / 2.0
     }
 }`,
+    ruby: `# link.rb — Conduit Hydraulics (Circular Cross Section)
+# SWMM5 Engine in Ruby — Pipe Geometry & Manning's Equation
+# Computes area, hydraulic radius, normal depth, and
+# critical depth for circular conduits
+
+GRAVITY   = 32.174
+MAX_ITER  = 50
+TOLERANCE = 1.0e-6
+
+class Xsect
+  attr_reader :y_full, :a_full, :r_full, :w_max
+
+  def initialize(y_full:, a_full:, r_full:, w_max:)
+    @y_full = y_full
+    @a_full = a_full
+    @r_full = r_full
+    @w_max  = w_max
+  end
+
+  def get_area(depth)
+    r = @y_full / 2.0
+    y_norm = depth / @y_full
+    return 0.0 if y_norm <= 0.0
+    return @a_full if y_norm >= 1.0
+
+    theta = 2.0 * Math.acos(1.0 - 2.0 * y_norm)
+    r * r * (theta - Math.sin(theta)) / 2.0
+  end
+
+  def get_hyd_radius(depth)
+    r = @y_full / 2.0
+    y_norm = depth / @y_full
+    return 0.0 if y_norm <= 0.0
+    return @r_full if y_norm >= 1.0
+
+    theta = 2.0 * Math.acos(1.0 - 2.0 * y_norm)
+    area  = r * r * (theta - Math.sin(theta)) / 2.0
+    perim = r * theta
+    return 0.0 if perim <= 0.0
+    area / perim
+  end
+
+  def normal_depth(n_manning, slope, q_target)
+    return 0.0 if q_target <= 0.0 || slope <= 0.0
+
+    y_lo = 0.0
+    y_hi = @y_full
+
+    MAX_ITER.times do
+      y_mid   = (y_lo + y_hi) / 2.0
+      area    = get_area(y_mid)
+      hyd_rad = get_hyd_radius(y_mid)
+      q_calc  = (1.0 / n_manning) * area *
+                hyd_rad**(2.0 / 3.0) *
+                Math.sqrt(slope)
+
+      break if (q_calc - q_target).abs < TOLERANCE
+      q_calc < q_target ? y_lo = y_mid : y_hi = y_mid
+    end
+    (y_lo + y_hi) / 2.0
+  end
+
+  def critical_depth(q_target)
+    return 0.0 if q_target <= 0.0
+
+    rhs  = (q_target * q_target) / GRAVITY
+    y_lo = 0.0
+    y_hi = @y_full
+
+    MAX_ITER.times do
+      y_mid  = (y_lo + y_hi) / 2.0
+      r      = @y_full / 2.0
+      y_norm = y_mid / @y_full
+      if y_norm <= 0.0; y_lo = y_mid; next; end
+      if y_norm >= 1.0; y_hi = y_mid; next; end
+
+      theta = 2.0 * Math.acos(1.0 - 2.0 * y_norm)
+      area  = r * r * (theta - Math.sin(theta)) / 2.0
+      top_w = 2.0 * r * Math.sin(theta / 2.0)
+
+      if top_w <= 0.0; y_lo = y_mid; next; end
+      lhs = area**3 / top_w
+
+      break if (lhs - rhs).abs < TOLERANCE
+      lhs < rhs ? y_lo = y_mid : y_hi = y_mid
+    end
+    (y_lo + y_hi) / 2.0
+  end
+end`,
   },
   "node.c — Junction & Storage Nodes": {
     category: "Hydraulics",
@@ -12942,6 +13364,74 @@ data class JunctionNode(
         }
     }
 }`,
+    ruby: `# node.rb — Junction & Storage Nodes
+# SWMM5 Engine in Ruby — Node Water Level Updates
+# Volume balance at junctions and storage nodes
+# with depth-area relationship and overflow check
+
+class StorageCurve
+  attr_reader :depths, :areas
+
+  def initialize(depths:, areas:)
+    @depths = depths
+    @areas  = areas
+  end
+
+  def get_volume(depth)
+    vol = 0.0
+    (1...@depths.size).each do |i|
+      if depth <= @depths[i]
+        frac = (depth - @depths[i - 1]) /
+               (@depths[i] - @depths[i - 1])
+        a_avg = @areas[i - 1] +
+                frac * (@areas[i] - @areas[i - 1])
+        return vol + a_avg * (depth - @depths[i - 1])
+      end
+      vol += 0.5 * (@areas[i - 1] + @areas[i]) *
+             (@depths[i] - @depths[i - 1])
+    end
+    vol
+  end
+end
+
+class JunctionNode
+  attr_accessor :invert_el, :max_depth, :depth,
+                :volume, :overflow
+
+  def initialize(invert_el:, max_depth:,
+                 depth: 0.0, volume: 0.0)
+    @invert_el = invert_el
+    @max_depth = max_depth
+    @depth     = depth
+    @volume    = volume
+    @overflow  = 0.0
+  end
+
+  def update_level(sc, q_in, q_out, dt)
+    dv = (q_in - q_out) * dt
+    @volume = [0.0, @volume + dv].max
+
+    (1...sc.depths.size).each do |i|
+      v = sc.get_volume(sc.depths[i])
+      if v >= @volume
+        v_prev = sc.get_volume(sc.depths[i - 1])
+        a_avg  = 0.5 *
+          (sc.areas[i - 1] + sc.areas[i])
+        @depth = sc.depths[i - 1] +
+                 (@volume - v_prev) / a_avg
+        break
+      end
+    end
+
+    @overflow = 0.0
+    if @depth > @max_depth
+      top_area  = sc.areas.last
+      @overflow = (@depth - @max_depth) *
+                  top_area / dt
+      @depth = @max_depth
+    end
+  end
+end`,
   },
   "rain.c — Rainfall Processing": {
     category: "Hydrology",
@@ -14522,6 +15012,60 @@ class RainGage(
         }
     }
 }`,
+    ruby: `# rain.rb — Rainfall Processing
+# SWMM5 Engine in Ruby — Rain Gage Input Handling
+# Converts raw rainfall data to time-stepped intensities
+# for driving all hydrologic computations
+
+module RainType
+  INTENSITY  = :intensity
+  VOLUME     = :volume
+  CUMULATIVE = :cumulative
+end
+
+class RainGage
+  attr_reader :rain_type, :interval, :units_factor,
+              :current_rate, :previous_total
+
+  def initialize(rain_type:, interval:,
+                 units_factor: 1.0)
+    @rain_type      = rain_type
+    @interval       = interval
+    @units_factor   = units_factor
+    @current_rate   = 0.0
+    @previous_total = 0.0
+  end
+
+  def convert_to_intensity(value)
+    case @rain_type
+    when RainType::INTENSITY
+      value * @units_factor
+    when RainType::VOLUME
+      return 0.0 if @interval <= 0.0
+      value * @units_factor * 3600.0 / @interval
+    when RainType::CUMULATIVE
+      return 0.0 if @interval <= 0.0
+      intensity = (value - @previous_total) *
+                  @units_factor * 3600.0 / @interval
+      @previous_total = value
+      [intensity, 0.0].max
+    end
+  end
+
+  def get_rate(raw, next_val, t_a, t_b, t)
+    rate_a = convert_to_intensity(raw)
+    rate_b = convert_to_intensity(next_val)
+    @current_rate = self.class.interpolate(
+      rate_a, rate_b, t_a, t_b, t)
+    @current_rate
+  end
+
+  def self.interpolate(rate_a, rate_b, t_a, t_b, t)
+    span = t_b - t_a
+    return rate_a if span <= 0.0
+    rate_a + (rate_b - rate_a) * (t - t_a) / span
+  end
+end`,
   },
   "massbal.c — Mass Balance Checking": {
     category: "Quality Assurance",
@@ -16114,6 +16658,65 @@ class MassBalance(
         }
     }
 }`,
+    ruby: `# massbal.rb — Mass Balance Checking
+# SWMM5 Engine in Ruby — Continuity Error Tracking
+# Tracks all inflows, outflows, and storage to verify
+# conservation of mass throughout the simulation
+
+class MassBalance
+  attr_accessor :total_inflow, :total_outflow,
+                :initial_storage, :final_storage,
+                :runoff_error, :routing_error
+
+  def initialize(initial_storage: 0.0)
+    @total_inflow    = 0.0
+    @total_outflow   = 0.0
+    @initial_storage = initial_storage
+    @final_storage   = 0.0
+    @runoff_error    = 0.0
+    @routing_error   = 0.0
+  end
+
+  def add_inflow(volume)
+    @total_inflow += volume
+  end
+
+  def add_outflow(volume)
+    @total_outflow += volume
+  end
+
+  def update_storage(current)
+    @final_storage = current
+  end
+
+  def report
+    delta = @final_storage - @initial_storage
+    @runoff_error = self.class.get_error(
+      @total_inflow, @total_outflow, delta)
+    @routing_error = @runoff_error
+
+    <<~REPORT
+
+      --- Mass Balance Report ---
+      Total Inflow:    #{'%12.4f' % @total_inflow}
+      Total Outflow:   #{'%12.4f' % @total_outflow}
+      Initial Storage: #{'%12.4f' % @initial_storage}
+      Final Storage:   #{'%12.4f' % @final_storage}
+      Runoff Error:    #{'%12.4f' % @runoff_error} %
+      Routing Error:   #{'%12.4f' % @routing_error} %
+    REPORT
+  end
+
+  def self.get_error(total_in, total_out,
+                     storage_change)
+    denom = total_in
+    denom = total_out + storage_change if denom <= 0.0
+    return 0.0 if denom <= 0.0
+
+    100.0 * (total_in - total_out -
+             storage_change) / denom
+  end
+end`,
   },
   "gwater.c — Groundwater Flow": {
     category: "Hydrology",
@@ -17514,6 +18117,60 @@ data class GWater(
         waterTable += dh
     }
 }`,
+    ruby: `# gwater.rb — Groundwater Flow
+# SWMM5 Engine in Ruby — Two-Zone Groundwater Model
+# Models unsaturated/saturated zones beneath each
+# subcatchment with Darcy lateral flow to drainage network
+
+class Aquifer
+  attr_accessor :ks, :porosity, :field_cap, :perc_exp
+
+  def initialize(ks:, porosity:, field_cap:, perc_exp:)
+    @ks        = ks
+    @porosity  = porosity
+    @field_cap = field_cap
+    @perc_exp  = perc_exp
+  end
+end
+
+class GWater
+  attr_accessor :upper_moist, :water_table, :area,
+                :node_elev, :flow_length
+
+  def initialize(upper_moist:, water_table:, area:,
+                 node_elev:, flow_length:)
+    @upper_moist = upper_moist
+    @water_table = water_table
+    @area        = area
+    @node_elev   = node_elev
+    @flow_length = flow_length
+  end
+
+  def percolation(aq)
+    return 0.0 if @upper_moist <= aq.field_cap
+    theta = [@upper_moist / aq.porosity, 1.0].min
+    aq.ks * theta**aq.perc_exp
+  end
+
+  def lateral_flow(aq)
+    return 0.0 if @flow_length <= 0.0
+    dh = @water_table - @node_elev
+    @area * aq.ks * dh / @flow_length
+  end
+
+  def update_water_table(aq, infil, et, dt)
+    perc  = percolation(aq)
+    q_lat = lateral_flow(aq)
+
+    @upper_moist += (infil - perc - et) * dt /
+                    (@area * aq.porosity)
+    @upper_moist = @upper_moist.clamp(0.0, aq.porosity)
+
+    dh = (perc * @area - q_lat) * dt /
+         (@area * aq.porosity)
+    @water_table += dh
+  end
+end`,
   },
 
   "xsect.c — Cross-Section Geometry": {
@@ -19018,6 +19675,62 @@ data class Xsect(val shape: Int, val diameter: Double) {
         return area * rh.pow(2.0 / 3.0)
     }
 }`,
+    ruby: `# xsect.rb — Cross-Section Geometry
+# SWMM5 Engine in Ruby — Circular Pipe Geometry
+# Computes area, hydraulic radius, top width,
+# and section factor from depth for circular pipes
+
+CIRCULAR = 1
+
+class Xsect
+  attr_reader :shape, :diameter
+
+  def initialize(shape:, diameter:)
+    @shape    = shape
+    @diameter = diameter
+  end
+
+  def self.get_theta(depth, diameter)
+    return 0.0 if depth <= 0.0
+    return 2.0 * Math::PI if depth >= diameter
+    y_norm = depth / diameter
+    2.0 * Math.acos(1.0 - 2.0 * y_norm)
+  end
+
+  def get_area(depth)
+    return 0.0 if depth <= 0.0
+    d = @diameter
+    return Math::PI / 4.0 * d * d if depth >= d
+    theta = self.class.get_theta(depth, d)
+    (d * d / 4.0) * (theta - Math.sin(theta))
+  end
+
+  def get_wetted_perimeter(depth)
+    return 0.0 if depth <= 0.0
+    return Math::PI * @diameter if depth >= @diameter
+    theta = self.class.get_theta(depth, @diameter)
+    0.5 * @diameter * theta
+  end
+
+  def get_hyd_radius(depth)
+    area = get_area(depth)
+    wp   = get_wetted_perimeter(depth)
+    return 0.0 if wp <= 0.0
+    area / wp
+  end
+
+  def get_width(depth)
+    return 0.0 if depth <= 0.0 || depth >= @diameter
+    theta = self.class.get_theta(depth, @diameter)
+    @diameter * Math.sin(theta / 2.0)
+  end
+
+  def get_section_factor(depth)
+    area = get_area(depth)
+    rh   = get_hyd_radius(depth)
+    area * rh**(2.0 / 3.0)
+  end
+end`,
   },
   "climate.c — Climate/Evaporation Processing": {
     category: "Hydrology",
@@ -20235,6 +20948,59 @@ data class Climate(
         }
     }
 }`,
+    ruby: `# climate.rb — Climate/Evaporation Processing
+# SWMM5 Engine in Ruby — Evaporation & Temperature
+# Supports constant, monthly, time series, and
+# Hargreaves temperature-based evaporation methods
+
+module EvapMethod
+  CONSTANT   = :constant
+  MONTHLY    = :monthly
+  TIMESERIES = :timeseries
+  HARGREAVES = :hargreaves
+end
+
+class Climate
+  attr_accessor :method, :const_rate, :monthly_rate,
+                :t_min, :t_max, :ra, :wind_speed, :month
+
+  def initialize(method:, const_rate: 0.0,
+                 monthly_rate: Array.new(12, 0.0),
+                 t_min: 0.0, t_max: 0.0, ra: 0.0,
+                 wind_speed: 0.0, month: 0)
+    @method       = method
+    @const_rate   = const_rate
+    @monthly_rate = monthly_rate
+    @t_min        = t_min
+    @t_max        = t_max
+    @ra           = ra
+    @wind_speed   = wind_speed
+    @month        = month
+  end
+
+  def hargreaves
+    t_mean  = (@t_max + @t_min) / 2.0
+    t_range = [(@t_max - @t_min), 0.0].max
+    0.0023 * @ra * (t_mean + 17.8) *
+      Math.sqrt(t_range)
+  end
+
+  def evap_rate
+    case @method
+    when EvapMethod::CONSTANT   then @const_rate
+    when EvapMethod::MONTHLY    then @monthly_rate[@month]
+    when EvapMethod::HARGREAVES then hargreaves
+    when EvapMethod::TIMESERIES then 0.0
+    end
+  end
+
+  def self.adjust_for_soil_moisture(et_pot, moisture,
+                                     field_cap)
+    return 0.0 if field_cap <= 0.0
+    ks = [moisture / field_cap, 1.0].min
+    et_pot * ks
+  end
+end`,
   },
   "controls.c — Rule-Based Controls": {
     category: "Operations",
@@ -21784,6 +22550,81 @@ fun evaluate(rules: List<ControlRule>,
         }
     }
 }`,
+    ruby: `# controls.rb — Rule-Based Controls
+# SWMM5 Engine in Ruby — Rule-Based Control System
+# Evaluates conditional rules each timestep to
+# operate pumps, gates, orifices, and weirs
+
+module Relation
+  EQ  = :eq
+  NEQ = :neq
+  LT  = :lt
+  LE  = :le
+  GT  = :gt
+  GE  = :ge
+end
+
+module ObjectType
+  NODE = :node
+  LINK = :link
+end
+
+class Condition
+  attr_reader :object_type, :object_index,
+              :attribute, :relation, :value
+
+  def initialize(object_type:, object_index:,
+                 attribute:, relation:, value:)
+    @object_type  = object_type
+    @object_index = object_index
+    @attribute    = attribute
+    @relation     = relation
+    @value        = value
+  end
+
+  def check(node_depths, link_flows)
+    measured = case @object_type
+               when ObjectType::NODE
+                 node_depths[@object_index]
+               when ObjectType::LINK
+                 link_flows[@object_index]
+               end
+
+    case @relation
+    when Relation::EQ  then measured == @value
+    when Relation::NEQ then measured != @value
+    when Relation::LT  then measured <  @value
+    when Relation::LE  then measured <= @value
+    when Relation::GT  then measured >  @value
+    when Relation::GE  then measured >= @value
+    end
+  end
+end
+
+class Action
+  attr_reader :link_index, :setting
+
+  def initialize(link_index:, setting:)
+    @link_index = link_index
+    @setting    = setting
+  end
+
+  def apply(link_settings)
+    link_settings[@link_index] = @setting
+  end
+end
+
+ControlRule = Struct.new(:condition, :action,
+                          :priority, keyword_init: true)
+
+def self.evaluate(rules, node_depths, link_flows,
+                  link_settings)
+  rules.sort_by { |r| -r.priority }.each do |rule|
+    if rule.condition.check(node_depths, link_flows)
+      rule.action.apply(link_settings)
+    end
+  end
+end`,
   },
   "qualrout.c — Water Quality Routing": {
     category: "Water Quality",
@@ -22946,6 +23787,49 @@ fun getMassFlow(conc: Double, flow: Double,
                 dt: Double): Double {
     return conc * abs(flow) * dt
 }`,
+    ruby: `# qualrout.rb — Water Quality Routing
+# SWMM5 Engine in Ruby — Pollutant Transport
+# CSTR mixing at nodes, first-order decay, mass balance
+
+class Pollutant
+  attr_accessor :decay_rate, :concen
+
+  def initialize(decay_rate:, concen: 0.0)
+    @decay_rate = decay_rate
+    @concen     = concen
+  end
+end
+
+def self.get_decay(conc, k, dt)
+  return conc if k <= 0.0 || dt <= 0.0
+  conc * Math.exp(-k * dt)
+end
+
+def self.find_node_qual(q_in, c_in, volume,
+                         c_old, dt)
+  mass_in = 0.0
+  total_q = 0.0
+  q_in.each_with_index do |q, i|
+    mass_in += q * c_in[i]
+    total_q += q
+  end
+
+  denom = total_q + volume / dt
+  return 0.0 if denom <= 0.0
+
+  (mass_in + volume * c_old / dt) / denom
+end
+
+def self.find_link_qual(c_up, c_link, flow,
+                         vol, dt)
+  return c_up if vol <= 0.0
+  fraction = [flow * dt / vol, 1.0].min
+  c_link + fraction * (c_up - c_link)
+end
+
+def self.get_mass_flow(conc, flow, dt)
+  conc * flow.abs * dt
+end`,
   },
   "kinwave.c — Kinematic Wave Routing": {
     category: "Hydraulics",
@@ -24211,6 +25095,53 @@ data class KinWave(
         return qOut
     }
 }`,
+    ruby: `# kinwave.rb — Kinematic Wave Routing
+# SWMM5 Engine in Ruby — Simplified Flow Routing
+# Manning's equation with Sf = S0 assumption
+# Courant-limited explicit finite-difference scheme
+
+class KinWave
+  attr_accessor :length, :slope, :roughness,
+                :width, :area, :q_out
+
+  def initialize(length:, slope:, roughness:,
+                 width:, area: 0.0, q_out: 0.0)
+    @length    = length
+    @slope     = slope
+    @roughness = roughness
+    @width     = width
+    @area      = area
+    @q_out     = q_out
+  end
+
+  def normal_flow(area)
+    return 0.0 if area <= 0.0 || @slope <= 0.0
+
+    h_radius = area / @width
+    (1.0 / @roughness) * area *
+      h_radius**(2.0 / 3.0) * Math.sqrt(@slope)
+  end
+
+  def wave_celerity(area)
+    return 0.0 if area <= 0.0
+
+    h_radius = area / @width
+    (5.0 / 3.0) * (1.0 / @roughness) *
+      h_radius**(2.0 / 3.0) * Math.sqrt(@slope)
+  end
+
+  def execute(q_in, dt)
+    celerity = wave_celerity(@area)
+    courant  = [celerity * dt / @length, 1.0].min
+
+    a_new = [@area +
+      (dt / @length) * (q_in - @q_out), 0.0].max
+
+    @area  = a_new
+    @q_out = normal_flow(a_new)
+    @q_out
+  end
+end`,
   },
   "rdii.c — Rainfall-Dependent I&I": {
     category: "Hydrology",
@@ -25684,6 +26615,69 @@ class RDIIModel(
         return totalQ
     }
 }`,
+    ruby: `# rdii.rb — Rainfall-Dependent I&I
+# SWMM5 Engine in Ruby — Unit Hydrograph RDII Model
+# Models RDII into sewers using three triangular
+# unit hydrographs (short/medium/long term)
+
+class UnitHydro
+  attr_reader :r, :tp, :k
+
+  def initialize(r:, tp:, k:)
+    @r  = r
+    @tp = tp
+    @k  = k
+  end
+
+  def t_base
+    2.0 * @tp * (1.0 + @k)
+  end
+
+  def peak
+    2.0 / t_base
+  end
+
+  def ordinate(t)
+    if t <= @tp
+      peak * t / @tp
+    else
+      [0.0, peak * (t_base - t) / (t_base - @tp)].max
+    end
+  end
+
+  def ordinates(dt)
+    n = (t_base / dt).floor + 1
+    (0...n).map { |i| ordinate(i.to_f * dt) }
+  end
+end
+
+def self.convolve(rain, uh, step)
+  sum = 0.0
+  [uh.size, step + 1].min.times do |j|
+    sum += rain[step - j] * uh[j]
+  end
+  sum
+end
+
+class RDIIModel
+  attr_reader :uh, :area, :rainfall
+
+  def initialize(uh:, area:, rainfall:)
+    @uh       = uh
+    @area     = area
+    @rainfall = rainfall
+  end
+
+  def get_flow(dt, step)
+    total_q = 0.0
+    @uh.each do |u|
+      ords = u.ordinates(dt)
+      q = self.class.convolve(@rainfall, ords, step)
+      total_q += u.r * q * @area
+    end
+    total_q
+  end
+end`,
   },
   "treatmnt.c — Water Quality Treatment": {
     category: "Water Quality",
@@ -26970,6 +27964,54 @@ data class Treatment(
         return cIn * getRemoval(cIn, Q, dt) * volume
     }
 }`,
+    ruby: `# treatmnt.rb — Water Quality Treatment
+# SWMM5 Engine in Ruby — Pollutant Treatment Model
+# Applies removal at nodes using constant removal,
+# first-order decay, or custom R = f(C,Q)
+
+module TreatType
+  REMOVAL_PCT = :removal_pct
+  FIRST_ORDER = :first_order
+  CUSTOM      = :custom
+end
+
+class Treatment
+  attr_reader :type, :param, :custom_coeff,
+              :exp_c, :exp_q
+
+  def initialize(type:, param:, custom_coeff: 0.0,
+                 exp_c: 1.0, exp_q: 0.0)
+    @type         = type
+    @param        = param
+    @custom_coeff = custom_coeff
+    @exp_c        = exp_c
+    @exp_q        = exp_q
+  end
+
+  def removal(c_in, q, dt)
+    case @type
+    when TreatType::REMOVAL_PCT
+      @param
+    when TreatType::FIRST_ORDER
+      1.0 - Math.exp(-@param * dt)
+    when TreatType::CUSTOM
+      return 0.0 if c_in <= 0.0
+      q_val = q > 0.0 ? q : 1.0
+      c_out = @custom_coeff *
+              c_in**@exp_c * q_val**@exp_q
+      r = 1.0 - c_out / c_in
+      r.clamp(0.0, 1.0)
+    end
+  end
+
+  def effluent(c_in, q, dt)
+    c_in * (1.0 - removal(c_in, q, dt))
+  end
+
+  def mass_removed(c_in, q, dt, volume)
+    c_in * removal(c_in, q, dt) * volume
+  end
+end`,
   },
 
   "snow.c — Snowpack/Snowmelt": {
@@ -28763,6 +29805,78 @@ data class Snowpack(
         return coverage
     }
 }`,
+    ruby: `# snow.rb — Snowpack/Snowmelt Simulation
+# SWMM5 Engine in Ruby — Degree-Day Snowmelt Model
+# Models accumulation, cold content, and melt
+# for plowable, impervious, and pervious surfaces
+
+C_ICE    = 0.5
+LIQ_CAP  = 0.05
+RAIN_TEMP = 1.0
+
+class Snowpack
+  attr_accessor :swe, :cold_content, :liquid_water,
+                :coverage, :melt_coeff, :base_melt_temp
+
+  def initialize(swe: 0.0, cold_content: 0.0,
+                 liquid_water: 0.0, coverage: 0.0,
+                 melt_coeff: 2.0, base_melt_temp: 0.0)
+    @swe            = swe
+    @cold_content   = cold_content
+    @liquid_water   = liquid_water
+    @coverage       = coverage
+    @melt_coeff     = melt_coeff
+    @base_melt_temp = base_melt_temp
+  end
+
+  def accumulate(precip, temp)
+    if temp <= RAIN_TEMP
+      @swe += precip
+      @cold_content += precip * C_ICE *
+                       (@base_melt_temp - temp)
+    else
+      @liquid_water += precip
+    end
+  end
+
+  def update_cold_content(temp)
+    if temp < @base_melt_temp
+      @cold_content += @swe * C_ICE *
+                       (@base_melt_temp - temp) * 0.1
+      max_cc = @swe * C_ICE * @base_melt_temp
+      @cold_content = max_cc if @cold_content > max_cc
+    end
+  end
+
+  def get_melt(temp)
+    return 0.0 if temp <= @base_melt_temp || @swe <= 0.0
+
+    melt = @melt_coeff * (temp - @base_melt_temp)
+
+    if @cold_content > 0.0
+      if melt <= @cold_content
+        @cold_content -= melt
+        return 0.0
+      end
+      melt -= @cold_content
+      @cold_content = 0.0
+    end
+
+    available = @swe + @liquid_water
+    melt = available if melt > available
+
+    @swe -= melt
+    @swe = 0.0 if @swe < 0.0
+
+    melt
+  end
+
+  def get_coverage(swe_max)
+    return 0.0 if swe_max <= 0.0
+    @coverage = [@swe / swe_max, 1.0].min
+    @coverage
+  end
+end`,
   },
   "dwflow.c — Steady/Normal Flow Initialization": {
     category: "Hydraulics",
@@ -30760,6 +31874,75 @@ data class DWFlow(
             vel / sqrt(GRAVITY * hDep) else 0.0
     }
 }`,
+    ruby: `# dwflow.rb — Steady/Normal Flow Initialization
+# SWMM5 Engine in Ruby — Manning's Equation & Bisection
+# Computes normal depth and uniform flow for circular
+# conduits using bisection root-finding
+
+GRAVITY   = 32.2
+MAX_ITER  = 50
+TOLERANCE = 1.0e-6
+
+class DWFlow
+  attr_reader :diameter, :slope, :roughness
+
+  def initialize(diameter:, slope:, roughness:)
+    @diameter  = diameter
+    @slope     = slope
+    @roughness = roughness
+  end
+
+  def self.get_area(diameter, depth)
+    return 0.0 if depth <= 0.0
+    if depth >= diameter
+      return Math::PI * diameter * diameter / 4.0
+    end
+    r     = diameter / 2.0
+    theta = 2.0 * Math.acos((r - depth) / r)
+    r * r * (theta - Math.sin(theta)) / 2.0
+  end
+
+  def self.get_hyd_radius(diameter, depth)
+    return 0.0 if depth <= 0.0
+    return diameter / 4.0 if depth >= diameter
+    r     = diameter / 2.0
+    theta = 2.0 * Math.acos((r - depth) / r)
+    area  = r * r * (theta - Math.sin(theta)) / 2.0
+    perim = r * theta
+    perim > 0.0 ? area / perim : 0.0
+  end
+
+  def manning_q(depth)
+    area  = self.class.get_area(@diameter, depth)
+    h_rad = self.class.get_hyd_radius(@diameter, depth)
+    return 0.0 if area <= 0.0 || h_rad <= 0.0
+    (1.486 / @roughness) * area *
+      h_rad**(2.0 / 3.0) * Math.sqrt(@slope)
+  end
+
+  def normal_depth(q_target)
+    return 0.0 if q_target <= 0.0 || @slope <= 0.0
+    lo = 0.0
+    hi = @diameter
+    MAX_ITER.times do
+      mid   = (lo + hi) / 2.0
+      q_mid = manning_q(mid)
+      return mid if (q_mid - q_target).abs < TOLERANCE
+      q_mid < q_target ? lo = mid : hi = mid
+    end
+    (lo + hi) / 2.0
+  end
+
+  def froude(depth)
+    return 0.0 if depth <= 0.0 || depth >= @diameter
+    area = self.class.get_area(@diameter, depth)
+    q    = manning_q(depth)
+    vel  = area > 0.0 ? q / area : 0.0
+    tw   = 2.0 * Math.sqrt(depth * (@diameter - depth))
+    h_dep = tw > 0.0 ? area / tw : 0.0
+    h_dep > 0.0 ? vel / Math.sqrt(GRAVITY * h_dep) : 0.0
+  end
+end`,
   },
   "hotstart.c — Simulation State Save/Restore": {
     category: "Data Processing",
@@ -32335,6 +33518,61 @@ data class SimState(
         20 + 8 * (nodeDepths.size + linkFlows.size
                   + subcatchMoisture.size + gwLevels.size)
 }`,
+    ruby: `# hotstart.rb — Simulation State Save/Restore
+# SWMM5 Engine in Ruby — Binary Checkpoint I/O
+# Saves and restores complete simulation state
+# for warm-starting continuous simulations
+
+class SimState
+  MAGIC   = 0x48535430
+  VERSION = 1
+
+  attr_accessor :node_depths, :link_flows,
+                :subcatch_moisture, :gw_levels
+
+  def initialize(n_nodes, n_links, n_subcatch)
+    @node_depths       = Array.new(n_nodes, 0.0)
+    @link_flows        = Array.new(n_links, 0.0)
+    @subcatch_moisture = Array.new(n_subcatch, 0.0)
+    @gw_levels         = Array.new(n_subcatch, 0.0)
+  end
+
+  def save(path)
+    File.open(path, "wb") do |f|
+      f.write([MAGIC, VERSION].pack("V2"))
+      f.write([@node_depths.size, @link_flows.size,
+               @subcatch_moisture.size].pack("V3"))
+      [@node_depths, @link_flows,
+       @subcatch_moisture, @gw_levels].each do |arr|
+        f.write(arr.pack("E*"))
+      end
+    end
+  end
+
+  def self.load(path)
+    File.open(path, "rb") do |f|
+      magic, ver = f.read(8).unpack("V2")
+      raise "Invalid hotstart file" unless
+        magic == MAGIC && ver == VERSION
+      nn, nl, ns = f.read(12).unpack("V3")
+      state = new(nn, nl, ns)
+      state.node_depths =
+        f.read(nn * 8).unpack("E#{nn}")
+      state.link_flows =
+        f.read(nl * 8).unpack("E#{nl}")
+      state.subcatch_moisture =
+        f.read(ns * 8).unpack("E#{ns}")
+      state.gw_levels =
+        f.read(ns * 8).unpack("E#{ns}")
+      state
+    end
+  end
+
+  def total_size
+    @node_depths.size + @link_flows.size +
+      @subcatch_moisture.size + @gw_levels.size
+  end
+end`,
   },
   "iface.c — Interface File Handling": {
     category: "Data Processing",
@@ -34046,6 +35284,77 @@ class IfaceFile {
         reader?.close()
     }
 }`,
+    ruby: `# iface.rb — Interface File Handling
+# SWMM5 Engine in Ruby — Cascaded Model I/O
+# Reads/writes interface files for passing flows
+# between upstream and downstream SWMM models
+
+class IfaceRecord
+  attr_accessor :time, :flows
+
+  def initialize(n_nodes)
+    @time  = 0.0
+    @flows = Array.new(n_nodes, 0.0)
+  end
+
+  def copy_from(other)
+    @time = other.time
+    @flows = other.flows.dup
+  end
+end
+
+class IfaceFile
+  def initialize
+    @n_nodes  = 0
+    @node_map = []
+    @prev     = IfaceRecord.new(0)
+    @next_rec = IfaceRecord.new(0)
+    @reader   = nil
+  end
+
+  def open(path, n_nodes)
+    @reader   = File.open(path, "r")
+    @n_nodes  = n_nodes
+    @node_map = (0...n_nodes).to_a
+    @prev     = IfaceRecord.new(n_nodes)
+    @next_rec = IfaceRecord.new(n_nodes)
+  end
+
+  def read_record
+    return false unless @reader
+    @prev.copy_from(@next_rec)
+    line = @reader.gets
+    return false unless line
+    parts = line.strip.split
+    return false if parts.size < 1 + @n_nodes
+    @next_rec.time = parts[0].to_f
+    @n_nodes.times do |i|
+      @next_rec.flows[i] = parts[i + 1].to_f
+    end
+    true
+  end
+
+  def interpolate_flow(node_idx, t)
+    return 0.0 if node_idx < 0 || node_idx >= @n_nodes
+    dt = @next_rec.time - @prev.time
+    return @prev.flows[node_idx] if dt <= 0.0
+    frac = ((t - @prev.time) / dt).clamp(0.0, 1.0)
+    q1 = @prev.flows[node_idx]
+    q2 = @next_rec.flows[node_idx]
+    q1 + (q2 - q1) * frac
+  end
+
+  def get_inflow(dest_node, t)
+    @n_nodes.times do |i|
+      return interpolate_flow(i, t) if @node_map[i] == dest_node
+    end
+    0.0
+  end
+
+  def close
+    @reader&.close
+  end
+end`,
   },
 
   "culvert.c — Culvert Inlet/Outlet Control": {
@@ -35424,6 +36733,62 @@ data class Culvert(
         return if (qo < qi && qo > 0.0) qo else qi
     }
 }`,
+    ruby: `# culvert.rb — Culvert Inlet/Outlet Control
+# SWMM5 Engine in Ruby — FHWA Culvert Flow Calculator
+# Computes flow under inlet and outlet control
+# using FHWA HDS-5 methodology
+
+GRAVITY = 32.2
+
+class Culvert
+  attr_reader :diameter, :length, :roughness,
+              :ke, :slope
+
+  def initialize(diameter:, length:, roughness:,
+                 ke: 0.5, slope: 0.01)
+    @diameter  = diameter
+    @length    = length
+    @roughness = roughness
+    @ke        = ke
+    @slope     = slope
+  end
+
+  def full_area
+    Math::PI / 4.0 * @diameter**2
+  end
+
+  def inlet_control(hw)
+    return 0.0 if hw <= 0.0
+    hw_ratio = hw / @diameter
+    c = 0.0398
+    y = 0.67
+    area = full_area
+    q = area * Math.sqrt(2.0 * GRAVITY * hw) *
+        c * hw_ratio**y
+    [q, 0.0].max
+  end
+
+  def outlet_control(hw, tw)
+    return 0.0 if hw <= 0.0
+    area  = full_area
+    vel   = Math.sqrt(2.0 * GRAVITY * (hw - tw).abs)
+    r_h   = @diameter / 4.0
+    f_loss = @roughness**2 * @length /
+             (r_h**(4.0 / 3.0))
+    h_loss = (1.0 + @ke + f_loss) * vel**2 /
+             (2.0 * GRAVITY)
+    h_avail = hw - tw - h_loss
+    return 0.0 if h_avail <= 0.0
+    q = area * Math.sqrt(2.0 * GRAVITY * h_avail)
+    [q, 0.0].max
+  end
+
+  def get_flow(hw, tw)
+    qi = inlet_control(hw)
+    qo = outlet_control(hw, tw)
+    (qo < qi && qo > 0.0) ? qo : qi
+  end
+end`,
   },
 
   "forcmain.c — Pressurized Force Main Flow": {
@@ -36834,6 +38199,69 @@ data class ForceMain(
         return vel * area
     }
 }`,
+    ruby: `# forcmain.rb — Pressurized Force Main Flow
+# SWMM5 Engine in Ruby — Force Main Flow Calculator
+# Hazen-Williams and Darcy-Weisbach friction models
+# for pressurized pipe flow in sewer systems
+
+GRAVITY = 32.2
+
+module FrictionModel
+  HAZEN_WILLIAMS = :hazen_williams
+  DARCY_WEISBACH = :darcy_weisbach
+end
+
+class ForceMain
+  attr_reader :diameter, :length, :roughness,
+              :model
+
+  def initialize(diameter:, length:, roughness:,
+                 model: FrictionModel::HAZEN_WILLIAMS)
+    @diameter  = diameter
+    @length    = length
+    @roughness = roughness
+    @model     = model
+  end
+
+  def area
+    Math::PI / 4.0 * @diameter**2
+  end
+
+  def hazen_williams_slope(vel)
+    return 0.0 if vel <= 0.0 || @roughness <= 0.0
+    r_h = @diameter / 4.0
+    s = (vel / (1.318 * @roughness *
+         r_h**0.63))**(1.0 / 0.54)
+    s
+  end
+
+  def darcy_weisbach_slope(vel)
+    return 0.0 if vel <= 0.0
+    re = vel * @diameter / 1.0e-5
+    return 0.0 if re <= 0.0
+    f = re < 2000.0 ? 64.0 / re :
+        0.25 / (Math.log10(@roughness /
+        (3.7 * @diameter) + 5.74 / re**0.9))**2
+    f * vel**2 / (2.0 * GRAVITY * @diameter)
+  end
+
+  def friction_slope(vel)
+    case @model
+    when FrictionModel::HAZEN_WILLIAMS
+      hazen_williams_slope(vel)
+    when FrictionModel::DARCY_WEISBACH
+      darcy_weisbach_slope(vel)
+    end
+  end
+
+  def get_flow(h_up, h_down)
+    dh = h_up - h_down
+    return 0.0 if dh <= 0.0
+    vel = Math.sqrt(2.0 * GRAVITY * dh /
+          (1.0 + friction_slope(1.0) * @length))
+    vel * area
+  end
+end`,
   },
 
   "roadway.c — Roadway/Street Overtopping Flow": {
@@ -38088,6 +39516,63 @@ data class Roadway(
         return crestElev + H
     }
 }`,
+    ruby: `# roadway.rb — Roadway/Street Overtopping Flow
+# SWMM5 Engine in Ruby — Broad-Crested Weir Calculator
+# Computes overtopping flow over roadway crossings
+# using FHWA HDS-5 broad-crested weir methodology
+
+GRAVITY = 32.2
+
+class Roadway
+  attr_reader :crest_elev, :crest_length, :width,
+              :surf_type
+
+  def initialize(crest_elev:, crest_length:,
+                 width: 40.0, surf_type: :paved)
+    @crest_elev   = crest_elev
+    @crest_length = crest_length
+    @width        = width
+    @surf_type    = surf_type
+  end
+
+  def discharge_coeff(h_over_l)
+    return 0.0 if h_over_l <= 0.0
+    case @surf_type
+    when :paved   then 2.85 + 0.12 * h_over_l
+    when :gravel  then 2.70 + 0.10 * h_over_l
+    else 2.80
+    end
+  end
+
+  def submergence_factor(h_down, h_up)
+    return 1.0 if h_up <= 0.0
+    ratio = h_down / h_up
+    return 1.0 if ratio < 0.8
+    return 0.0 if ratio >= 1.0
+    1.0 - (ratio - 0.8) / 0.2
+  end
+
+  def get_flow(h_up_elev, h_down_elev)
+    head = h_up_elev - @crest_elev
+    return 0.0 if head <= 0.0
+
+    h_over_l = head / @width
+    cd = discharge_coeff(h_over_l)
+
+    h_down = [h_down_elev - @crest_elev, 0.0].max
+    sf = submergence_factor(h_down, head)
+
+    q = cd * @crest_length * head**1.5 * sf
+    [q, 0.0].max
+  end
+
+  def get_head(q, sf = 1.0)
+    return 0.0 if q <= 0.0 || @crest_length <= 0.0
+    cd = 2.85
+    h = (q / (cd * @crest_length * sf))**(2.0 / 3.0)
+    @crest_elev + h
+  end
+end`,
   },
 
   "runoff.c — Surface Runoff Generation": {
@@ -39470,6 +40955,72 @@ fun getRunoff(s: Subcatch, state: RunoffState,
         (1.0 - s.pctImperv) * dPerv) * dt
     if (state.depth < 0.0) state.depth = 0.0
 }`,
+    ruby: `# runoff.rb — Surface Runoff Generation
+# SWMM5 Engine in Ruby — Nonlinear Reservoir Method
+# Models overland flow from subcatchments using
+# Manning's equation and water balance
+
+GRAVITY = 32.2  # ft/s²
+
+class Subcatch
+  attr_accessor :area, :slope, :width,
+                :n_imperv, :n_perv,
+                :d_store_imperv, :d_store_perv,
+                :pct_imperv
+
+  def initialize(area:, slope:, width:,
+                 n_imperv:, n_perv:,
+                 d_store_imperv:, d_store_perv:,
+                 pct_imperv:)
+    @area = area
+    @slope = slope
+    @width = width
+    @n_imperv = n_imperv
+    @n_perv = n_perv
+    @d_store_imperv = d_store_imperv
+    @d_store_perv = d_store_perv
+    @pct_imperv = pct_imperv
+  end
+end
+
+class RunoffState
+  attr_accessor :depth, :runoff
+
+  def initialize(depth: 0.0, runoff: 0.0)
+    @depth = depth
+    @runoff = runoff
+  end
+end
+
+def surface_outflow(depth, dstore, width, slope, n)
+  d = depth - dstore
+  return 0.0 if d <= 0.0
+  width * Math.sqrt(slope) / n * d**(5.0 / 3.0)
+end
+
+def depth_change(rainfall, evap, infil, outflow, area)
+  return 0.0 if area <= 0.0
+  rainfall - evap - infil - outflow / area
+end
+
+def get_runoff(s, state, rainfall, evap, infil, dt)
+  q_imperv = surface_outflow(state.depth,
+    s.d_store_imperv, s.width, s.slope, s.n_imperv)
+  q_perv = surface_outflow(state.depth,
+    s.d_store_perv, s.width, s.slope, s.n_perv)
+
+  state.runoff = s.pct_imperv * q_imperv +
+    (1.0 - s.pct_imperv) * q_perv
+
+  d_imperv = depth_change(rainfall, evap,
+    0.0, q_imperv, s.area)
+  d_perv = depth_change(rainfall, evap,
+    infil, q_perv, s.area)
+
+  state.depth += (s.pct_imperv * d_imperv +
+    (1.0 - s.pct_imperv) * d_perv) * dt
+  state.depth = 0.0 if state.depth < 0.0
+end`,
   },
 
   "gage.c — Rain Gauge Management": {
@@ -40862,6 +42413,60 @@ class Gage(
         return 0.0
     }
 }`,
+    ruby: `# gage.rb — Rain Gauge Management
+# SWMM5 Engine in Ruby — Rainfall Data Handling
+# Reads rain gauge recordings, converts units,
+# provides rainfall at each timestep
+
+module RainType
+  INTENSITY  = :intensity
+  CUMULATIVE = :cumulative
+  VOLUME     = :volume
+end
+
+Reading = Struct.new(:time, :value)
+
+class Gage
+  attr_accessor :rainfall, :previous_total
+  attr_reader :rain_type, :interval, :units_factor
+
+  def initialize(rain_type:, interval:, units_factor:)
+    @rain_type = rain_type
+    @interval = interval
+    @units_factor = units_factor
+    @rainfall = 0.0
+    @previous_total = 0.0
+    @readings = []
+  end
+
+  def add_reading(time, value)
+    @readings << Reading.new(time, value)
+  end
+
+  def get_rainfall(time)
+    dt_hr = @interval / 3600.0
+
+    @readings.reverse_each do |r|
+      next unless r.time <= time
+      v = r.value * @units_factor
+
+      case @rain_type
+      when RainType::INTENSITY
+        @rainfall = v
+      when RainType::CUMULATIVE
+        @rainfall = (v - @previous_total) / dt_hr
+        @previous_total = v
+      when RainType::VOLUME
+        @rainfall = v / dt_hr
+      end
+
+      return @rainfall
+    end
+
+    @rainfall = 0.0
+    0.0
+  end
+end`,
   },
 
   "landuse.c — Land Use & Pollutant Buildup": {
@@ -42188,6 +43793,66 @@ data class Landuse(
         return min(w, buildup)
     }
 }`,
+    ruby: `# landuse.rb — Land Use & Pollutant Buildup
+# SWMM5 Engine in Ruby — Buildup/Washoff Functions
+# Models pollutant accumulation during dry weather
+# and washoff during storm events
+
+module BuildType
+  POWER       = :power
+  EXPONENTIAL = :exponential
+  SATURATION  = :saturation
+end
+
+module WashType
+  EXPONENTIAL = :exponential
+  RATING_CURVE = :rating_curve
+  EMC          = :emc
+end
+
+class Landuse
+  attr_reader :build_type, :c1, :c2, :c3,
+              :wash_type, :w1, :w2
+
+  def initialize(build_type:, c1:, c2:, c3:,
+                 wash_type:, w1:, w2:)
+    @build_type = build_type
+    @c1 = c1; @c2 = c2; @c3 = c3
+    @wash_type = wash_type
+    @w1 = w1; @w2 = w2
+  end
+
+  def get_buildup(days)
+    return 0.0 if days <= 0.0
+
+    case @build_type
+    when BuildType::POWER
+      [@c1 * days**@c2, @c3].min
+    when BuildType::EXPONENTIAL
+      @c3 * (1.0 - Math.exp(-@c1 * days))
+    when BuildType::SATURATION
+      @c3 * @c1 * days / (1.0 + @c1 * days)
+    else
+      0.0
+    end
+  end
+
+  def get_washoff(buildup, runoff, area)
+    return 0.0 if buildup <= 0.0 || runoff <= 0.0
+
+    w = case @wash_type
+        when WashType::EXPONENTIAL
+          @w1 * runoff**@w2 * buildup
+        when WashType::RATING_CURVE
+          @w1 * runoff**@w2
+        when WashType::EMC
+          @w1 * runoff * area
+        else
+          0.0
+        end
+    [w, buildup].min
+  end
+end`,
   },
 
   "surfqual.c — Surface Water Quality/Washoff": {
@@ -43456,6 +45121,55 @@ class SurfQual(
         }
     }
 }`,
+    ruby: `# surfqual.rb — Surface Water Quality / Washoff
+# SWMM5 Engine in Ruby — Pollutant washoff
+# Supports exponential, rating curve, and EMC models
+
+module WashoffType
+  EXPONENTIAL = :exponential
+  RATING_CURVE = :rating_curve
+  EMC          = :emc
+end
+
+class SurfQual
+  attr_accessor :buildup
+  attr_reader :pollut_load, :washoff_type, :c1, :c2
+
+  def initialize(buildup:, washoff_type:, c1:, c2:)
+    @buildup = buildup
+    @washoff_type = washoff_type
+    @c1 = c1
+    @c2 = c2
+    @pollut_load = 0.0
+  end
+
+  def get_washoff(runoff, area, dt)
+    return 0.0 if runoff <= 0.0 || @buildup <= 0.0
+
+    washoff = case @washoff_type
+              when WashoffType::EXPONENTIAL
+                @c1 * runoff**@c2 * @buildup
+              when WashoffType::RATING_CURVE
+                @c1 * runoff**@c2
+              when WashoffType::EMC
+                @c1 * runoff
+              else
+                0.0
+              end
+
+    washoff = @buildup / dt if washoff * dt > @buildup
+
+    @buildup -= washoff * dt
+    @buildup = 0.0 if @buildup < 0.0
+    @pollut_load = washoff
+    washoff
+  end
+
+  def self.get_concentration(washoff, flow)
+    return 0.0 if flow <= 0.0
+    washoff / flow
+  end
+end`,
   },
   "inflow.c — External Inflow Handling": {
     category: "Data Processing",
@@ -44748,6 +46462,49 @@ fun getTotalInflow(
 
     return max(0.0, total)
 }`,
+    ruby: `# inflow.rb — External Inflow Handling
+# SWMM5 Engine in Ruby — Direct, dry-weather, RDII
+# Combines multiple inflow sources at network nodes
+
+MAX_PERIODS = 24
+
+class Inflow
+  attr_accessor :ts_value
+  attr_reader :baseline, :scale_factor, :pattern
+
+  def initialize(baseline:, scale_factor:,
+                 pattern: [], ts_value: 0.0)
+    @baseline = baseline
+    @scale_factor = scale_factor
+    @pattern = pattern
+    @ts_value = ts_value
+  end
+
+  def get_pattern(time)
+    n = @pattern.size
+    return 1.0 if n == 0
+    period = time.floor.to_i % n
+    period += n if period < 0
+    @pattern[period]
+  end
+
+  def get_direct_inflow(time)
+    @baseline + @scale_factor * @ts_value
+  end
+
+  def get_dry_weather_flow(time)
+    pat = get_pattern(time)
+    @baseline * @scale_factor * pat
+  end
+end
+
+def get_total_inflow(direct: nil, dwf: nil,
+                     rdii: 0.0, time: 0.0)
+  total = rdii
+  total += direct.get_direct_inflow(time) if direct
+  total += dwf.get_dry_weather_flow(time) if dwf
+  [0.0, total].max
+end`,
   },
 
   "odesolve.c — ODE Solver (Runge-Kutta)": {
@@ -46168,6 +47925,65 @@ class OdeSolver(private val n: Int) {
         return maxErr
     }
 }`,
+    ruby: `# odesolve.rb — ODE Solver (Runge-Kutta-Fehlberg)
+# SWMM5 Engine in Ruby — Adaptive RK5 integrator
+
+class OdeSolver
+  def initialize(n)
+    @n = n
+    @k1 = Array.new(n, 0.0)
+    @k2 = Array.new(n, 0.0)
+    @k3 = Array.new(n, 0.0)
+    @k4 = Array.new(n, 0.0)
+    @k5 = Array.new(n, 0.0)
+    @k6 = Array.new(n, 0.0)
+    @y_tmp = Array.new(n, 0.0)
+  end
+
+  def rk5_step(y, h, t, &deriv)
+    @k1 = deriv.call(t, y)
+    @n.times { |i| @y_tmp[i] = y[i] + h * 0.25 * @k1[i] }
+
+    @k2 = deriv.call(t + 0.25 * h, @y_tmp)
+    @n.times do |i|
+      @y_tmp[i] = y[i] + h * (3.0/32 * @k1[i] +
+                                9.0/32 * @k2[i])
+    end
+
+    @k3 = deriv.call(t + 3.0/8 * h, @y_tmp)
+    @n.times do |i|
+      @y_tmp[i] = y[i] + h * (1932.0/2197 * @k1[i] -
+        7200.0/2197 * @k2[i] + 7296.0/2197 * @k3[i])
+    end
+
+    @k4 = deriv.call(t + 12.0/13 * h, @y_tmp)
+    @n.times do |i|
+      @y_tmp[i] = y[i] + h * (439.0/216 * @k1[i] -
+        8 * @k2[i] + 3680.0/513 * @k3[i] -
+        845.0/4104 * @k4[i])
+    end
+
+    @k5 = deriv.call(t + h, @y_tmp)
+    @n.times do |i|
+      @y_tmp[i] = y[i] + h * (-8.0/27 * @k1[i] +
+        2 * @k2[i] - 3544.0/2565 * @k3[i] +
+        1859.0/4104 * @k4[i] - 11.0/40 * @k5[i])
+    end
+
+    @k6 = deriv.call(t + 0.5 * h, @y_tmp)
+  end
+
+  def get_error(h)
+    max_err = 0.0
+    @n.times do |i|
+      err = (h * (@k1[i] / 360.0 -
+        128.0/4275 * @k3[i] - 2197.0/75240 * @k4[i] +
+        @k5[i] / 50.0 + 2.0/55 * @k6[i])).abs
+      max_err = err if err > max_err
+    end
+    max_err
+  end
+end`,
   },
 
   "findroot.c — Root Finding (Bisection/Ridder)": {
@@ -47532,6 +49348,58 @@ fun ridder(f: (Double) -> Double,
     }
     return (a + b) / 2.0
 }`,
+    ruby: `# findroot.rb — Root Finding (Bisection & Ridder)
+# SWMM5 Engine in Ruby — Solves f(x) = 0
+
+ROOT_TOL = 1.0e-6
+MAX_IT   = 50
+
+def bisect(a, b, &f)
+  fa = f.call(a)
+  return (a + b) / 2.0 if fa * f.call(b) > 0
+
+  MAX_IT.times do
+    mid = (a + b) / 2.0
+    fmid = f.call(mid)
+    return mid if fmid.abs < ROOT_TOL ||
+                  (b - a) / 2.0 < ROOT_TOL
+    if fa * fmid < 0
+      b = mid
+    else
+      a = mid
+      fa = fmid
+    end
+  end
+  (a + b) / 2.0
+end
+
+def ridder(a, b, &f)
+  fa = f.call(a)
+  fb = f.call(b)
+  return (a + b) / 2.0 if fa * fb > 0
+
+  MAX_IT.times do
+    mid = (a + b) / 2.0
+    fmid = f.call(mid)
+    s = Math.sqrt(fmid * fmid - fa * fb)
+    return mid if s == 0.0
+
+    sgn = (fa - fb) >= 0 ? fmid.abs : -fmid.abs
+    xnew = mid + (mid - a) * sgn / s
+    fnew = f.call(xnew)
+    return xnew if fnew.abs < ROOT_TOL
+
+    if fmid * fnew < 0
+      a = mid; fa = fmid
+      b = xnew; fb = fnew
+    elsif fa * fnew < 0
+      b = xnew; fb = fnew
+    else
+      a = xnew; fa = fnew
+    end
+  end
+  (a + b) / 2.0
+end`,
   },
 
   "mathexpr.c — Mathematical Expression Parser": {
@@ -49672,6 +51540,96 @@ class ExprParser(private val expr: String) {
             ?: 0.0
     }
 }`,
+    ruby: `# mathexpr.rb — Mathematical Expression Parser
+# SWMM5 Engine in Ruby — Recursive descent evaluator
+
+class ExprParser
+  def initialize(expr)
+    @expr = expr
+    @pos = 0
+    @vars = {}
+  end
+
+  def set_var(name, value)
+    @vars[name] = value
+  end
+
+  def evaluate
+    @pos = 0
+    parse_expr
+  end
+
+  private
+
+  def skip_spaces
+    @pos += 1 while @pos < @expr.length &&
+                     @expr[@pos] == ' '
+  end
+
+  def parse_expr
+    v = parse_term
+    skip_spaces
+    while @pos < @expr.length && '+-'.include?(@expr[@pos])
+      op = @expr[@pos]; @pos += 1
+      rhs = parse_term
+      v = op == '+' ? v + rhs : v - rhs
+      skip_spaces
+    end
+    v
+  end
+
+  def parse_term
+    v = parse_factor
+    skip_spaces
+    while @pos < @expr.length && '*/'.include?(@expr[@pos])
+      op = @expr[@pos]; @pos += 1
+      rhs = parse_factor
+      v = op == '*' ? v * rhs : v / rhs
+      skip_spaces
+    end
+    v
+  end
+
+  def parse_factor
+    skip_spaces
+    if @pos < @expr.length && @expr[@pos] == '('
+      @pos += 1
+      v = parse_expr
+      @pos += 1 if @pos < @expr.length
+      return v
+    end
+    if @pos < @expr.length && @expr[@pos] =~ /[a-zA-Z]/
+      name = ''
+      while @pos < @expr.length &&
+            @expr[@pos] =~ /[a-zA-Z0-9]/
+        name << @expr[@pos]; @pos += 1
+      end
+      if @pos < @expr.length && @expr[@pos] == '('
+        @pos += 1
+        arg = parse_expr
+        @pos += 1 if @pos < @expr.length
+        return case name
+               when 'sqrt' then Math.sqrt(arg)
+               when 'exp'  then Math.exp(arg)
+               when 'log'  then Math.log(arg)
+               when 'abs'  then arg.abs
+               when 'sin'  then Math.sin(arg)
+               when 'cos'  then Math.cos(arg)
+               else arg
+               end
+      end
+      return @vars[name] || 0.0
+    end
+    parse_number
+  end
+
+  def parse_number
+    start = @pos
+    @pos += 1 while @pos < @expr.length &&
+      (@expr[@pos] =~ /[0-9]/ || @expr[@pos] == '.')
+    @expr[start...@pos].to_f
+  end
+end`,
   },
 
   "shape.c — Normalized Cross-Section Shapes": {
@@ -51247,6 +53205,63 @@ class ShapeTable {
         return entries.last().wFrac
     }
 }`,
+    ruby: `# shape.rb — Normalized Cross-Section Shapes
+# SWMM5 Engine in Ruby — Shape Table Lookup
+# Tabular depth-area-width relationships for
+# standard and custom cross-section shapes
+
+MAX_SHAPE_POINTS = 51
+
+ShapeEntry = Struct.new(:depth, :a_frac, :w_frac)
+
+class ShapeTable
+  def initialize
+    @entries = []
+  end
+
+  def add_entry(depth, a_frac, w_frac)
+    return false if @entries.size >= MAX_SHAPE_POINTS
+    @entries << ShapeEntry.new(depth, a_frac, w_frac)
+    true
+  end
+
+  def lookup_area(y_norm)
+    return y_norm if @entries.size < 2
+    return 0.0 if y_norm <= 0.0
+    return 1.0 if y_norm >= 1.0
+
+    @entries.each_cons(2) do |prev, curr|
+      if curr.depth >= y_norm
+        return interp(y_norm,
+          prev.depth, curr.depth,
+          prev.a_frac, curr.a_frac)
+      end
+    end
+    @entries.last.a_frac
+  end
+
+  def lookup_width(y_norm)
+    return 1.0 if @entries.size < 2
+    return 0.0 if y_norm <= 0.0
+    return 0.0 if y_norm >= 1.0
+
+    @entries.each_cons(2) do |prev, curr|
+      if curr.depth >= y_norm
+        return interp(y_norm,
+          prev.depth, curr.depth,
+          prev.w_frac, curr.w_frac)
+      end
+    end
+    @entries.last.w_frac
+  end
+
+  private
+
+  def interp(x, x1, x2, y1, y2)
+    return y1 if (x2 - x1).abs < 1e-20
+    y1 + (y2 - y1) * (x - x1) / (x2 - x1)
+  end
+end`,
   },
 
   "transect.c — Irregular Channel Transects": {
@@ -52867,6 +54882,69 @@ class Transect {
         return getArea(wse) / perim
     }
 }`,
+    ruby: `# transect.rb — Irregular Channel Transects
+# SWMM5 Engine in Ruby — Station-Elevation Cross Section
+# Computes hydraulic properties for natural channels
+# using trapezoidal integration of station-elevation data
+
+class Transect
+  def initialize
+    @stations = []
+    @elevations = []
+  end
+
+  def add_station(x, z)
+    @stations << x
+    @elevations << z
+  end
+
+  def get_area(wse)
+    area = 0.0
+    (0...@stations.size - 1).each do |i|
+      d1 = [0.0, wse - @elevations[i]].max
+      d2 = [0.0, wse - @elevations[i + 1]].max
+
+      if d1 > 0 || d2 > 0
+        dx = @stations[i + 1] - @stations[i]
+        area += 0.5 * (d1 + d2) * dx
+      end
+    end
+    area
+  end
+
+  def get_perimeter(wse)
+    perim = 0.0
+    (0...@stations.size - 1).each do |i|
+      d1 = [0.0, wse - @elevations[i]].max
+      d2 = [0.0, wse - @elevations[i + 1]].max
+
+      if d1 > 0 || d2 > 0
+        dx = @stations[i + 1] - @stations[i]
+        dz = @elevations[i + 1] - @elevations[i]
+        perim += Math.sqrt(dx * dx + dz * dz)
+      end
+    end
+    perim
+  end
+
+  def get_top_width(wse)
+    width = 0.0
+    (0...@stations.size - 1).each do |i|
+      d1 = wse - @elevations[i]
+      d2 = wse - @elevations[i + 1]
+      if d1 > 0 || d2 > 0
+        width += @stations[i + 1] - @stations[i]
+      end
+    end
+    width
+  end
+
+  def get_hyd_radius(wse)
+    perim = get_perimeter(wse)
+    return 0.0 if perim <= 0.0
+    get_area(wse) / perim
+  end
+end`,
   },
 
   "output.c — Binary Output File Writing": {
@@ -54502,6 +56580,56 @@ class OutputFile(
 
     fun getFileSize(): Long = File(filename).length()
 }`,
+    ruby: `# output.rb — Binary Output File Writing
+# SWMM5 Engine in Ruby — Binary Results File Manager
+# Packs node depths and link flows into fixed-size
+# records for efficient random-access retrieval
+
+class OutputFile
+  HEADER_SIZE = 64
+  MAGIC = 0x53574D4D
+
+  attr_reader :filename, :node_count, :link_count
+
+  def initialize(filename, node_count, link_count)
+    @filename = filename
+    @node_count = node_count
+    @link_count = link_count
+    @record_size = (node_count + link_count) * 8
+  end
+
+  def write_header
+    File.open(@filename, 'wb') do |f|
+      header = [MAGIC, @node_count, @link_count]
+        .pack('V3')
+      header += "\x00" * (HEADER_SIZE - header.size)
+      f.write(header)
+    end
+  end
+
+  def write_timestep(depths, flows)
+    File.open(@filename, 'ab') do |f|
+      record = (depths + flows).pack('E*')
+      f.write(record)
+    end
+  end
+
+  def read_timestep(step)
+    File.open(@filename, 'rb') do |f|
+      offset = HEADER_SIZE + step * @record_size
+      f.seek(offset)
+      data = f.read(@record_size)
+      values = data.unpack('E*')
+      depths = values[0...@node_count]
+      flows = values[@node_count..]
+      { depths: depths, flows: flows }
+    end
+  end
+
+  def file_size
+    File.size(@filename)
+  end
+end`,
   },
 
   "input.c — INP File Parsing": {
@@ -56280,6 +58408,64 @@ class InputReader {
         return results
     }
 }`,
+    ruby: `# input.rb — INP File Parsing
+# SWMM5 Engine in Ruby — INP Input File Parser
+# Reads bracketed section headers and tokenizes
+# whitespace-delimited data lines
+
+class InputReader
+  attr_reader :current_section, :line_num, :tokens
+
+  SECTION_RE = /^\[(.+)\]$/
+
+  def initialize
+    @current_section = ''
+    @line_num = 0
+    @tokens = []
+  end
+
+  def self.section_header?(line)
+    m = line.strip.match(SECTION_RE)
+    m ? m[1] : nil
+  end
+
+  def parse_tokens(line)
+    @tokens = []
+    line.strip.split(/\s+/).each do |tok|
+      break if tok.start_with?(';')
+      @tokens << tok unless tok.empty?
+    end
+    @tokens.size
+  end
+
+  def process_line(line)
+    @line_num += 1
+    trimmed = line.strip
+    return 0 if trimmed.empty? || trimmed.start_with?(';')
+
+    section = self.class.section_header?(trimmed)
+    if section
+      @current_section = section
+      return 1
+    end
+
+    parse_tokens(trimmed)
+  end
+
+  ParsedRecord = Struct.new(:section, :tokens)
+
+  def read_file(content)
+    results = []
+    content.each_line do |line|
+      count = process_line(line)
+      if count > 0 && !@tokens.empty?
+        results << ParsedRecord.new(
+          @current_section, @tokens.dup)
+      end
+    end
+    results
+  end
+end`,
   },
 
   "report.c — Simulation Report Generation": {
@@ -57950,6 +60136,61 @@ class ReportWriter {
     fun getReport(): String =
         lines.joinToString("\\n")
 }`,
+    ruby: `# report.rb — Simulation Report Generation
+# SWMM5 Engine in Ruby — Report Writer
+# Generates formatted text reports with summary
+# statistics and continuity error checking
+
+class ReportWriter
+  def initialize
+    @lines = []
+  end
+
+  def add_line(line)
+    @lines << line
+  end
+
+  def write_header(title)
+    add_line('==========================================')
+    add_line('  SWMM5 Simulation Report')
+    add_line('==========================================')
+    add_line(title)
+    add_line('')
+  end
+
+  def self.format_value(value, decimals: 4)
+    format("%.#{decimals}f", value)
+  end
+
+  def self.compute_error(total_inflow, total_outflow)
+    avg = (total_inflow + total_outflow) / 2.0
+    return 0.0 if avg.abs < 1e-10
+    100.0 * (total_inflow - total_outflow) / avg
+  end
+
+  def write_summary_stats(total_inflow, total_outflow)
+    add_line('--- Summary Statistics ---')
+    add_line("  Total Inflow:  #{'%.4f' % total_inflow}")
+    add_line("  Total Outflow: #{'%.4f' % total_outflow}")
+
+    pct_error = self.class.compute_error(
+      total_inflow, total_outflow)
+    add_line("  Pct Error:     #{'%.2f' % pct_error}%")
+  end
+
+  def get_line(index)
+    return '' unless index >= 0 && index < @lines.size
+    @lines[index]
+  end
+
+  def line_count
+    @lines.size
+  end
+
+  def report
+    @lines.join("\n")
+  end
+end`,
   },
 
   "project.c — Project Data Management": {
@@ -59746,6 +61987,62 @@ class Project(var title: String = "") {
     fun getNodes(): List<Node> = nodes.toList()
     fun getLinks(): List<Link> = links.toList()
 }`,
+    ruby: `# project.rb — Project Data Management
+# SWMM5 Engine in Ruby — Project Object Table Manager
+# Manages nodes, links, and object lookup for
+# the simulation project data structure
+
+Node = Struct.new(:name, :invert, :max_depth)
+Link = Struct.new(:name, :from_node, :to_node, :length)
+
+class Project
+  attr_accessor :title
+
+  def initialize(title: '')
+    @title = title
+    @nodes = []
+    @links = []
+  end
+
+  def add_node(name, invert, max_depth)
+    idx = @nodes.size
+    @nodes << Node.new(name, invert, max_depth)
+    idx
+  end
+
+  def add_link(name, from_node, to_node, length)
+    idx = @links.size
+    @links << Link.new(name, from_node,
+                       to_node, length)
+    idx
+  end
+
+  def find_node(name)
+    @nodes.index { |n| n.name == name }
+  end
+
+  def find_link(name)
+    @links.index { |l| l.name == name }
+  end
+
+  def clear
+    @nodes.clear
+    @links.clear
+    @title = ''
+  end
+
+  def object_count
+    @nodes.size + @links.size
+  end
+
+  def nodes
+    @nodes.dup
+  end
+
+  def links
+    @links.dup
+  end
+end`,
   },
 
   "stats.c — Runtime Statistics Collection": {
@@ -61086,6 +63383,63 @@ data class LinkStats(
         return totalFlow / periods.toDouble()
     }
 }`,
+    ruby: `# stats.rb — Runtime Statistics Collection
+# SWMM5 Engine in Ruby — Simulation Statistics Tracker
+# Collects max/min/mean statistics for nodes and links
+# during a stormwater simulation run
+
+class NodeStats
+  attr_accessor :max_depth, :max_flow, :total_volume,
+                :time_flooded, :max_lat_flow, :periods
+
+  def initialize
+    @max_depth = 0.0
+    @max_flow = 0.0
+    @total_volume = 0.0
+    @time_flooded = 0.0
+    @max_lat_flow = 0.0
+    @periods = 0
+  end
+
+  def update(depth, flow, volume, full_depth, dt)
+    @max_depth = depth if depth > @max_depth
+    @max_flow = flow if flow.abs > @max_flow.abs
+
+    @total_volume += volume * dt
+    @periods += 1
+
+    if depth > full_depth && full_depth > 0.0
+      @time_flooded += dt / 3600.0
+    end
+  end
+end
+
+class LinkStats
+  attr_accessor :max_flow, :max_velocity, :max_depth,
+                :total_flow, :periods
+
+  def initialize
+    @max_flow = 0.0
+    @max_velocity = 0.0
+    @max_depth = 0.0
+    @total_flow = 0.0
+    @periods = 0
+  end
+
+  def update(flow, velocity, depth)
+    @max_flow = flow if flow.abs > @max_flow.abs
+    @max_velocity = velocity.abs if velocity.abs > @max_velocity
+    @max_depth = depth if depth > @max_depth
+
+    @total_flow += flow.abs
+    @periods += 1
+  end
+
+  def mean_flow
+    return 0.0 if @periods <= 0
+    @total_flow / @periods.to_f
+  end
+end`,
     chapel: `// stats.chpl — Runtime Statistics Collection
 // SWMM5 Engine in Chapel — Simulation Statistics Tracker
 // Collects max/min/mean statistics for nodes and links
@@ -62511,6 +64865,55 @@ fun printSummary(report: StatsReport,
     println("Flooded Nodes:    $flooded")
     println("Total Flood Vol:  \${"%.3f".format(total)} ft3")
 }`,
+    ruby: `# statsrpt.rb — Statistics Reporting
+# SWMM5 Engine in Ruby — Post-Simulation Report Generator
+# Computes continuity errors, ranks flooding nodes,
+# and generates summary statistics for the simulation
+
+class StatsReport
+  attr_accessor :total_inflow, :total_outflow,
+                :init_storage, :final_storage
+
+  def initialize(total_inflow: 0.0, total_outflow: 0.0,
+                 init_storage: 0.0, final_storage: 0.0)
+    @total_inflow  = total_inflow
+    @total_outflow = total_outflow
+    @init_storage  = init_storage
+    @final_storage = final_storage
+  end
+
+  def continuity_error
+    return 0.0 if @total_inflow <= 0.0
+    d_storage = @final_storage - @init_storage
+    (@total_inflow - @total_outflow - d_storage) /
+      @total_inflow * 100.0
+  end
+end
+
+FloodEntry = Struct.new(:node_index, :flood_volume,
+                        :max_rate, :time_flooded)
+
+def rank_by_flooding(entries)
+  entries.sort_by { |e| -e.flood_volume }
+end
+
+def get_flooded_count(entries)
+  entries.count { |e| e.flood_volume > 0.0 }
+end
+
+def total_flood_volume(entries)
+  entries.sum(&:flood_volume)
+end
+
+def print_summary(report, entries)
+  err     = report.continuity_error
+  flooded = get_flooded_count(entries)
+  total   = total_flood_volume(entries)
+
+  puts "Continuity Error: #{'%.2f' % err}%"
+  puts "Flooded Nodes:    #{flooded}"
+  puts "Total Flood Vol:  #{'%.3f' % total} ft3"
+end`,
     chapel: `// statsrpt.chpl — Statistics Reporting
 // SWMM5 Engine in Chapel — Post-Simulation Report Generator
 // Computes continuity errors, ranks flooding nodes,
@@ -64418,6 +66821,71 @@ class LookupTable {
         return area
     }
 }`,
+    ruby: `# table.rb — Lookup Table & Curves
+# SWMM5 Engine in Ruby — Table Interpolation Module
+# Linear interpolation, inverse lookup, and
+# trapezoidal integration for curve data
+
+class LookupTable
+  attr_reader :x, :y
+
+  def initialize
+    @x = []
+    @y = []
+  end
+
+  def add_entry(x_val, y_val)
+    pos = @x.index { |v| v >= x_val } || @x.size
+    @x.insert(pos, x_val)
+    @y.insert(pos, y_val)
+  end
+
+  def lookup(x_target)
+    n = @x.size
+    return 0.0 if n == 0
+    return @y[0] if x_target <= @x[0]
+    return @y[n - 1] if x_target >= @x[n - 1]
+
+    (1...n).each do |i|
+      next unless @x[i] >= x_target
+      dx = @x[i] - @x[i - 1]
+      return @y[i] if dx == 0.0
+      frac = (x_target - @x[i - 1]) / dx
+      return @y[i - 1] + frac * (@y[i] - @y[i - 1])
+    end
+    @y[n - 1]
+  end
+
+  def inverse_lookup(y_target)
+    n = @x.size
+    return 0.0 if n == 0
+    return @x[0] if y_target <= @y[0]
+    return @x[n - 1] if y_target >= @y[n - 1]
+
+    (1...n).each do |i|
+      next unless @y[i] >= y_target
+      dy = @y[i] - @y[i - 1]
+      return @x[i] if dy == 0.0
+      frac = (y_target - @y[i - 1]) / dy
+      return @x[i - 1] + frac * (@x[i] - @x[i - 1])
+    end
+    @x[n - 1]
+  end
+
+  def integrate(x_min, x_max)
+    area = 0.0
+    (1...@x.size).each do |i|
+      x0, x1 = @x[i - 1], @x[i]
+      next if x1 <= x_min || x0 >= x_max
+      y0 = x0 < x_min ? lookup(x_min) : @y[i - 1]
+      y1 = x1 > x_max ? lookup(x_max) : @y[i]
+      x0 = x_min if x0 < x_min
+      x1 = x_max if x1 > x_max
+      area += 0.5 * (y0 + y1) * (x1 - x0)
+    end
+    area
+  end
+end`,
   },
 
   "datetime.c — Date/Time Utilities": {
@@ -66000,6 +68468,80 @@ data class DateTimeSWMM(
         }
     }
 }`,
+    ruby: `# datetime.rb — Date/Time Utilities
+# SWMM5 Engine in Ruby — Julian Day Conversion Module
+# Calendar date to/from Julian day number with
+# time arithmetic for simulation timesteps
+
+class DateTimeSWMM
+  attr_accessor :year, :month, :day,
+                :hour, :minute, :second
+
+  def initialize(year, month, day,
+                 hour: 0, minute: 0, second: 0)
+    @year   = year
+    @month  = month
+    @day    = day
+    @hour   = hour
+    @minute = minute
+    @second = second
+  end
+
+  def to_julian
+    y = @year.to_f
+    m = @month.to_f
+    d = @day.to_f
+
+    jd = 367.0 * y -
+         (7.0 * (y + ((m + 9.0) / 12.0).floor) / 4.0).floor +
+         (275.0 * m / 9.0).floor + d + 1721013.5
+
+    jd += (@hour + @minute / 60.0 +
+           @second / 3600.0) / 24.0
+    jd
+  end
+
+  def self.from_julian(jd)
+    l = (jd + 68569.5).to_i
+    n = 4 * l / 146097
+    l -= (146097 * n + 3) / 4
+    i = 4000 * (l + 1) / 1461001
+    l = l - 1461 * i / 4 + 31
+    j = 80 * l / 2447
+
+    day   = l - 2447 * j / 80
+    ll    = j / 11
+    month = j + 2 - 12 * ll
+    year  = 100 * (n - 49) + i + ll
+
+    frac = jd - jd.floor + 0.5
+    frac -= 1.0 if frac >= 1.0
+    hour   = (frac * 24.0).to_i
+    minute = (frac * 1440.0).to_i % 60
+    second = (frac * 86400.0).to_i % 60
+
+    new(year, month, day,
+        hour: hour, minute: minute, second: second)
+  end
+
+  def self.add_seconds(jd, sec)
+    jd + sec / 86400.0
+  end
+
+  def self.diff_hours(jd1, jd2)
+    (jd2 - jd1) * 24.0
+  end
+
+  def self.days_in_month(year, month)
+    dm = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31]
+    return 0 if month < 1 || month > 12
+    if month == 2 && ((year % 4 == 0 && year % 100 != 0) ||
+                       year % 400 == 0)
+      return 29
+    end
+    dm[month - 1]
+  end
+end`,
   },
 
   "exfil.c — Conduit Exfiltration": {
@@ -67269,6 +69811,54 @@ class Exfil(
         }
     }
 }`,
+    ruby: `# exfil.rb — Conduit Exfiltration
+# SWMM5 Engine in Ruby — Green-Ampt Seepage Model
+# Computes exfiltration rate from conduits into
+# surrounding soil via wetted perimeter
+
+class Exfil
+  attr_accessor :soil_k, :cap_suction, :porosity,
+                :init_moist, :cum_exfil
+
+  def initialize(soil_k:, cap_suction:,
+                 porosity:, init_moist:)
+    @soil_k      = soil_k
+    @cap_suction = cap_suction
+    @porosity    = porosity
+    @init_moist  = init_moist
+    @cum_exfil   = 0.0
+  end
+
+  def get_rate
+    d_theta = @porosity - @init_moist
+    return @soil_k if d_theta <= 0.0
+
+    cum = [@cum_exfil, 1.0e-6].max
+    @soil_k * (1.0 + @cap_suction * d_theta / cum)
+  end
+
+  def update(rate, dt)
+    @cum_exfil += rate * dt
+    @cum_exfil = 0.0 if @cum_exfil < 0.0
+  end
+
+  def self.wetted_area(diameter, depth)
+    return 0.0 if depth <= 0.0
+    return Math::PI * diameter if depth >= diameter
+
+    theta = 2.0 * Math.acos(
+      1.0 - 2.0 * depth / diameter)
+    0.5 * diameter * theta
+  end
+
+  def get_loss(diameter, depth, length, dt)
+    w_area = Exfil.wetted_area(diameter, depth)
+    rate   = get_rate
+    loss   = rate * w_area * length * dt
+    update(rate, dt)
+    loss
+  end
+end`,
   },
 
   "lidproc.c — LID Process Simulation": {
@@ -69039,6 +71629,76 @@ class LIDProc(
         storage.moisture = maxOf(storage.moisture, 0.0)
     }
 }`,
+    ruby: `# lidproc.rb — LID Process Simulation
+# SWMM5 Engine in Ruby — Layered Green Infrastructure
+# Routes flow through surface, soil, storage, and drain
+# layers using Manning, Green-Ampt, and orifice equations
+
+LIDLayer = Struct.new(:thickness, :void_frac, :moisture) do
+  def initialize(thickness:, void_frac:, moisture: 0.0)
+    super(thickness, void_frac, moisture)
+  end
+end
+
+class LIDProc
+  attr_accessor :surface, :soil, :storage,
+                :drain_coeff, :drain_expon,
+                :surf_slope, :surf_rough,
+                :soil_k, :soil_psi, :surf_width
+
+  def initialize(surface:, soil:, storage:,
+                 drain_coeff:, drain_expon:,
+                 surf_slope:, surf_rough:,
+                 soil_k:, soil_psi:, surf_width:)
+    @surface     = surface
+    @soil        = soil
+    @storage     = storage
+    @drain_coeff = drain_coeff
+    @drain_expon = drain_expon
+    @surf_slope  = surf_slope
+    @surf_rough  = surf_rough
+    @soil_k      = soil_k
+    @soil_psi    = soil_psi
+    @surf_width  = surf_width
+  end
+
+  def surface_outflow
+    d = @surface.moisture
+    return 0.0 if d <= 0.0
+    (@surf_width / @surf_rough) *
+      Math.sqrt(@surf_slope) * d**(5.0 / 3.0)
+  end
+
+  def soil_perc
+    d_theta = @soil.void_frac - @soil.moisture
+    return @soil_k if d_theta <= 0.0
+    cum_f = [@soil.moisture * @soil.thickness, 1.0e-6].max
+    @soil_k * (1.0 + @soil_psi * d_theta / cum_f)
+  end
+
+  def drain_flow
+    head = @storage.moisture * @storage.thickness
+    return 0.0 if head <= 0.0
+    @drain_coeff * head**@drain_expon
+  end
+
+  def route_flow(rainfall, dt)
+    surf_vol = @surface.thickness * @surface.void_frac
+    @surface.moisture += rainfall * dt / surf_vol
+    s_out = surface_outflow * dt
+    @surface.moisture -= s_out / surf_vol
+    @surface.moisture = [@surface.moisture, 0.0].max
+
+    perc = soil_perc * dt
+    @soil.moisture += perc / @soil.thickness
+    @soil.moisture = [@soil.moisture, @soil.void_frac].min
+
+    drn = drain_flow * dt
+    stor_vol = @storage.thickness * @storage.void_frac
+    @storage.moisture -= drn / stor_vol
+    @storage.moisture = [@storage.moisture, 0.0].max
+  end
+end`,
   },
 
   "toposort.c — Topological Sorting of Network": {
@@ -70422,6 +73082,51 @@ class Graph(val nodeCount: Int) {
 
     fun isDAG(): Boolean = topoSort() != null
 }`,
+    ruby: `# toposort.rb — Topological Sorting of Network
+# SWMM5 Engine in Ruby — Kahn's Algorithm for DAG
+# Determines upstream-to-downstream processing order
+# for nodes in the drainage network graph
+
+class Graph
+  attr_reader :node_count
+
+  def initialize(node_count)
+    @node_count = node_count
+    @adj_list   = Array.new(node_count) { [] }
+    @in_degree  = Array.new(node_count, 0)
+  end
+
+  def add_edge(from, to)
+    @adj_list[from] << to
+    @in_degree[to] += 1
+  end
+
+  def topo_sort
+    in_deg = @in_degree.dup
+    queue  = []
+    sorted = []
+
+    @node_count.times do |i|
+      queue << i if in_deg[i] == 0
+    end
+
+    until queue.empty?
+      u = queue.shift
+      sorted << u
+
+      @adj_list[u].each do |v|
+        in_deg[v] -= 1
+        queue << v if in_deg[v] == 0
+      end
+    end
+
+    sorted.size == @node_count ? sorted : nil
+  end
+
+  def dag?
+    !topo_sort.nil?
+  end
+end`,
   },
 
   "hash.c — Hash Table": {
@@ -72119,6 +74824,58 @@ class HashTable {
         return false
     }
 }`,
+    ruby: `# hash.rb — Hash Table
+# SWMM5 Engine in Ruby — Hash Table with Built-in Hash
+# Ruby has a built-in Hash class, so this wraps it
+# with djb2-style API matching the C implementation
+
+TABLE_SIZE = 256
+
+class SwmmHashTable
+  attr_reader :count
+
+  def initialize
+    @buckets = {}
+    @count   = 0
+  end
+
+  def self.hash_func(key)
+    h = 5381
+    key.each_byte { |c| h = ((h << 5) + h) + c }
+    h.abs % TABLE_SIZE
+  end
+
+  def insert(key, value)
+    if @buckets.key?(key)
+      @buckets[key] = value
+    else
+      @buckets[key] = value
+      @count += 1
+    end
+  end
+
+  def find(key)
+    @buckets[key]
+  end
+
+  def delete(key)
+    if @buckets.key?(key)
+      @buckets.delete(key)
+      @count -= 1
+      true
+    else
+      false
+    end
+  end
+
+  def contains?(key)
+    @buckets.key?(key)
+  end
+
+  def keys
+    @buckets.keys
+  end
+end`,
   },
 
   "mempool.c — Memory Pool Allocator": {
@@ -73745,6 +76502,66 @@ class MemPool(private val blockSize: Int = 65536) {
         return result
     }
 }`,
+    ruby: `# mempool.rb — Memory Pool Allocator
+# SWMM5 Engine in Ruby — Arena/Bump Allocator
+# Pre-allocates blocks and serves requests by
+# advancing an offset pointer (Ruby has GC!)
+
+MAX_BLOCKS = 64
+DEFAULT_BLOCK_SIZE = 65_536
+
+AllocResult = Struct.new(:block, :offset)
+
+class MemPool
+  attr_reader :total_used
+
+  def initialize(block_size: DEFAULT_BLOCK_SIZE)
+    @block_size    = block_size
+    @free_offset   = 0
+    @current_block = 0
+    @blocks        = [Array.new(block_size, 0)]
+    @total_used    = 0
+  end
+
+  def new_block
+    return false if @blocks.size >= MAX_BLOCKS
+    @blocks << Array.new(@block_size, 0)
+    @current_block = @blocks.size - 1
+    @free_offset   = 0
+    true
+  end
+
+  def alloc(size)
+    aligned = (size + 7) & ~7
+    if @free_offset + aligned > @block_size
+      return nil unless new_block
+    end
+    result = AllocResult.new(@current_block, @free_offset)
+    @free_offset += aligned
+    @total_used  += aligned
+    result
+  end
+
+  def reset
+    @current_block = 0
+    @free_offset   = 0
+    @total_used    = 0
+  end
+
+  def num_blocks
+    @blocks.size
+  end
+
+  def write_bytes(block, offset, data)
+    data.each_with_index do |byte, i|
+      @blocks[block][offset + i] = byte
+    end
+  end
+
+  def read_bytes(block, offset, size)
+    @blocks[block][offset, size]
+  end
+end`,
   },
 
   "keywords.c — Keyword/Token Lookup": {
@@ -75371,6 +78188,68 @@ class KeywordTable(useDefaults: Boolean = true) {
         return false
     }
 }`,
+    ruby: `# keywords.rb — Keyword/Token Lookup
+# SWMM5 Engine in Ruby — INP Section Keyword Matcher
+# Manages a table of SWMM section keywords and
+# provides case-insensitive lookup for the parser
+
+MAX_KEYWORDS = 64
+
+SWMM_DEFAULTS = %w[
+  TITLE OPTIONS RAINGAGES
+  SUBCATCHMENTS SUBAREAS INFILTRATION
+  JUNCTIONS OUTFALLS STORAGE
+  CONDUITS PUMPS ORIFICES
+  WEIRS XSECTIONS TRANSECTS
+  CONTROLS DWF CURVES
+  TIMESERIES REPORT MAP
+  COORDINATES VERTICES LABELS
+].freeze
+
+class KeywordTable
+  attr_reader :words
+
+  def initialize(use_defaults: true)
+    @words = use_defaults ? SWMM_DEFAULTS.dup : []
+  end
+
+  def find(token)
+    lower = token.strip.downcase
+    @words.each_with_index do |word, i|
+      return i if word.downcase == lower
+    end
+    -1
+  end
+
+  def add(word)
+    return false if @words.size >= MAX_KEYWORDS
+    @words << word
+    true
+  end
+
+  def count
+    @words.size
+  end
+
+  def get_word(index)
+    return "" unless index.between?(0, @words.size - 1)
+    @words[index]
+  end
+
+  def contains?(token)
+    find(token) >= 0
+  end
+
+  def remove(token)
+    idx = find(token)
+    if idx >= 0
+      @words.delete_at(idx)
+      true
+    else
+      false
+    end
+  end
+end`,
   },
 
   "swmm5.c — Main Simulation API": {
@@ -77116,6 +79995,70 @@ class SwmmModel {
         totalDuration = 0.0
     }
 }`,
+    ruby: `# swmm5.rb — Main Simulation API
+# SWMM5 Engine in Ruby — Top-level Controller
+# Provides open/start/step/end/close entry points
+# for driving the SWMM5 simulation engine
+
+class SwmmError < RuntimeError; end
+
+class SwmmModel
+  attr_reader :project_open, :running, :elapsed_time
+
+  def initialize
+    @project_open   = false
+    @running        = false
+    @elapsed_time   = 0.0
+    @total_duration = 0.0
+    @route_step     = 0.0
+    @input_file     = ""
+    @report_file    = ""
+  end
+
+  def open(inp, rpt)
+    raise SwmmError, "Project already open" if @project_open
+    @input_file   = inp
+    @report_file  = rpt
+    @project_open = true
+    @running      = false
+    @elapsed_time = 0.0
+  end
+
+  def start(duration, step)
+    raise SwmmError, "Project not open" unless @project_open
+    raise SwmmError, "Already running"  if @running
+    @total_duration = duration
+    @route_step     = step
+    @elapsed_time   = 0.0
+    @running        = true
+  end
+
+  def step
+    raise SwmmError, "Not running" unless @running
+    @elapsed_time += @route_step
+    if @elapsed_time >= @total_duration
+      @elapsed_time = @total_duration
+      @running = false
+    end
+    @elapsed_time
+  end
+
+  def progress
+    return 0.0 if @total_duration <= 0.0
+    (@elapsed_time / @total_duration) * 100.0
+  end
+
+  def end_sim
+    @running = false
+  end
+
+  def close
+    @project_open   = false
+    @running        = false
+    @elapsed_time   = 0.0
+    @total_duration = 0.0
+  end
+end`,
   },
 };
 const languages = [
@@ -77142,6 +80085,7 @@ const languages = [
   { id: "chapel", label: "Chapel", ext: ".chpl", color: "#8DC63F" },
   { id: "swift", label: "Swift", ext: ".swift", color: "#F05138" },
   { id: "kotlin", label: "Kotlin", ext: ".kt", color: "#A97BFF" },
+  { id: "ruby", label: "Ruby", ext: ".rb", color: "#CC342D" },
 ];
 
 const translationNotes = {
@@ -77415,7 +80359,30 @@ const translationNotes = {
   "swift-zig": "Zig's struct with namespaced fn becomes Swift's struct with mutating func. @sqrt, std.math.pow maps to Foundation/Darwin math. Zig's manual with allocator interface memory contrasts with Swift's ARC (automatic reference counting) approach. static with comptime typing meets static, strong with optionals typing.",
   "typescript-wasm": "TypeScript's class with interface becomes WebAssembly/WAT's linear memory layout. Math object maps to f64.mul, f64.sqrt. TypeScript's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static (structural) typing meets static (i32/i64/f32/f64) typing.",
   "typescript-zig": "Zig's struct with namespaced fn becomes TypeScript's class with interface. @sqrt, std.math.pow maps to Math object. Zig's manual with allocator interface memory contrasts with TypeScript's garbage collected approach. static with comptime typing meets static (structural) typing.",
-  "wasm-zig": "Zig's struct with namespaced fn becomes WebAssembly/WAT's linear memory layout. @sqrt, std.math.pow maps to f64.mul, f64.sqrt. Zig's manual with allocator interface memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static with comptime typing meets static (i32/i64/f32/f64) typing."
+  "wasm-zig": "Zig's struct with namespaced fn becomes WebAssembly/WAT's linear memory layout. @sqrt, std.math.pow maps to f64.mul, f64.sqrt. Zig's manual with allocator interface memory contrasts with WebAssembly/WAT's linear memory (manual) approach. static with comptime typing meets static (i32/i64/f32/f64) typing.",
+  "ada-ruby": "Ada's record type becomes Ruby's class with attr_accessor. Ada.Numerics functions map to Ruby's built-in Math module. Ada's stack with controlled types memory contrasts with Ruby's garbage collected approach. Ada's static, very strong typing meets Ruby's dynamic duck typing. Ruby trades Ada's compile-time safety guarantees for expressive, readable code with blocks and iterators.",
+  "c-ruby": "C's typedef struct becomes a Ruby class with attr_accessor for each field. Pointer dereference (c->width) becomes simple dot notation (conduit.width). C's math.h functions map to Ruby's Math module (Math.sqrt, Math::PI). malloc/free disappear entirely — Ruby's garbage collector handles memory. C's for loops become Ruby's .each, .map, and .times iterators. snake_case is native to Ruby. ICM InfoWorks uses Ruby scripting extensively, making this translation directly relevant to production SWMM workflows with 133+ existing Ruby automation scripts.",
+  "chapel-ruby": "Chapel's record or class becomes Ruby's class with attr_accessor. Built-in math maps to Ruby's Math module. Chapel's automatic/managed memory contrasts with Ruby's garbage collected approach. Chapel's static, inferred typing meets Ruby's dynamic duck typing. Chapel targets HPC parallelism; Ruby targets developer productivity and ICM InfoWorks scripting.",
+  "cpp-ruby": "C++'s class/struct with methods becomes Ruby's class with attr_accessor. std::pow, std::sqrt map to Math module methods. C++'s manual or smart pointers memory contrasts with Ruby's garbage collected approach. C++'s static typing with templates meets Ruby's dynamic duck typing. Ruby's open classes and mixins (include/extend) replace C++ inheritance hierarchies. Blocks and iterators replace STL algorithms.",
+  "csharp-ruby": "C#'s class with properties becomes Ruby's class with attr_accessor. Math class maps to Ruby's Math module. C#'s garbage collected (.NET) memory contrasts with Ruby's garbage collected (MRI/CRuby) approach. C#'s static, strong typing meets Ruby's dynamic duck typing. Both are object-oriented, but Ruby uses duck typing and mixins (modules) instead of interfaces. C#'s LINQ parallels Ruby's Enumerable methods.",
+  "cuda-ruby": "CUDA's struct with __device__ functions becomes Ruby's class with regular methods. Device math (sqrtf, powf) maps to Ruby's Math module. CUDA's explicit GPU allocation contrasts with Ruby's garbage collected approach. CUDA's static (C-based) typing meets Ruby's dynamic duck typing. Ruby cannot match CUDA's parallel GPU performance but offers dramatically simpler code for prototyping SWMM algorithms before GPU optimization.",
+  "delphi-ruby": "Delphi/Pascal's class (TMyClass) becomes Ruby's class with attr_accessor. Math unit maps to Ruby's Math module. Delphi/Pascal's manual or ARC memory contrasts with Ruby's garbage collected approach. Delphi's static, strong typing meets Ruby's dynamic duck typing. Ruby's blocks and iterators replace Delphi's procedural loops. Both have strong OOP traditions.",
+  "fortran-ruby": "Fortran's derived type becomes Ruby's class with attr_accessor. Intrinsic functions map to Ruby's Math module. Fortran's stack/allocatable memory contrasts with Ruby's garbage collected approach. Fortran's static typing with intent meets Ruby's dynamic duck typing. Fortran's array operations find parallels in Ruby's Enumerable methods. Ruby sacrifices Fortran's numerical performance for readability and scripting flexibility.",
+  "go-ruby": "Go's struct with methods becomes Ruby's class with attr_accessor. math package maps to Ruby's Math module. Go's garbage collected memory contrasts with Ruby's garbage collected approach. Go's static, simple typing meets Ruby's dynamic duck typing. Go's explicit error returns become Ruby's begin/rescue/raise exception handling. Ruby's blocks and iterators replace Go's for-range loops.",
+  "java-ruby": "Java's class with getters/setters becomes Ruby's class with attr_accessor (eliminating boilerplate). Math class maps to Ruby's Math module. Both use garbage collection. Java's static, strong typing meets Ruby's dynamic duck typing. Ruby's open classes and mixins replace Java's interfaces and abstract classes. JRuby runs Ruby on the JVM, bridging both ecosystems.",
+  "javascript-ruby": "JavaScript's class with constructor becomes Ruby's class with initialize. Math object maps to Ruby's Math module. Both use garbage collection. JavaScript's dynamic typing meets Ruby's dynamic duck typing. Both are interpreted and highly dynamic. Ruby's blocks (do..end, {}) parallel JavaScript's arrow functions/callbacks. Ruby's symbols (:name) have no direct JS equivalent. Both excel at rapid prototyping of SWMM tools.",
+  "julia-ruby": "Julia's struct becomes Ruby's class with attr_accessor. Built-in math maps to Ruby's Math module. Julia's garbage collected memory contrasts with Ruby's garbage collected approach. Julia's dynamic with JIT typing meets Ruby's dynamic duck typing. Both are expressive and readable, but Julia's multiple dispatch and JIT compilation give it significant numerical performance advantages. Ruby excels at scripting and web integration.",
+  "kotlin-ruby": "Kotlin's data class becomes Ruby's class with attr_accessor. kotlin.math maps to Ruby's Math module. Both use garbage collection. Kotlin's static, strong with null-safety typing meets Ruby's dynamic duck typing. Kotlin's when expressions parallel Ruby's case/when. Both emphasize concise, readable code. Kotlin targets Android/JVM; Ruby targets web and ICM InfoWorks scripting.",
+  "matlab-ruby": "MATLAB's struct/function becomes Ruby's class with methods. Built-in MATLAB math maps to Ruby's Math module. MATLAB's automatic memory contrasts with Ruby's garbage collected approach. MATLAB's dynamic (matrix-first) typing meets Ruby's dynamic duck typing. MATLAB excels at matrix operations and plotting; Ruby excels at scripting, automation, and ICM InfoWorks integration. Both prioritize readability over raw performance.",
+  "mojo-ruby": "Mojo's struct with fn becomes Ruby's class with def. Built-in math maps to Ruby's Math module. Mojo's ownership model memory contrasts with Ruby's garbage collected approach. Mojo's static with dynamic option typing meets Ruby's dynamic duck typing. Mojo targets Python-compatible high-performance computing; Ruby targets developer happiness and ICM InfoWorks scripting. Mojo aims for C-level speed; Ruby prioritizes expressiveness.",
+  "nim-ruby": "Nim's object type becomes Ruby's class with attr_accessor. math module maps to Ruby's Math module. Nim's manual/GC selectable memory contrasts with Ruby's garbage collected approach. Nim's static with inference typing meets Ruby's dynamic duck typing. Both emphasize readable, Python-like syntax. Nim compiles to C for performance; Ruby interprets for flexibility. Both use snake_case conventions natively.",
+  "python-ruby": "Python's @dataclass becomes Ruby's class with attr_accessor. math module maps to Ruby's Math module. Both use garbage collection and dynamic typing. Python's explicit self parallels Ruby's implicit self. Python's list comprehensions become Ruby's .map/.select chains. Ruby's blocks (do..end) have no direct Python equivalent — closest is lambda/generator. Both are excellent for SWMM scripting: PySWMM wraps the C engine; ICM InfoWorks uses Ruby with 133+ automation scripts.",
+  "r-ruby": "R's list or R6 class becomes Ruby's class with attr_accessor. Built-in R math maps to Ruby's Math module. Both use garbage collection. R's dynamic (vector-first) typing meets Ruby's dynamic duck typing. R's $ notation (obj$field) becomes Ruby's dot notation (obj.field). R excels at statistical analysis of SWMM results; Ruby excels at automation and ICM InfoWorks scripting. The swmmr package bridges R to SWMM; Ruby scripts drive ICM directly.",
+  "ruby-rust": "Ruby's class with attr_accessor becomes Rust's struct with impl blocks. Ruby's Math module maps to Rust's .powf(), .sqrt(), .abs(). Ruby's garbage collected memory contrasts with Rust's ownership/borrowing system. Ruby's dynamic duck typing meets Rust's static, strong typing with lifetimes. Ruby's begin/rescue becomes Rust's Result<T,E>. Ruby prioritizes developer productivity; Rust prioritizes zero-cost abstractions and memory safety.",
+  "ruby-swift": "Ruby's class with attr_accessor becomes Swift's struct with mutating func. Ruby's Math module maps to Foundation/Darwin math. Ruby's garbage collected memory contrasts with Swift's ARC. Ruby's dynamic duck typing meets Swift's static, strong typing with optionals. Ruby's nil maps to Swift's Optional (nil). Both emphasize clean, readable syntax. Swift enables mobile SWMM tools on iOS; Ruby drives ICM InfoWorks scripting.",
+  "ruby-typescript": "Ruby's class with attr_accessor becomes TypeScript's class with interface. Ruby's Math module maps to TypeScript's Math object. Both use garbage collection. Ruby's dynamic duck typing meets TypeScript's static structural typing. TypeScript adds compile-time type safety that Ruby lacks. Ruby's symbols become TypeScript string literals or enums. Both excel at rapid SWMM tool development — Ruby for backend/scripting, TypeScript for browser UIs.",
+  "ruby-wasm": "Ruby's class with attr_accessor becomes WebAssembly/WAT's linear memory layout. Ruby's Math module maps to f64.mul, f64.sqrt. Ruby's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. Ruby's dynamic duck typing meets WebAssembly's static (i32/i64/f32/f64) typing. The most extreme translation gap — Ruby's elegant OOP and blocks are reduced to raw stack operations and memory offsets.",
+  "ruby-zig": "Ruby's class with attr_accessor becomes Zig's struct with namespaced fn. Ruby's Math module maps to @sqrt, std.math.pow. Ruby's garbage collected memory contrasts with Zig's manual with allocator interface approach. Ruby's dynamic duck typing meets Zig's static typing with comptime. Ruby prioritizes developer happiness and expressiveness; Zig prioritizes explicit control and zero hidden allocations."
 };
 
 export { modules, languages, translationNotes };
