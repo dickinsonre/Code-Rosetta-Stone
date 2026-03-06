@@ -208,18 +208,22 @@ defmodule SwmmEngine do
 
   def xsect_hrad(xs, depth) do
     area = xsect_area(xs, depth)
-    if area <= 0, do: 0.0,
-    else: if xs.xtype == "CIRCULAR" do
-      r = xs.geom1 / 2; y = depth - r
-      if abs(r) < 1.0e-10, do: 0.0,
-      else: (
-        arg = max(-1.0, min(1.0, -y / r))
-        theta = 2 * :math.acos(arg); perim = r * theta
-        if(perim > 0, do: area / perim, else: 0.0)
-      )
+    if area <= 0 do
+      0.0
     else
-      w = if(xs.geom2 > 0, do: xs.geom2, else: xs.geom1); perim = w + 2 * depth
-      if(perim > 0, do: area / perim, else: 0.0)
+      if xs.xtype == "CIRCULAR" do
+        r = xs.geom1 / 2; y = depth - r
+        if abs(r) < 1.0e-10 do
+          0.0
+        else
+          arg = max(-1.0, min(1.0, -y / r))
+          theta = 2 * :math.acos(arg); perim = r * theta
+          if(perim > 0, do: area / perim, else: 0.0)
+        end
+      else
+        w = if(xs.geom2 > 0, do: xs.geom2, else: xs.geom1); perim = w + 2 * depth
+        if(perim > 0, do: area / perim, else: 0.0)
+      end
     end
   end
 
@@ -232,7 +236,7 @@ defmodule SwmmEngine do
 
   defp do_step(m, dt, total, elapsed, steps) when elapsed >= total, do: {steps, elapsed, m}
   defp do_step(m, dt, total, elapsed, steps) do
-    {m, _} = Enum.reduce(0..(length(m.subcatchments)-1), {m, nil}, fn i, {m, _} ->
+    {m, _} = Enum.reduce(0..max(0, length(m.subcatchments)-1)//1, {m, nil}, fn i, {m, _} ->
       sc = Enum.at(m.subcatchments, i)
       rain = get_rainfall(m, sc.rain_gage, elapsed)
       sc = %{sc | rainfall: rain, total_precip: sc.total_precip + rain * dt / 3600}
@@ -250,13 +254,13 @@ defmodule SwmmEngine do
     end)
     nodes = Enum.map(m.nodes, &(%{&1 | inflow: &1.lateral_inflow}))
     m = %{m | nodes: nodes}
-    {links, nodes} = Enum.reduce(0..(length(m.links)-1), {m.links, m.nodes}, fn j, {links, nodes} ->
+    {links, nodes} = Enum.reduce(0..max(0, length(m.links)-1)//1, {m.links, m.nodes}, fn j, {links, nodes} ->
       lk = Enum.at(links, j)
       fi = Map.get(m.node_map, lk.from_node); ti = Map.get(m.node_map, lk.to_node)
-      if fi == nil or ti == nil, do: {links, nodes},
-      else: case find_xsect(m, lk.id) do
-        nil -> {links, nodes}
-        xs ->
+      xs = find_xsect(m, lk.id)
+      if fi == nil or ti == nil or xs == nil do
+        {links, nodes}
+      else
           n1 = Enum.at(nodes, fi); n2 = Enum.at(nodes, ti)
           slope = if(lk.length > 0, do: (n1.head - n2.head) / lk.length, else: 0.0)
           avg_d = max(0.0, min(xs.geom1, (n1.depth + n2.depth) / 2))
@@ -283,6 +287,7 @@ defmodule SwmmEngine do
           {List.replace_at(links, j, lk), nodes}
       end
     end)
+
     nodes = Enum.with_index(nodes) |> Enum.map(fn {n, _i} ->
       if n.type != "OUTFALL" do
         sa = if(n.a_ponded > 0, do: n.a_ponded, else: m.opts.min_surf_area)
@@ -350,8 +355,36 @@ defmodule SwmmEngine do
       |> String.replace("\n", "\\n") |> String.replace("\r", "\\r") |> String.replace("\t", "\\t")
   end
 
+  defp read_http(socket) do
+    read_http(socket, <<>>)
+  end
+  defp read_http(socket, buf) do
+    case :gen_tcp.recv(socket, 0, 5000) do
+      {:ok, data} ->
+        buf = buf <> data
+        case String.split(buf, "\r\n\r\n", parts: 2) do
+          [headers, body] ->
+            cl = case Regex.run(~r/[Cc]ontent-[Ll]ength:\s*(\d+)/, headers) do
+              [_, n] -> String.to_integer(n)
+              _ -> 0
+            end
+            if byte_size(body) >= cl, do: buf,
+            else: read_http_body(socket, buf, cl - byte_size(body))
+          _ -> read_http(socket, buf)
+        end
+      _ -> buf
+    end
+  end
+  defp read_http_body(socket, buf, remaining) when remaining <= 0, do: buf
+  defp read_http_body(socket, buf, remaining) do
+    case :gen_tcp.recv(socket, min(remaining, 65536), 30000) do
+      {:ok, data} -> read_http_body(socket, buf <> data, remaining - byte_size(data))
+      _ -> buf
+    end
+  end
+
   def handle_client(socket) do
-    {:ok, data} = :gen_tcp.recv(socket, 0, 30000)
+    data = read_http(socket)
     req = to_string(data)
     resp = cond do
       String.starts_with?(req, "GET /health") ->

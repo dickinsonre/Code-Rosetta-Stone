@@ -4,7 +4,7 @@ import AppShowcase from "./AppShowcase.jsx";
 import SwmmEngineRunner from "./apps/SwmmEngineRunner.jsx";
 import SwmmCodeViewer from "./apps/SwmmCodeViewer.jsx";
 
-const playgroundUrls = {
+export const playgroundUrls = {
   c: "https://godbolt.org/",
   rust: "https://play.rust-lang.org/",
   python: "https://pynative.com/online-python-code-editor-to-execute-python-code/",
@@ -162,7 +162,7 @@ function highlightCode(code, langId) {
 
 // ─── Difficulty Badge ────────────────────────────────────────────────
 
-const difficultyConfig = {
+export const difficultyConfig = {
   accessible: { label: "Accessible", color: "#50a14f", icon: "\u{1F7E2}" },
   intermediate: { label: "Intermediate", color: "#c18401", icon: "\u{1F7E1}" },
   advanced: { label: "Advanced", color: "#e45649", icon: "\u{1F534}" },
@@ -170,7 +170,7 @@ const difficultyConfig = {
 
 // ─── Components ──────────────────────────────────────────────────────
 
-function CodePanel({ code, langId, label, color, t, scrollRef, onScroll, highlightedLine, onLineHover, onLineLeave, codeSearch, playgroundUrl }) {
+export function CodePanel({ code, langId, label, color, t, scrollRef, onScroll, highlightedLine, onLineHover, onLineLeave, codeSearch, playgroundUrl }) {
   const [copied, setCopied] = useState(false);
   const lines = code.split("\n");
 
@@ -302,7 +302,7 @@ function CodePanel({ code, langId, label, color, t, scrollRef, onScroll, highlig
   );
 }
 
-function ModuleInfoPanel({ mod, t, show, onToggle }) {
+export function ModuleInfoPanel({ mod, t, show, onToggle }) {
   if (!show) return null;
 
   const diff = difficultyConfig[mod.difficulty] || difficultyConfig.intermediate;

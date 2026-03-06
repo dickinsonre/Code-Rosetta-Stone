@@ -123,8 +123,8 @@ subroutine parse_inp(text)
       if (ntok >= 7 .and. num_sc < MAX_SC) then
         num_sc = num_sc + 1
         sc_ids(num_sc) = tokens(1); sc_rg(num_sc) = tokens(2); sc_out(num_sc) = tokens(3)
-        read(tokens(4),*) sc_area(num_sc); read(tokens(5),*) sc_pi(num_sc)
-        read(tokens(6),*) sc_w(num_sc); read(tokens(7),*) sc_sl(num_sc)
+        read(tokens(4),*,iostat=ios) sc_area(num_sc); read(tokens(5),*,iostat=ios) sc_pi(num_sc)
+        read(tokens(6),*,iostat=ios) sc_w(num_sc); read(tokens(7),*,iostat=ios) sc_sl(num_sc)
         inf_mr(num_sc) = 3; inf_mnr(num_sc) = 0.5; inf_dc(num_sc) = 4
         inf_dt(num_sc) = 7; inf_cr(num_sc) = 3; inf_ci(num_sc) = 0
       end if
@@ -132,8 +132,8 @@ subroutine parse_inp(text)
       if (ntok >= 4) then
         do i = 1, num_sc
           if (trim(sc_ids(i)) == trim(tokens(1))) then
-            read(tokens(2),*) inf_mr(i); read(tokens(3),*) inf_mnr(i); read(tokens(4),*) inf_dc(i)
-            if (ntok > 4) then; read(tokens(5),*) inf_dt(i); else; inf_dt(i) = 7; end if
+            read(tokens(2),*,iostat=ios) inf_mr(i); read(tokens(3),*,iostat=ios) inf_mnr(i); read(tokens(4),*,iostat=ios) inf_dc(i)
+            if (ntok > 4) then; read(tokens(5),*,iostat=ios) inf_dt(i); else; inf_dt(i) = 7; end if
             inf_cr(i) = inf_mr(i); exit
           end if
         end do
@@ -142,7 +142,7 @@ subroutine parse_inp(text)
       if (ntok >= 2 .and. num_nodes < MAX_NODES) then
         num_nodes = num_nodes + 1
         node_ids(num_nodes) = tokens(1); node_types(num_nodes) = "JUNCTION"
-        read(tokens(2),*) n_ie(num_nodes)
+        read(tokens(2),*,iostat=ios) n_ie(num_nodes)
         n_md(num_nodes) = 0; n_id(num_nodes) = 0; n_sd(num_nodes) = 0; n_ap(num_nodes) = 0
         if (ntok > 2) read(tokens(3),*,iostat=ios) n_md(num_nodes)
         if (ntok > 3) read(tokens(4),*,iostat=ios) n_id(num_nodes)
@@ -155,7 +155,7 @@ subroutine parse_inp(text)
       if (ntok >= 3 .and. num_nodes < MAX_NODES) then
         num_nodes = num_nodes + 1
         node_ids(num_nodes) = tokens(1); node_types(num_nodes) = "OUTFALL"
-        read(tokens(2),*) n_ie(num_nodes)
+        read(tokens(2),*,iostat=ios) n_ie(num_nodes)
         n_md(num_nodes) = 0; n_id(num_nodes) = 0; n_sd(num_nodes) = 0; n_ap(num_nodes) = 0
         n_depth(num_nodes) = 0; n_head(num_nodes) = n_ie(num_nodes)
       end if
@@ -163,8 +163,8 @@ subroutine parse_inp(text)
       if (ntok >= 6 .and. num_links < MAX_LINKS) then
         num_links = num_links + 1
         link_ids(num_links) = tokens(1); l_fn(num_links) = tokens(2); l_tn(num_links) = tokens(3)
-        read(tokens(4),*) l_len(num_links); read(tokens(5),*) l_rough(num_links)
-        read(tokens(6),*) l_io(num_links)
+        read(tokens(4),*,iostat=ios) l_len(num_links); read(tokens(5),*,iostat=ios) l_rough(num_links)
+        read(tokens(6),*,iostat=ios) l_io(num_links)
         l_oo(num_links) = 0; if (ntok > 6) read(tokens(7),*,iostat=ios) l_oo(num_links)
       end if
     case ("XSECTIONS")
@@ -201,7 +201,8 @@ subroutine parse_inp(text)
             if (ios /= 0) then; tv = parse_time(tokens(k)) / 3600.0d0; end if
             ts_cnt(ti) = ts_cnt(ti) + 1
             ts_times(ti, ts_cnt(ti)) = tv
-            read(tokens(k+1),*) ts_vals(ti, ts_cnt(ti))
+            read(tokens(k+1),*,iostat=ios) ts_vals(ti, ts_cnt(ti))
+            if (ios /= 0) ts_vals(ti, ts_cnt(ti)) = 0.0d0
             k = k + 2
           end do
         end block

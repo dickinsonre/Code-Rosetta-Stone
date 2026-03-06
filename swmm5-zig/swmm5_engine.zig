@@ -286,7 +286,7 @@ fn parseInp(m: *Model, text: []const u8) void {
                 else if (streql(&tokens[0], "START_DATE")) copyStr(&m.options.start_date, strSlice(&tokens[1]))
                 else if (streql(&tokens[0], "END_DATE")) copyStr(&m.options.end_date, strSlice(&tokens[1]))
                 else if (streql(&tokens[0], "REPORT_STEP")) { m.options.report_step = parseTimeStr(strSlice(&tokens[1])); }
-                else if (streql(&tokens[0], "ROUTING_STEP")) { m.options.routing_step = parseTimeStr(strSlice(&tokens[1])); };
+                else if (streql(&tokens[0], "ROUTING_STEP")) { m.options.routing_step = parseTimeStr(strSlice(&tokens[1])); }
             } else if (streql(&section, "RAINGAGES") and ntok >= 6 and m.num_gages < MAX_GAGES) {
                 copyStr(&m.gages[m.num_gages].id, strSlice(&tokens[0]));
                 copyStr(&m.gages[m.num_gages].source_name, strSlice(&tokens[5]));
@@ -350,7 +350,7 @@ fn parseInp(m: *Model, text: []const u8) void {
                 m.xsects[xi].geom1 = safeFloat(strSlice(&tokens[2]));
                 m.xsects[xi].geom2 = if (ntok > 3) safeFloat(strSlice(&tokens[3])) else 0;
                 if (streql(&m.xsects[xi].xtype, "CIRCULAR")) {
-                    m.xsects[xi].a_full = PI * std.math.pow(m.xsects[xi].geom1 / 2, 2);
+                    m.xsects[xi].a_full = PI * std.math.pow(f64, m.xsects[xi].geom1 / 2, 2);
                     m.xsects[xi].r_full = m.xsects[xi].geom1 / 4;
                 } else {
                     const w = if (m.xsects[xi].geom2 > 0) m.xsects[xi].geom2 else m.xsects[xi].geom1;
@@ -429,12 +429,12 @@ fn simulate(m: *Model) struct { steps: usize, elapsed: f64 } {
             var manning_q: f64 = 0;
             if (area > 0 and hrad > 0 and @abs(slope) > 1e-12) {
                 const sign: f64 = if (slope > 0) 1.0 else -1.0;
-                manning_q = sign * (1.49 / m.links[li].roughness) * area * std.math.pow(hrad, 2.0 / 3.0) * @sqrt(@abs(slope));
+                manning_q = sign * (1.49 / m.links[li].roughness) * area * std.math.pow(f64, hrad, 2.0 / 3.0) * @sqrt(@abs(slope));
             }
             m.links[li].flow = m.links[li].flow * 0.5 + manning_q * 0.5;
             if (m.xsects[xi].a_full > 0) {
                 const sl = @max(@abs(slope), 0.001);
-                const q_full = (1.49 / m.links[li].roughness) * m.xsects[xi].a_full * std.math.pow(m.xsects[xi].r_full, 2.0 / 3.0) * @sqrt(sl);
+                const q_full = (1.49 / m.links[li].roughness) * m.xsects[xi].a_full * std.math.pow(f64, m.xsects[xi].r_full, 2.0 / 3.0) * @sqrt(sl);
                 if (@abs(m.links[li].flow) > q_full * 1.5) {
                     m.links[li].flow = (if (m.links[li].flow > 0) @as(f64, 1.0) else @as(f64, -1.0)) * q_full * 1.5;
                 }
@@ -504,7 +504,7 @@ fn generateRpt(m: *Model, steps: usize, wall_ms: f64, buf: []u8) usize {
         var full_q: f64 = 1;
         if (xi) |x| {
             if (m.xsects[x].a_full > 0 and m.xsects[x].r_full > 0)
-                full_q = (1.49 / m.links[li].roughness) * m.xsects[x].a_full * std.math.pow(m.xsects[x].r_full, 2.0 / 3.0) * @sqrt(0.01);
+                full_q = (1.49 / m.links[li].roughness) * m.xsects[x].a_full * std.math.pow(f64, m.xsects[x].r_full, 2.0 / 3.0) * @sqrt(0.01);
         }
         const mff = if (full_q > 0) m.links[li].peak_flow / full_q else 0.0;
         w.print("  {s: <30} {d:10.3} {d:12.1} {d:10.3} {d:8.2} {d:8.2}\n", .{ strSlice(&m.links[li].id), m.links[li].peak_flow, m.links[li].time_peak_flow, m.links[li].peak_velocity, mff, m.links[li].max_depth_frac }) catch {};
@@ -540,8 +540,8 @@ pub fn main() !void {
     const port_str = std.posix.getenv("ZIG_ENGINE_PORT") orelse "3015";
     const port: u16 = fmt.parseInt(u16, port_str, 10) catch 3015;
 
-    var server = try net.Address.resolveIp("127.0.0.1", port);
-    const listener = try server.listen(.{ .reuse_address = true });
+    const addr = net.Address.initIp4(.{ 127, 0, 0, 1 }, port);
+    var listener = try addr.listen(.{ .reuse_address = true });
 
     const stdout = std.io.getStdOut().writer();
     try stdout.print("SWMM5-Zig engine listening on port {d}\n", .{port});
@@ -576,7 +576,7 @@ pub fn main() !void {
         } else if (mem.startsWith(u8, req, "POST /simulate")) {
             const header_end = (mem.indexOf(u8, req, "\r\n\r\n") orelse continue) + 4;
             const body = req[header_end..];
-            const timer = std.time.Timer.start() catch continue;
+            var timer = std.time.Timer.start() catch continue;
             var model = Model{};
             parseInp(&model, body);
             const result = simulate(&model);

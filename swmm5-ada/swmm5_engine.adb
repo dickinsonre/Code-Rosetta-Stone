@@ -43,9 +43,11 @@ procedure Swmm5_Engine is
    end record;
    type Inf_Rec is record MR, MNR, DC, DT, CR, CI : Float := 0.0; end record;
    type Gage_Rec is record Id, SN : Str64 := Blank64; end record;
+   type Float_Array is array(1..Max_TV) of Float;
+   Empty_FA : constant Float_Array := (others => 0.0);
    type TS_Rec is record
       Id : Str64 := Blank64;
-      Times, Vals : array(1..Max_TV) of Float := (others => 0.0);
+      Times, Vals : Float_Array := Empty_FA;
       Cnt : Natural := 0;
    end record;
 

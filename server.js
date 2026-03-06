@@ -19,6 +19,14 @@ const RUST_ENGINE_PORT = 3007;
 const PERL_ENGINE_PORT = 3008;
 const RUBY_ENGINE_PORT = 3009;
 const JAVA_ENGINE_PORT = 3011;
+const KOTLIN_ENGINE_PORT = 3012;
+const SCALA_ENGINE_PORT = 3013;
+const NIM_ENGINE_PORT = 3014;
+const ZIG_ENGINE_PORT = 3015;
+const DART_ENGINE_PORT = 3016;
+const TCL_ENGINE_PORT = 3017;
+const RACKET_ENGINE_PORT = 3018;
+const ELIXIR_ENGINE_PORT = 3019;
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
@@ -33,6 +41,21 @@ const perlScript = path.join(__dirname, 'swmm5-perl', 'swmm5_engine.pl');
 const rubyScript = path.join(__dirname, 'swmm5-ruby', 'swmm5_engine.rb');
 const luaScript = path.join(__dirname, 'swmm5-lua', 'swmm5_engine.lua');
 const javaDir = path.join(__dirname, 'swmm5-java');
+const kotlinJar = path.join(__dirname, 'swmm5-kotlin', 'SwmmEngine.jar');
+const scalaScript = path.join(__dirname, 'swmm5-scala', 'SwmmEngine.scala');
+const nimBinary = path.join(__dirname, 'swmm5-nim', 'swmm5-nim');
+const zigBinary = path.join(__dirname, 'swmm5-zig', 'swmm5_engine');
+const dartBinary = path.join(__dirname, 'swmm5-dart', 'swmm5-dart');
+const tclScript = path.join(__dirname, 'swmm5-tcl', 'swmm5_engine.tcl');
+const racketScript = path.join(__dirname, 'swmm5-racket', 'swmm5_engine.rkt');
+const elixirScript = path.join(__dirname, 'swmm5-elixir', 'swmm5_engine.exs');
+const fortranBinary = path.join(__dirname, 'swmm5-fortran', 'swmm5-fortran');
+const rScript = path.join(__dirname, 'swmm5-r', 'swmm5_engine.R');
+const ocamlBinary = path.join(__dirname, 'swmm5-ocaml', 'swmm5-ocaml');
+const haskellBinary = path.join(__dirname, 'swmm5-haskell', 'swmm5-haskell');
+const pascalBinary = path.join(__dirname, 'swmm5-pascal', 'swmm5_engine');
+const lispScript = path.join(__dirname, 'swmm5-lisp', 'swmm5_engine.lisp');
+const adaBinary = path.join(__dirname, 'swmm5-ada', 'swmm5-ada');
 
 let goProcess = null;
 let pyProcess = null;
@@ -43,6 +66,14 @@ let rustProcess = null;
 let perlProcess = null;
 let rubyProcess = null;
 let javaProcess = null;
+let kotlinProcess = null;
+let scalaProcess = null;
+let nimProcess = null;
+let zigProcess = null;
+let dartProcess = null;
+let tclProcess = null;
+let racketProcess = null;
+let elixirProcess = null;
 
 function startChildEngine(name, cmd, args, envOverrides) {
   const checkPath = args.length > 0 ? args[args.length - 1] : cmd;
@@ -79,6 +110,31 @@ if (existsSync(path.join(javaDir, 'SwmmEngine.class'))) {
   javaProc.stderr.on('data', d => console.error('[Java Engine ERR]', d.toString().trim()));
   javaProc.on('exit', code => console.log(`Java Engine exited with code ${code}`));
   javaProcess = javaProc;
+}
+
+if (existsSync(kotlinJar)) {
+  kotlinProcess = startChildEngine('Kotlin Engine', 'java', ['-jar', kotlinJar], { KOTLIN_ENGINE_PORT: String(KOTLIN_ENGINE_PORT) });
+}
+if (existsSync(scalaScript)) {
+  scalaProcess = startChildEngine('Scala Engine', 'scala', [scalaScript], { SCALA_ENGINE_PORT: String(SCALA_ENGINE_PORT) });
+}
+if (existsSync(nimBinary)) {
+  nimProcess = startChildEngine('Nim Engine', nimBinary, [], { NIM_ENGINE_PORT: String(NIM_ENGINE_PORT) });
+}
+if (existsSync(zigBinary)) {
+  zigProcess = startChildEngine('Zig Engine', zigBinary, [], { ZIG_ENGINE_PORT: String(ZIG_ENGINE_PORT) });
+}
+if (existsSync(dartBinary)) {
+  dartProcess = startChildEngine('Dart Engine', dartBinary, [], { DART_ENGINE_PORT: String(DART_ENGINE_PORT) });
+}
+if (existsSync(tclScript)) {
+  tclProcess = startChildEngine('Tcl Engine', 'tclsh', [tclScript], { TCL_ENGINE_PORT: String(TCL_ENGINE_PORT) });
+}
+if (existsSync(racketScript)) {
+  racketProcess = startChildEngine('Racket Engine', 'racket', [racketScript], { RACKET_ENGINE_PORT: String(RACKET_ENGINE_PORT) });
+}
+if (existsSync(elixirScript)) {
+  elixirProcess = startChildEngine('Elixir Engine', 'elixir', [elixirScript], { ELIXIR_ENGINE_PORT: String(ELIXIR_ENGINE_PORT) });
 }
 
 const storage = multer.diskStorage({
@@ -270,6 +326,96 @@ app.post('/api/run-swmm-lua', upload.single('inpFile'), (req, res) => {
   });
 });
 
+app.post('/api/run-swmm-kotlin', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Kotlin engine', KOTLIN_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-scala', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Scala engine', SCALA_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-nim', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Nim engine', NIM_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-zig', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Zig engine', ZIG_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-dart', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Dart engine', DART_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-tcl', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Tcl engine', TCL_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-racket', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Racket engine', RACKET_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-elixir', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Elixir engine', ELIXIR_ENGINE_PORT, req, res);
+});
+
+function cgiEngine(engineName, cmd, args, req, res) {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No .inp file uploaded' });
+  }
+  const inpPath = req.file.path;
+  readFile(inpPath, 'utf8', (readErr, inpText) => {
+    try { unlink(inpPath, () => {}); } catch (e) {}
+    if (readErr) {
+      return res.status(500).json({ error: 'Could not read uploaded file' });
+    }
+    const proc = spawn(cmd, args, { timeout: 60000 });
+    let stdout = '', stderr = '';
+    proc.stdout.on('data', d => { stdout += d; });
+    proc.stderr.on('data', d => { stderr += d; });
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({ error: engineName + ' error: ' + stderr });
+      }
+      try {
+        const result = JSON.parse(stdout);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ error: 'Invalid response from ' + engineName });
+      }
+    });
+    proc.stdin.write(inpText);
+    proc.stdin.end();
+  });
+}
+
+app.post('/api/run-swmm-fortran', upload.single('inpFile'), (req, res) => {
+  cgiEngine('Fortran engine', fortranBinary, [], req, res);
+});
+
+app.post('/api/run-swmm-r', upload.single('inpFile'), (req, res) => {
+  cgiEngine('R engine', 'Rscript', [rScript], req, res);
+});
+
+app.post('/api/run-swmm-ocaml', upload.single('inpFile'), (req, res) => {
+  cgiEngine('OCaml engine', ocamlBinary, [], req, res);
+});
+
+app.post('/api/run-swmm-haskell', upload.single('inpFile'), (req, res) => {
+  cgiEngine('Haskell engine', haskellBinary, [], req, res);
+});
+
+app.post('/api/run-swmm-pascal', upload.single('inpFile'), (req, res) => {
+  cgiEngine('FreePascal engine', pascalBinary, [], req, res);
+});
+
+app.post('/api/run-swmm-lisp', upload.single('inpFile'), (req, res) => {
+  cgiEngine('Common Lisp engine', 'sbcl', ['--script', lispScript], req, res);
+});
+
+app.post('/api/run-swmm-ada', upload.single('inpFile'), (req, res) => {
+  cgiEngine('Ada engine', adaBinary, [], req, res);
+});
+
 const sourceFileMap = {
   'c': path.join(__dirname, 'swmm5-c', 'swmm5_engine.c'),
   'cpp': path.join(__dirname, 'swmm5-cpp', 'swmm5_engine.cpp'),
@@ -282,6 +428,21 @@ const sourceFileMap = {
   'ruby': path.join(__dirname, 'swmm5-ruby', 'swmm5_engine.rb'),
   'perl': path.join(__dirname, 'swmm5-perl', 'swmm5_engine.pl'),
   'lua': path.join(__dirname, 'swmm5-lua', 'swmm5_engine.lua'),
+  'kotlin': path.join(__dirname, 'swmm5-kotlin', 'SwmmEngine.kt'),
+  'scala': path.join(__dirname, 'swmm5-scala', 'SwmmEngine.scala'),
+  'nim': path.join(__dirname, 'swmm5-nim', 'swmm5_engine.nim'),
+  'zig': path.join(__dirname, 'swmm5-zig', 'swmm5_engine.zig'),
+  'dart': path.join(__dirname, 'swmm5-dart', 'swmm5_engine.dart'),
+  'tcl': path.join(__dirname, 'swmm5-tcl', 'swmm5_engine.tcl'),
+  'racket': path.join(__dirname, 'swmm5-racket', 'swmm5_engine.rkt'),
+  'elixir': path.join(__dirname, 'swmm5-elixir', 'swmm5_engine.exs'),
+  'fortran': path.join(__dirname, 'swmm5-fortran', 'swmm5_engine.f90'),
+  'r': path.join(__dirname, 'swmm5-r', 'swmm5_engine.R'),
+  'ocaml': path.join(__dirname, 'swmm5-ocaml', 'swmm5_engine.ml'),
+  'haskell': path.join(__dirname, 'swmm5-haskell', 'swmm5_engine.hs'),
+  'pascal': path.join(__dirname, 'swmm5-pascal', 'swmm5_engine.pas'),
+  'lisp': path.join(__dirname, 'swmm5-lisp', 'swmm5_engine.lisp'),
+  'ada': path.join(__dirname, 'swmm5-ada', 'swmm5_engine.adb'),
 };
 
 app.get('/api/engine-source/:lang', (req, res) => {

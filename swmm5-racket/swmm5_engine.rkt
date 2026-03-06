@@ -1,7 +1,7 @@
 #!/usr/bin/env racket
 #lang racket
 
-(require racket/tcp racket/string racket/match racket/math)
+(require racket/tcp racket/string racket/match racket/math racket/date)
 
 (define PI 3.14159265358979323846)
 
@@ -325,16 +325,36 @@
 (printf "SWMM5-Racket engine listening on port ~a\n" port)
 (flush-output)
 
+(define (read-http-request in)
+  (define header-lines '())
+  (let hloop ()
+    (define line (read-line in 'return-linefeed))
+    (cond
+      [(or (eof-object? line) (equal? line ""))
+       (define headers (string-join (reverse header-lines) "\r\n"))
+       (define cl-match (regexp-match #rx"[Cc]ontent-[Ll]ength:[ ]*([0-9]+)" headers))
+       (define body
+         (if cl-match
+           (let ([cl (string->number (if (bytes? (cadr cl-match)) (bytes->string/utf-8 (cadr cl-match)) (cadr cl-match)))])
+             (if cl (read-string cl in) ""))
+           ""))
+       (string-append headers "\r\n\r\n" (if (string? body) body ""))]
+      [else (set! header-lines (cons line header-lines)) (hloop)])))
+
 (let loop ()
   (define-values (in out) (tcp-accept listener))
-  (with-handlers ([exn:fail? (lambda (e) (displayln (format "Error: ~a" (exn-message e)) (current-error-port)))])
-    (define data (port->bytes in))
-    (define req (bytes->string/utf-8 data))
+  (with-handlers ([exn:fail? (lambda (e)
+    (displayln (format "Error: ~a" (exn-message e)) (current-error-port))
+    (with-handlers ([exn:fail? void])
+      (fprintf out "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\n\r\n{\"error\":\"~a\"}" (exn-message e))))])
+    (define req (read-http-request in))
+    (define req-line (car (string-split req "\r\n")))
     (cond
-      [(string-prefix? req "GET /health")
+      [(string-prefix? req-line "GET /health")
        (define json "{\"engine\":\"SWMM5-Racket\",\"status\":\"ok\",\"version\":\"v1.0\",\"language\":\"Racket\"}")
-       (fprintf out "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n\r\n~a" (string-length json) json)]
-      [(string-prefix? req "POST /simulate")
+       (fprintf out "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n\r\n~a" (string-length json) json)
+       (flush-output out)]
+      [(string-prefix? req-line "POST /simulate")
        (define header-end (let ([pos (regexp-match-positions #rx"\r\n\r\n" req)]) (if pos (cdar pos) 0)))
        (define body (substring req header-end))
        (define t0 (current-inexact-milliseconds))
@@ -343,7 +363,8 @@
        (define wall-ms (- (current-inexact-milliseconds) t0))
        (define rpt (generate-rpt mdl steps wall-ms))
        (define json (format "{\"success\":true,\"rpt\":\"~a\"}" (escape-json rpt)))
-       (fprintf out "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n\r\n~a" (string-utf-8-length json) json)]
-      [else (fprintf out "HTTP/1.1 404 Not Found\r\n\r\n")]))
+       (fprintf out "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ~a\r\n\r\n~a" (string-utf-8-length json) json)
+       (flush-output out)]
+      [else (fprintf out "HTTP/1.1 404 Not Found\r\n\r\n") (flush-output out)]))
   (close-input-port in) (close-output-port out)
   (loop))

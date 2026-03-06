@@ -359,24 +359,27 @@ proc main() =
       var buf = ""
       var headerEnd = -1
       while true:
-        var chunk = ""
-        let n = client.recv(chunk, 65536)
+        var chunk = newString(1)
+        let n = client.recv(chunk, 1)
         if n <= 0: break
-        buf.add(chunk)
-        let pos = buf.find("\r\n\r\n")
-        if pos >= 0:
-          headerEnd = pos + 4
+        buf.add(chunk[0])
+        if buf.len >= 4 and buf[^4..^1] == "\r\n\r\n":
+          headerEnd = buf.len
           let clIdx = buf.toLower().find("content-length:")
           if clIdx >= 0:
             let rest = buf[clIdx + 15 ..< buf.len].strip()
             var clStr = ""
             for c in rest:
               if c.isDigit: clStr.add(c) else: break
-            let cl = parseInt(clStr)
-            while buf.len - headerEnd < cl:
-              let n2 = client.recv(chunk, 65536)
-              if n2 <= 0: break
-              buf.add(chunk)
+            if clStr.len > 0:
+              let cl = parseInt(clStr)
+              var body = newString(cl)
+              var read = 0
+              while read < cl:
+                let n2 = client.recv(body, cl - read)
+                if n2 <= 0: break
+                read += n2
+              buf.add(body[0 ..< read])
           break
       if buf.startsWith("GET /health"):
         let json = """{"engine":"SWMM5-Nim","status":"ok","version":"v1.0","language":"Nim"}"""

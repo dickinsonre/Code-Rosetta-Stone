@@ -1,0 +1,349 @@
+V "GNAT Lib v13"
+M P W=b
+A -O2
+P SS ZX
+
+RN
+RV NO_CALENDAR
+RV NO_DELAY
+RV NO_DIRECT_BOOLEAN_OPERATORS
+RV NO_EXCEPTION_HANDLERS
+RV NO_EXCEPTIONS
+RV NO_FIXED_POINT
+RV NO_FLOATING_POINT
+RV NO_IO
+RV NO_IMPLICIT_CONDITIONALS
+RV NO_SECONDARY_STACK
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_DEFAULT_INITIALIZATION
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLICIT_LOOPS
+RV NO_OBSOLESCENT_FEATURES
+
+U swmm5_engine%b	swmm5_engine.adb	b2832b69 NE OO SU
+W ada%s			ada.ads			ada.ali
+W ada.calendar%s	a-calend.adb		a-calend.ali
+W ada.characters%s	a-charac.ads		a-charac.ali
+W ada.characters.handling%s  a-chahan.adb	a-chahan.ali
+W ada.float_text_io%s	a-flteio.ads		a-flteio.ali
+W ada.numerics%s	a-numeri.ads		a-numeri.ali
+W ada.numerics.elementary_functions%s  a-nuelfu.ads  a-nuelfu.ali
+W ada.strings%s		a-string.ads		a-string.ali
+W ada.strings.fixed%s	a-strfix.adb		a-strfix.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+Z system.secondary_stack%s  s-secsta.adb	s-secsta.ali
+Z system.val_flt%s	s-valflt.ads		s-valflt.ali
+
+D ada.ads		19700101000000 76789da1 ada%s
+D a-calend.ads		19700101000000 f55c50a3 ada.calendar%s
+D a-charac.ads		19700101000000 2d3ec45b ada.characters%s
+D a-chahan.ads		19700101000000 278246c0 ada.characters.handling%s
+D a-chlat1.ads		19700101000000 e0d72e76 ada.characters.latin_1%s
+D a-except.ads		19700101000000 2a7d8d70 ada.exceptions%s
+D a-flteio.ads		19700101000000 e18a47a0 ada.float_text_io%s
+D a-ioexce.ads		19700101000000 40018c65 ada.io_exceptions%s
+D a-numeri.ads		19700101000000 84bea7a3 ada.numerics%s
+D a-nuelfu.ads		19700101000000 dc1b3a37 ada.numerics.elementary_functions%s
+D a-ngelfu.ads		19700101000000 58d8ffc8 ada.numerics.generic_elementary_functions%s
+D a-stream.ads		19700101000000 119b8fb3 ada.streams%s
+D a-string.ads		19700101000000 90ac6797 ada.strings%s
+D a-strfix.ads		19700101000000 d8832344 ada.strings.fixed%s
+D a-strmap.ads		19700101000000 ed8acfdb ada.strings.maps%s
+D a-strsea.ads		19700101000000 2d394feb ada.strings.search%s
+D a-sttebu.ads		19700101000000 f1ad67a2 ada.strings.text_buffers%s
+D a-stuten.ads		19700101000000 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		19700101000000 9eaa38c6 ada.tags%s
+D a-textio.ads		19700101000000 5c2c6153 ada.text_io%s
+D a-tiflio.ads		19700101000000 9fe024a2 ada.text_io.float_io%s
+D a-unccon.ads		19700101000000 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		19700101000000 15f799c2 interfaces%s
+D i-cstrea.ads		19700101000000 e53d8b8e interfaces.c_streams%s
+D swmm5_engine.adb	20260306130128 49cf651d swmm5_engine%b
+D system.ads		19700101000000 426dafb8 system%s
+D s-crtl.ads		19700101000000 8a0692f8 system.crtl%s
+D s-exctab.ads		19700101000000 91bef6ef system.exception_table%s
+D s-ficobl.ads		19700101000000 dc5161d4 system.file_control_block%s
+D s-parame.ads		19700101000000 d494a4a6 system.parameters%s
+D s-powflt.ads		19700101000000 a51ab9b8 system.powten_flt%s
+D s-putima.ads		19700101000000 17291fe4 system.put_images%s
+D s-secsta.ads		19700101000000 578279f5 system.secondary_stack%s
+D s-soflin.ads		19700101000000 df77073e system.soft_links%s
+D s-stache.ads		19700101000000 0b81c1fe system.stack_checking%s
+D s-stalib.ads		19700101000000 1c9580f6 system.standard_library%s
+D s-stoele.ads		19700101000000 ab5468e4 system.storage_elements%s
+D s-stoele.adb		19700101000000 8f5a9db6 system.storage_elements%b
+D s-traent.ads		19700101000000 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		19700101000000 fa2a7f59 system.unsigned_types%s
+D s-valflt.ads		19700101000000 78fc9326 system.val_flt%s
+D s-valrea.ads		19700101000000 f0598c00 system.val_real%s
+D s-wchcon.ads		19700101000000 d9032363 system.wch_con%s
+G a e
+G c Z b b [swmm5_engine standard 9 11 none]
+X 1 ada.ads
+16K9*Ada 20e8 25|1r6 1r23 2r6 3r6 3r29 4r6 4r23 5r6 5r45 6r6 6r35 7r6 7r24
+X 2 a-calend.ads
+36K13*Calendar 413e17 25|7w10 7r28
+42I9*Time<226I9> 25|255r13
+56V13*Clock{42I9} 25|277s10 281s10
+112V14*"-"{duration} 25|282s23
+226I9 Time_Rep<long_long_integer>
+X 3 a-charac.ads
+16K13*Characters 18e19 25|6r10 6r39
+X 4 a-chahan.ads
+43K24*Handling 455e28 25|6w21 6r50
+X 7 a-flteio.ads
+20K13*Float_Text_IO[21|46] 25|2w10
+X 9 a-numeri.ads
+16K13*Numerics 35e17 25|5r10 5r49
+X 10 a-nuelfu.ads
+18K22*Elementary_Functions[11|39] 25|5w19 5r58
+X 11 a-ngelfu.ads
+53V13*Sqrt{float} 25|207s65[10|18] 212s85[10|18]
+84V13*Exp{float} 25|143s64[10|18]
+87V14*"**"{float} 25|207s52[10|18] 212s72[10|18]
+95V13*Sin{float} 25|157s58[10|18]
+140V13*Arccos{float} 25|157s25[10|18] 169s23[10|18]
+X 13 a-string.ads
+16K13*Strings 35e16 25|3r10 3r33 4w10 4r27
+33n37*Both{33E9} 25|90r25
+X 14 a-strfix.ads
+49K21*Fixed 1433e22 25|3w18 3r41
+253V13*Index{natural} 25|98s12
+1156V13*Trim{string} 25|90s17
+X 20 a-textio.ads
+58K13*Text_IO 787e16 25|1w10 1r27
+519U14*Put 25|284s4
+537U14*Get_Line 25|264s10
+606X4*End_Error 25|272r15
+X 25 swmm5_engine.adb
+9U11*Swmm5_Engine 9b11 285l5 285t17
+10f4 PI{float}
+11N4 Max_Nodes 54r21
+12N4 Max_Links 55r21
+13N4 Max_SC 57r19 58r20
+14N4 Max_XS 56r22
+15N4 Max_Gages 59r21
+16N4 Max_TS 60r20
+17N4 Max_TV 46r33
+19A12 Str64{string}<integer> 22r23 27r12 33r26 38r31 40r28 45r37 49r12 71r41
+. 72r11 103r28 108r26 113r26 119r27
+20A12 Str16{string}<integer> 23r23 27r38 38r57 65r17 66r15 77r41 78r11
+21A12 Str32{string}<integer> 24r23 62r17 63r19 64r19 83r41 84r11
+22a4 Blank64{19A12} 27r21 33r35 38r40 40r37 45r46 49r21 72r20
+23a4 Blank16{20A12} 27r47 38r66 65r26 66r24 78r20
+24a4 Blank32{21A12} 62r26 63r28 64r28 84r20
+26R9 Node_Rec 31e14 54r35
+27a7 Id{19A12} 105r47
+27a30 Ntype{20A12} 228r33
+28f7 Invert_Elev{float} 238r42
+28f20 Max_Depth{float} 233r28 233r74 234r64 236r46
+28f31 Sur_Depth{float} 233r93
+28f42 A_Ponded{float} 229r31
+29f7 Depth{float} 201r30 201r46 231m25 231r43 232r28 232m54 233r57 234r49
+. 236m28 238r63 239r44 240r28 240r93
+29f14 Head{float} 200r74 200r89 238m25 241r28 241r88
+29f20 Volume{float} 239m25
+29f28 Inflow{float} 195m39 224m105 224r125 230r32 242r72 245m50
+29f36 Outflow{float} 224m51 224r72 230r50 243r74 245m74
+29f45 Overflow{float} 234m28 235r69 245m99
+29f55 Lat_Inflow{float} 193m38 193r62 195r58 230r69 245m22
+30f7 Peak_Depth{float} 240r45 240m70
+30f19 Peak_Hgl{float} 241r44 241m67
+30f29 Total_Inflow{float} 242m25 242r50
+30f43 Total_Outflow{float} 243m25 243r51
+30f58 Flood_Vol{float} 235m28 235r50
+32R9 Link_Rec 37e14 55r35
+33a7 Id{19A12} 199r36
+33a11 From_N{19A12} 197r38
+33a19 To_N{19A12} 197r72
+34f7 Len{float} 200r39 200r104 220r40
+34f12 Rough{float} 207r40 212r37
+34f19 In_Off{float}
+34f27 Out_Off{float}
+35f7 Flow{float} 209m22 209r39 213r32 214r42 215m28 219r79 221r29 221r96
+. 224r25 224r89 224r141
+35f13 Dep{float} 218m22
+35f18 Vel{float} 219m22 219m59 222r25 222r84
+35f23 Vol{float} 220m22
+36f7 Peak_Flow{float} 221r46 221m70
+36f18 Peak_Vel{float} 222r40 222m63
+36f28 Time_PF{float} 221m112
+36f37 Max_DF{float} 223r68 223m89
+36f45 Full_D{float}
+36f53 Full_A{float}
+38R9 XS_Rec 38e116 56r33
+38a26 Id{19A12} 110r48
+38a49 Xtype{20A12} 152r29 166r29
+38f75 G1{float} 153r29 154r26 158r65 167r26 171r65 202r55 223r27 223r54 223r113
+38f79 G2{float} 158r28 171r28
+38f83 AF{float} 153r55 210r27 212r55
+38f87 RF{float} 212r70
+39R9 SC_Rec 43e14 57r30
+40a7 Id{19A12}
+40a11 Rain_G{19A12} 183r37
+40a19 Outlet{19A12} 192r36
+41f7 Area{float} 187r31 188r29
+41f13 Pct_I{float} 185r48 188r46
+41f20 Width{float}
+41f27 Slope{float}
+42f7 Runoff{float} 189m49
+42f15 TP{float} 184m20 184r33
+42f19 TR{float} 190m20 190r33
+42f23 TI{float} 186m20 186r33
+42f27 PR{float} 191r28 191m43
+44R9 Inf_Rec 44e77 58r31
+44f27 MR{float} 140r46
+44f31 MNR{float} 143r29 143r57
+44f36 DC{float} 143r77
+44f40 DT{float} 139r33 139r68
+44f44 CR{float} 140m18 140r32 140r59 142r33 143m15 143r44
+44f48 CI{float} 144m15 144r29
+45R9 Gage_Rec 45e65 59r35
+45a28 Id{19A12} 123r30
+45a32 SN{19A12} 124r36
+46A9 Float_Array(float)<integer> 47r24 50r21
+47a4 Empty_FA{46A9} 50r36
+48R9 TS_Rec 52e14 60r31
+49a7 Id{19A12} 115r46
+50a7 Times{46A9} 127r34
+50a14 Vals{46A9} 127r64
+51i7 Cnt{natural} 126r42
+54a4 Nodes(26R9) 105r38 193m28 193r52 195m30 195r49 200r64 200r79 201r20
+. 201r36 224m41 224r62 224m95 224r115 228r24 229r22 230r23 230r41 230r60
+. 231m16 231r34 232r19 232m45 233r19 233r48 233r65 233r84 234m19 234r40 234r55
+. 235m19 235r41 235r60 236m19 236r37 238m16 238r33 238r54 239m16 239r35 240r19
+. 240r36 240m61 240r84 241r19 241r35 241m58 241r79 242m16 242r41 242r63 243m16
+. 243r42 243r65 245m13 245m41 245m65 245m90
+55a4 Links(32R9) 197r29 197r63 199r27 200r30 200r95 207r31 209m13 209r30
+. 212r28 213r23 214r33 215m19 218m13 219m13 219m50 219r70 220m13 220r31 221r20
+. 221r37 221m61 221r87 221m103 222r16 222r31 222m54 222r75 223r59 223m80
+. 224r16 224r80 224r132
+56a4 XSects(38R9) 110r38 152r18 153r18 153r44 154r15 158r17 158r54 166r18
+. 167r15 171r17 171r54 202r44 210r16 212r44 212r59 223r16 223r43 223r102
+57a4 SCs(39R9) 183r30 184m13 184r26 185r41 186m13 186r26 187r24 188r22 188r39
+. 189m42 190m13 190r26 191r21 191m36 192r29
+58a4 Infs(44R9) 139r25 139r60 140m10 140r24 140r38 140r51 142r25 143m7 143r21
+. 143r36 143r49 143r69 144m7 144r21
+59a4 Gages(45R9) 123r21 124r27
+60a4 TSer(48R9) 115r38 126r33 127r25 127r55
+61i4 NN{natural} 105r19 195r22 227r22
+61i8 NL{natural} 196r22
+61i12 NX{natural} 110r19
+61i16 NS{natural} 182r22
+61i20 NG{natural} 122r19
+61i24 NT{natural} 115r19
+62a4 Flow_Units{21A12} 259m4
+63a4 Infiltration{21A12} 259m35
+64a4 Flow_Routing{21A12} 260m4
+65a4 Start_Date{20A12} 261m4
+66a4 End_Date{20A12} 261m42
+67f4 Routing_Step{float} 180r13
+68f4 Total_Dur{float} 181r23
+69f4 Min_SA{float} 229r65
+71V13 To_Str64{19A12} 71b13 71>22 76t7
+71a22 S{string} 74r28 74r42 74r44 74r53 74r79
+72a7 R{19A12} 74m7 75r14
+77V13 To_Str16{20A12} 77b13 77>22 82t7 261s18 261s54
+77a22 S{string} 80r28 80r42 80r44 80r53 80r79
+78a7 R{20A12} 80m7 81r14
+83V13 To_Str32{21A12} 83b13 83>22 88t7 259s18 259s51 260s20
+83a22 S{string} 86r28 86r42 86r44 86r53 86r79
+84a7 R{21A12} 86m7 87r14
+89V13 Trimmed{string} 89b13 89>21 90t35 105s30 105s53 110s30 110s54 115s30
+. 115s52 123s13 123s36 152s10 166s10 228s16
+89a21 S{string} 90r22
+92V13 Safe_Float{float} 92b13 92>24 93t73 99s28 99s67 100s19
+92a24 S{string} 93r29
+95V13 Parse_Time{float} 95b13 95>24 101t7
+95a24 S{string} 98r18 99r39 99r41 99r78 99r85 100r30
+96i7 P{natural} 98m7 99r10 99r50 99r80
+103V13 Find_Node{natural} 103b13 103>23 107t7 192s19 197s19 197s53
+103a23 Id{19A12} 105r61
+105i11 I{integer} 105r44 105r77
+108V13 Find_XS{natural} 108b13 108>21 112t7 199s19
+108a21 Id{19A12} 110r62
+110i11 I{integer} 110r45 110r78
+113V13 Find_TS{natural} 113b13 113>21 117t7 124s19
+113a21 Id{19A12} 115r60
+115i11 I{integer} 115r43 115r76
+119V13 Get_Rain{float} 119b13 119>22 119>34 133t7 183s21
+119a22 GI{19A12} 123r44
+119f34 Elapsed{float} 125r19
+120i7 TI{natural} 124m13 124r44 126r38 127r30 127r60
+120f21 TH{float} 125m13 127r19
+122i11 I{integer} 123r27 124r33
+126i17 K{integer} 127r40 127r69
+135V13 Horton{float} 135b13 135>20 135>33 135>39 146t7 185s19
+135i20 I{natural} 139r30 139r65 140r15 140r29 140r43 140r56 142r30 143r12
+. 143r26 143r41 143r54 143r74 144r12 144r26
+135f33 Rain{float} 138r10 142r37
+135f39 DT{float} 139r54 143r82 144r41
+136f7 Rec{float} 139m10 139m47 140r65
+136f12 Rate{float} 142m7 144r34 145r14
+148V13 Calc_Area{float} 148b13 148>23 148>37 160t7 165s12 203s18
+148i23 XI{natural} 152r25 153r25 153r51 154r22 158r24 158r61
+148f37 D{float} 151r10 153r13 154r41 158r84
+149f7 R{float} 154m10 154r45 155r17 156r51 157r45 157r47
+149f10 Y{float} 154m36 156r49
+149f13 Arg{float} 156m10 157r32
+149f18 Theta{float} 157m10 157r50 157r62
+149f25 W{float} 158m12 158r35 158m49 158r88
+162V13 Calc_Hrad{float} 162b13 162>23 162>37 174t7 203s43
+162i23 XI{natural} 165r22 166r25 167r22 171r24 171r61
+162f37 D{float} 165r26 167r39 172r21
+163f7 A{float} 165m7 165r33 170r33 172r47
+163f10 R{float} 167m10 167r41 167r51 168r51 169r41
+163f13 Y{float} 167m34 168r49
+163f16 Arg{float} 168m10 169r30
+163f21 Theta{float} 169m10 169r43
+163f28 P{float} 169m36 170r13 170r35 172m10 172r27 172r49
+163f31 W{float} 171m12 171r35 171m49 172r15
+176U14 Do_Simulate 176b14 176<26 176<47 249t7 280s4
+176i26 Steps{natural} 180m43 247m33 247r42
+176f47 Elapsed{float} 180m27 181r13 183r45 221r123 247m10 247r21
+177f7 DT{float} 180m7 184r43 185r62 186r41 190r41 231r55 235r78 242r79 243r82
+. 247r29
+177f11 Rain{float} 183m13 184r38 185r29 187r19
+177f17 IR{float} 185m13 186r38 188r19
+177f21 RI{float} 187m13 189r34
+177f25 IV{float} 188m13 189r37
+177f29 RO{float} 189m13 189r59 190r38 191r16 191r49 193r75
+177f33 Slope{float} 200m13 200m54 205r45 206r30 207r74 211r36
+177f40 AD{float} 201m13 202m13 202r59 203r32 203r57 218r29 223r40 223r99
+177f44 A{float} 203m13 205r16 207r47 219r37 219r85 220r29
+177f47 HR{float} 203m37 205r28 207r50
+177f51 MQ{float} 204m13 207m16 209r50
+177f55 SV{float} 206m16 206m47 207r22 214m19 214m58 215r36
+177f59 QF{float} 212m16 213r40 215r39
+177f63 SL{float} 211m16 212r90
+177f67 SA{float} 229m16 229r44 229m59 231r58 239r50
+177f71 Net{float} 230m16 231r51
+178i7 FI{natural} 192m13 193r16 193r34 193r58 197m13 198r16 200r70 201r26
+. 224r47 224r68
+178i11 TI{natural} 197m47 198r26 200r85 201r42 224r101 224r121
+178i15 XI{natural} 199m13 199r44 202r51 203r28 203r53 210r23 212r51 212r66
+. 223r23 223r50 223r109
+182i14 I{integer} 183r34 184r17 184r30 185r26 185r45 186r17 186r30 187r28
+. 188r26 188r43 189r46 190r17 190r30 191r25 191r40 192r33
+195i14 J{integer} 195r36 195r55
+196i14 J{integer} 197r35 197r69 199r33 200r36 200r101 207r37 209r19 209r36
+. 212r34 213r29 214r39 215r25 218r19 219r19 219r56 219r76 220r19 220r37 221r26
+. 221r43 221r67 221r93 221r109 222r22 222r37 222r60 222r81 223r65 223r86
+. 224r22 224r86 224r138
+225L15 Continue_Link 198r43 199r61
+227i14 J{integer} 228r30 229r28 230r29 230r47 230r66 231r22 231r40 232r25
+. 232r51 233r25 233r54 233r71 233r90 234r25 234r46 234r61 235r25 235r47 235r66
+. 236r25 236r43 238r22 238r39 238r60 239r22 239r41 240r25 240r42 240r67 240r90
+. 241r25 241r41 241r64 241r85 242r22 242r47 242r69 243r22 243r48 243r71 245r19
+. 245r47 245r71 245r96
+251a4 Inp_Text{string} 265r35 266m13 268m13
+252i4 Inp_Len{natural} 265r13 266r22 266r33 267m13 267r24 268r22 269m13 269r24
+253i4 Steps{natural} 280m16
+254f4 Elapsed{float} 280m23
+254f13 Wall_MS{float} 282m4
+255i4 T0{2|42I9} 277m4 282r24
+255i8 T1{2|42I9} 281m4 282r21
+256a4 Line_Buf{string} 264m19 266r50
+257i4 Last{natural} 264m29 265r23 266r41 266r62 267r34
+

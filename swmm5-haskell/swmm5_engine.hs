@@ -120,33 +120,44 @@ parseInp text = let m = foldl' parseLine (emptyModel, "") (lines text)
           Nothing -> m
           Just idx -> m { mInfils = updateAt idx (\_ -> Infil (safeRead mr) (safeRead mnr) (safeRead dc) (if null rest then 7 else safeRead (head rest)) (safeRead mr) 0) (mInfils m) }
     processSection m "JUNCTIONS" ts
-      | length ts >= 2 = let i = ts!!0; ie = safeRead (ts!!1)
-                              md = if length ts > 2 then safeRead (ts!!2) else 0
-                              initD = if length ts > 3 then safeRead (ts!!3) else 0
-                              sd = if length ts > 4 then safeRead (ts!!4) else 0
-                              ap = if length ts > 5 then safeRead (ts!!5) else 0
-                              n = Node i "JUNCTION" ie md sd ap initD (ie+initD) 0 0 0 0 0 0 0 0 0 0
-                          in m { mNodes = mNodes m ++ [n], mNodeMap = Map.insert i (length (mNodes m)) (mNodeMap m) }
+      | length ts >= 2 =
+          let i = ts!!0
+              ie = safeRead (ts!!1)
+              md = if length ts > 2 then safeRead (ts!!2) else 0
+              initD = if length ts > 3 then safeRead (ts!!3) else 0
+              sd = if length ts > 4 then safeRead (ts!!4) else 0
+              ap = if length ts > 5 then safeRead (ts!!5) else 0
+              n = Node i "JUNCTION" ie md sd ap initD (ie+initD) 0 0 0 0 0 0 0 0 0 0
+          in m { mNodes = mNodes m ++ [n], mNodeMap = Map.insert i (length (mNodes m)) (mNodeMap m) }
     processSection m "OUTFALLS" ts
-      | length ts >= 3 = let i = ts!!0; ie = safeRead (ts!!1)
-                              n = Node i "OUTFALL" ie 0 0 0 0 ie 0 0 0 0 0 0 0 0 0 0
-                          in m { mNodes = mNodes m ++ [n], mNodeMap = Map.insert i (length (mNodes m)) (mNodeMap m) }
+      | length ts >= 3 =
+          let i = ts!!0
+              ie = safeRead (ts!!1)
+              n = Node i "OUTFALL" ie 0 0 0 0 ie 0 0 0 0 0 0 0 0 0 0
+          in m { mNodes = mNodes m ++ [n], mNodeMap = Map.insert i (length (mNodes m)) (mNodeMap m) }
     processSection m "CONDUITS" ts
       | length ts >= 6 = m { mLinks = mLinks m ++ [Link (ts!!0) (ts!!1) (ts!!2) (safeRead(ts!!3)) (safeRead(ts!!4)) (safeRead(ts!!5)) (if length ts > 6 then safeRead (ts!!6) else 0) 0 0 0 0 0 0 0 0 0 0] }
     processSection m "XSECTIONS" ts
-      | length ts >= 3 = let i = ts!!0; tp = map toUpper (ts!!1); g1 = safeRead (ts!!2)
-                              g2 = if length ts > 3 then safeRead (ts!!3) else 0
-                              (af, rf) = if tp == "CIRCULAR" then (piVal * (g1/2)^(2::Int), g1/4)
-                                         else let w = if g2 > 0 then g2 else g1; a = g1*w; p = 2*g1+2*w in (a, if p > 0 then a/p else 0)
-                              xs = Xsect i tp g1 g2 af rf
-                              lks = map (\lk -> if lId lk == i then lk { lFullDepth = g1, lFullArea = af } else lk) (mLinks m)
-                          in m { mXsects = mXsects m ++ [xs], mLinks = lks }
+      | length ts >= 3 =
+          let i = ts!!0
+              tp = map toUpper (ts!!1)
+              g1 = safeRead (ts!!2)
+              g2 = if length ts > 3 then safeRead (ts!!3) else 0
+              (af, rf) = if tp == "CIRCULAR" then (piVal * (g1/2)^(2::Int), g1/4)
+                         else let w = if g2 > 0 then g2 else g1
+                                  a = g1*w
+                                  p = 2*g1+2*w
+                              in (a, if p > 0 then a/p else 0)
+              xs = Xsect i tp g1 g2 af rf
+              lks = map (\lk -> if lId lk == i then lk { lFullDepth = g1, lFullArea = af } else lk) (mLinks m)
+          in m { mXsects = mXsects m ++ [xs], mLinks = lks }
     processSection m "TIMESERIES" ts
-      | length ts >= 3 = let tsid = head ts
-                              existing = Map.findWithDefault (TSeries tsid [] []) tsid (mTimeseries m)
-                              (newTimes, newVals) = parseTSValues (tail ts)
-                              updated = existing { tsTimes = tsTimes existing ++ newTimes, tsValues = tsValues existing ++ newVals }
-                          in m { mTimeseries = Map.insert tsid updated (mTimeseries m) }
+      | length ts >= 3 =
+          let tsid = head ts
+              existing = Map.findWithDefault (TSeries tsid [] []) tsid (mTimeseries m)
+              (newTimes, newVals) = parseTSValues (tail ts)
+              updated = existing { tsTimes = tsTimes existing ++ newTimes, tsValues = tsValues existing ++ newVals }
+          in m { mTimeseries = Map.insert tsid updated (mTimeseries m) }
     processSection m _ _ = m
     findIdx _ [] = Nothing
     findIdx x (y:ys) = if x == y then Just 0 else fmap (+1) (findIdx x ys)

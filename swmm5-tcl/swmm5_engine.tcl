@@ -379,14 +379,31 @@ set server [socket -server acceptConn $PORT]
 puts "SWMM5-Tcl engine listening on port $PORT"
 
 proc acceptConn {sock addr port} {
-    fconfigure $sock -translation binary -buffering full
-    fileevent $sock readable [list handleRequest $sock]
+    fconfigure $sock -translation binary -buffering full -blocking 0
+    fileevent $sock readable [list handleRequest $sock ""]
 }
 
-proc handleRequest {sock} {
+proc handleRequest {sock buf} {
     if {[eof $sock]} {close $sock; return}
-    set data [read $sock]
-    if {$data eq ""} {close $sock; return}
+    append buf [read $sock]
+    if {$buf eq ""} return
+    set headerEnd [string first "\r\n\r\n" $buf]
+    if {$headerEnd < 0} {
+        fileevent $sock readable [list handleRequest $sock $buf]
+        return
+    }
+    set clIdx [string first "Content-Length: " $buf]
+    if {$clIdx >= 0} {
+        set clStart [expr {$clIdx + 16}]
+        set clEnd [string first "\r\n" $buf $clStart]
+        set cl [string trim [string range $buf $clStart [expr {$clEnd - 1}]]]
+        set bodyStart [expr {$headerEnd + 4}]
+        if {[string length $buf] - $bodyStart < $cl} {
+            fileevent $sock readable [list handleRequest $sock $buf]
+            return
+        }
+    }
+    set data $buf
     if {[string match "GET /health*" $data]} {
         set json {{"engine":"SWMM5-Tcl","status":"ok","version":"v1.0","language":"Tcl"}}
         set resp "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: [string length $json]\r\n\r\n$json"
