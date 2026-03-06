@@ -869,15 +869,15 @@ const results = new Simulation(inp).run();
   },
   {
     id: "go-swmm5",
-    name: "Go API Server Engine",
+    name: "Go Native Engine",
     lang: "Go",
     icon: "\uD83D\uDC39",
     color: "#00add8",
     status: "live",
     version: "v1.0",
-    desc: "Single-binary SWMM5 with built-in HTTP API server. All 50 Go modules connected. Concurrent multi-model simulation via goroutines. Cross-compile to Linux/Mac/Windows. 12 MB Docker image.",
-    effort: "Ready now",
-    impact: "SWMM5 as a microservice. REST API. Docker-native. One-command deploy.",
+    desc: "Real standalone SWMM5 engine compiled from Go source. 8.6MB native binary with INP parser, Horton infiltration, dynamic wave routing, and .rpt report generation. Runs as a separate HTTP server on port 3002. Sub-millisecond simulation times.",
+    effort: "Ready now — real native engine",
+    impact: "Fourth real engine (after EPA C, JS browser, Rust/WASM). Native compiled. Zero dependencies.",
     code: `// swmm5-go \u2014 Single-Binary SWMM5 API Server
 //
 // swmm5-go/
@@ -3084,6 +3084,24 @@ export default function SwmmEngineRunner({ theme: t }) {
           setStatus('Simulation completed successfully via ' + activeEngine.name + ' (WASM, 140KB binary)');
         } catch (wasmErr) {
           setError('Rust WASM engine error: ' + wasmErr.message);
+          setStatus('');
+        }
+      } else if (selectedEngine === 'go-swmm5') {
+        const blob = new Blob([inpContent], { type: 'text/plain' });
+        const formData = new FormData();
+        formData.append('inpFile', blob, fileName || 'model.inp');
+
+        const resp = await fetch('/api/run-swmm-go', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const data = await resp.json();
+        if (data.success && data.rpt) {
+          setRptContent(data.rpt);
+          setStatus('Simulation completed successfully via ' + activeEngine.name + ' (native Go binary)');
+        } else {
+          setError(data.error || 'Go engine simulation failed');
           setStatus('');
         }
       } else {

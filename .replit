@@ -1,4 +1,4 @@
-modules = ["nodejs-20", "python-3.11", "rust-stable"]
+modules = ["nodejs-20", "python-3.11", "rust-stable", "go-1.25"]
 [agent]
 expertMode = true
 
@@ -33,6 +33,10 @@ outputType = "webview"
 [[ports]]
 localPort = 3001
 externalPort = 3000
+
+[[ports]]
+localPort = 3002
+externalPort = 3002
 
 [[ports]]
 localPort = 5000

@@ -28,6 +28,19 @@ const playgroundUrls = {
   swift: "https://swiftfiddle.com/",
   kotlin: "https://play.kotlinlang.org/",
   ruby: "https://try.ruby-lang.org/",
+  autolisp: "https://www.autodesk.com/developer-network/platform-technologies/autocad/autolisp",
+  commonlisp: "https://www.jdoodle.com/execute-clisp-online/",
+  clojure: "https://tryclojure.org/",
+  scheme: "https://try.scheme.org/",
+  hy: "https://hylang.org/try-hy",
+  vba: "https://www.mycompiler.io/new/vb",
+  lua: "https://www.lua.org/demo.html",
+  tcl: "https://www.mycompiler.io/new/tcl",
+  haskell: "https://play.haskell.org/",
+  scala: "https://scastie.scala-lang.org/",
+  dart: "https://dartpad.dev/",
+  elixir: "https://playground.functional.computer/",
+  ocaml: "https://try.ocaml.pro/",
 };
 
 // ─── Code Samples (moved to modules.js) ─────────────────────────────
@@ -59,6 +72,19 @@ const keywordSets = {
   swift: /\b(struct|class|func|var|let|return|if|else|for|in|while|import|self|Self|init|mutating|public|private|static|guard|switch|case|default|nil|true|false|Double|Int|Float|String|Bool|Array|protocol|extension|override|throws|try|catch|inout)\b/g,
   kotlin: /\b(class|data|fun|val|var|return|if|else|for|in|while|when|import|package|this|super|object|companion|override|open|abstract|interface|private|public|internal|protected|null|true|false|Double|Int|Float|String|Boolean|Long|is|as|try|catch|throw|constructor)\b/g,
   ruby: /\b(class|module|def|end|return|if|else|elsif|unless|for|in|while|do|begin|rescue|ensure|raise|yield|block_given|require|require_relative|include|extend|attr_accessor|attr_reader|attr_writer|self|super|nil|true|false|puts|print|lambda|proc|case|when|then|until|break|next|retry|redo|and|or|not|defined)\b/g,
+  autolisp: /\b(defun|setq|if|progn|cond|while|repeat|foreach|cons|car|cdr|cadr|caddr|list|assoc|subst|nth|length|append|apply|mapcar|lambda|nil|T|princ|strcat|itoa|rtos|getvar|setvar|ssget|ssname|sslength|entget|entmod|command|vl-load-com|vlax-get-acad-object|vla-get)\b/g,
+  commonlisp: /\b(defun|defstruct|defpackage|defparameter|defconstant|defvar|defclass|defmethod|defgeneric|let|let\*|setf|if|cond|when|unless|loop|do|dotimes|dolist|progn|block|return-from|values|multiple-value-bind|declare|optimize|speed|safety|type|the|in-package|use-package|export|import|require|nil|t|lambda|funcall|apply|mapcar|format|make-instance|slot-value|with-slots)\b/g,
+  clojure: /\b(defn|def|fn|let|if|cond|when|do|loop|recur|for|doseq|dotimes|map|filter|reduce|apply|comp|partial|assoc|dissoc|get|update|conj|cons|first|rest|next|seq|vec|hash-map|set|atom|deref|swap!|reset!|ns|require|use|import|defstruct|defrecord|defprotocol|extend-type|nil|true|false|not|and|or|str|println|prn)\b/g,
+  scheme: /\b(define|lambda|let|let\*|letrec|if|cond|when|unless|begin|set!|do|for\/fold|for\/list|for|in-range|match|struct|values|call-with-values|map|filter|fold|apply|cons|car|cdr|list|null\?|pair\?|eq\?|equal\?|display|newline|require|provide|module|define-struct)\b/g,
+  hy: /\b(defn|defclass|setv|let|if|cond|when|unless|do|for|while|import|from|return|yield|try|except|raise|with|as|in|not|and|or|is|None|True|False|print|get|assoc|first|rest|cons|list|dict|fn|defmacro|require|of)\b/g,
+  vba: /\b(Sub|Function|End|Dim|As|Integer|Long|Double|Single|String|Boolean|Variant|Object|Private|Public|Static|Const|If|Then|Else|ElseIf|For|To|Step|Next|While|Wend|Do|Loop|Until|Select|Case|Set|New|With|Property|Get|Let|Type|Enum|ByVal|ByRef|Optional|ReDim|Preserve|Nothing|True|False|Not|And|Or|Mod|Exit|GoTo|On|Error|Resume|Call|Debug|Print|MsgBox|InputBox)\b/gi,
+  lua: /\b(local|function|end|return|if|then|else|elseif|for|in|while|do|repeat|until|and|or|not|nil|true|false|require|module|pairs|ipairs|next|select|table|string|math|io|os|type|tonumber|tostring|print|error|pcall|xpcall|setmetatable|getmetatable|rawset|rawget|self|coroutine)\b/g,
+  tcl: /\b(proc|set|if|else|elseif|for|foreach|while|switch|return|expr|puts|gets|open|close|read|write|file|string|list|lindex|lappend|lsort|llength|lrange|lreplace|lsearch|dict|create|get|set|keys|values|namespace|eval|variable|upvar|uplevel|catch|try|package|require|source|info|array|regexp|regsub|format|scan|incr|append|concat|join|split|glob|exec|after|update)\b/g,
+  haskell: /\b(module|where|import|qualified|as|hiding|data|type|newtype|class|instance|deriving|Show|Eq|Ord|Num|let|in|if|then|else|case|of|do|return|pure|\-\>|=\>|forall|Int|Integer|Double|Float|Char|String|Bool|IO|Maybe|Just|Nothing|Either|Left|Right|True|False|otherwise|map|filter|foldr|foldl|zip|head|tail|null|length|main|putStrLn|print|show|read)\b/g,
+  scala: /\b(object|class|case|trait|extends|with|abstract|override|sealed|final|implicit|lazy|val|var|def|type|return|if|else|for|yield|while|match|new|this|super|import|package|private|protected|public|null|true|false|Int|Double|Float|Long|Boolean|String|Unit|Any|Nothing|Option|Some|None|List|Vector|Map|Set|Seq|Array|Try|Future|println)\b/g,
+  dart: /\b(class|abstract|extends|implements|with|mixin|void|int|double|num|bool|String|var|final|const|late|required|return|if|else|for|in|while|do|switch|case|default|break|continue|new|this|super|null|true|false|static|async|await|Future|Stream|List|Map|Set|dynamic|typedef|enum|factory|get|set|import|export|library|part|throw|try|catch|finally|assert|is|as|print)\b/g,
+  elixir: /\b(defmodule|def|defp|defstruct|defprotocol|defimpl|defmacro|defguard|do|end|fn|if|else|unless|cond|case|when|with|for|in|import|alias|use|require|raise|try|rescue|catch|after|receive|send|spawn|self|nil|true|false|and|or|not|is_nil|is_integer|is_float|is_binary|is_atom|is_list|is_map|Enum|Map|List|String|IO|Agent|GenServer|Supervisor)\b/g,
+  ocaml: /\b(let|in|val|fun|function|match|with|if|then|else|begin|end|for|while|do|done|to|downto|type|of|module|struct|sig|open|include|rec|and|or|not|true|false|ref|mutable|int|float|string|bool|char|unit|list|array|option|Some|None|Ok|Error|failwith|raise|try|assert|print_string|print_int|print_float|Printf|fprintf|sprintf)\b/g,
 };
 
 const commentPatterns = {
@@ -86,6 +112,19 @@ const commentPatterns = {
   swift: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   kotlin: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
   ruby: /(#.*$|=begin[\s\S]*?=end)/gm,
+  autolisp: /(;.*$)/gm,
+  commonlisp: /(;.*$|#\|[\s\S]*?\|#)/gm,
+  clojure: /(;.*$)/gm,
+  scheme: /(;.*$|#\|[\s\S]*?\|#)/gm,
+  hy: /(;.*$|#.*$)/gm,
+  vba: /('.*$|REM\s.*$)/gmi,
+  lua: /(--.*$|--\[\[[\s\S]*?\]\])/gm,
+  tcl: /(#.*$)/gm,
+  haskell: /(--.*$|\{-[\s\S]*?-\})/gm,
+  scala: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  dart: /(\/\/.*$|\/\*[\s\S]*?\*\/)/gm,
+  elixir: /(#.*$)/gm,
+  ocaml: /(\(\*[\s\S]*?\*\))/gm,
 };
 
 const stringPattern = /("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)/g;

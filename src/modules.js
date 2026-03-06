@@ -1194,6 +1194,442 @@ class Conduit
     q_new.clamp(-q_max, q_max)
   end
 end`,
+    autolisp: `;;; routing.lsp \u2014 Dynamic Wave Routing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:routing-init (/ data)
+  (setq data (list
+    (cons "module" "routing.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:routing-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-ROUTING (/ params res)
+  (setq params (swmm:routing-init))
+  (setq res (swmm:routing-compute params))
+  (princ (strcat "\nDynamic Wave Routing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; routing.lisp \u2014 Dynamic Wave Routing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/routing
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/routing)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct routing-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (routing-data-value data))
+         (a (routing-data-area data))
+         (d (routing-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (routing-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-routing-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Dynamic Wave Routing: ~,4F~%"
+            (routing-data-result data))
+    data))`,
+    clojure: `;;; routing.clj \u2014 Dynamic Wave Routing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.routing)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord RoutingData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->RoutingData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Dynamic Wave Routing: " (:result data)))
+    data))`,
+    scheme: `;;; routing.rkt \u2014 Dynamic Wave Routing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct routing-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (routing-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (routing-data-value data)]
+         [a (routing-data-area data)]
+         [d (routing-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-routing-data-result! data r)
+          r)
+        (begin
+          (set-routing-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Dynamic Wave Routing: ~a~n"
+            (routing-data-result data))
+    data))`,
+    hy: `;;; routing.hy \u2014 Dynamic Wave Routing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass RoutingData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (RoutingData value area depth))
+  (compute data)
+  (print (.format "Dynamic Wave Routing: {:.4f}" data.result))
+  data)`,
+    vba: `' routing.bas \u2014 Dynamic Wave Routing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TRouting
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Routing_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TRouting
+    Dim data As TRouting
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Routing_Init = data
+End Function
+
+Public Function Routing_Compute( _
+        ByRef data As TRouting) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Routing_Compute = data.Result
+End Function
+
+Public Sub RunRouting()
+    Dim data As TRouting
+    data = Routing_Init(100#, 12.5, 3.2)
+    Call Routing_Compute(data)
+    Debug.Print "Dynamic Wave Routing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- routing.lua \u2014 Dynamic Wave Routing
+-- SWMM5 Engine in Lua
+
+local routing = {}
+routing.__index = routing
+
+local GRAVITY = 32.2
+
+function routing.new(value, area, depth)
+    local self = setmetatable({}, routing)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function routing:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function routing:display()
+    print(string.format("Dynamic Wave Routing: %.4f", self.result))
+end
+
+local data = routing.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return routing`,
+    tcl: `# routing.tcl \u2014 Dynamic Wave Routing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::routing {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Dynamic Wave Routing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::routing::run 100 12.5 3.2`,
+    haskell: `-- routing.hs \u2014 Dynamic Wave Routing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Routing where
+
+gravity :: Double
+gravity = 32.2
+
+data RoutingData = RoutingData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> RoutingData
+mkData v a d = RoutingData v a d 0.0
+
+compute :: RoutingData -> RoutingData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO RoutingData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Dynamic Wave Routing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// routing.scala \u2014 Dynamic Wave Routing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Routing {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Dynamic Wave Routing: " + data.result)
+    data
+  }
+}`,
+    dart: `// routing.dart \u2014 Dynamic Wave Routing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class RoutingData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  RoutingData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+RoutingData compute(RoutingData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(RoutingData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Dynamic Wave Routing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# routing.ex \u2014 Dynamic Wave Routing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Routing do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Dynamic Wave Routing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* routing.ml \u2014 Dynamic Wave Routing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type routing_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Dynamic Wave Routing: %.4f\n" data.result;
+  data`,
   },
   "dynwave.c — Dynamic Wave Solver": {
     category: "Hydraulics",
@@ -2872,6 +3308,442 @@ class Link
       @velocity.abs / Math.sqrt(GRAVITY * depth) : 0.0
   end
 end`,
+    autolisp: `;;; dynwave.lsp \u2014 Dynamic Wave Solver
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:dynwave-init (/ data)
+  (setq data (list
+    (cons "module" "dynwave.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:dynwave-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-DYNWAVE (/ params res)
+  (setq params (swmm:dynwave-init))
+  (setq res (swmm:dynwave-compute params))
+  (princ (strcat "\nDynamic Wave Solver: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; dynwave.lisp \u2014 Dynamic Wave Solver
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/dynwave
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/dynwave)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct dynwave-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (dynwave-data-value data))
+         (a (dynwave-data-area data))
+         (d (dynwave-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (dynwave-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-dynwave-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Dynamic Wave Solver: ~,4F~%"
+            (dynwave-data-result data))
+    data))`,
+    clojure: `;;; dynwave.clj \u2014 Dynamic Wave Solver
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.dynwave)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord DynwaveData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->DynwaveData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Dynamic Wave Solver: " (:result data)))
+    data))`,
+    scheme: `;;; dynwave.rkt \u2014 Dynamic Wave Solver
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct dynwave-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (dynwave-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (dynwave-data-value data)]
+         [a (dynwave-data-area data)]
+         [d (dynwave-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-dynwave-data-result! data r)
+          r)
+        (begin
+          (set-dynwave-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Dynamic Wave Solver: ~a~n"
+            (dynwave-data-result data))
+    data))`,
+    hy: `;;; dynwave.hy \u2014 Dynamic Wave Solver
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass DynwaveData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (DynwaveData value area depth))
+  (compute data)
+  (print (.format "Dynamic Wave Solver: {:.4f}" data.result))
+  data)`,
+    vba: `' dynwave.bas \u2014 Dynamic Wave Solver
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TDynwave
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Dynwave_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TDynwave
+    Dim data As TDynwave
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Dynwave_Init = data
+End Function
+
+Public Function Dynwave_Compute( _
+        ByRef data As TDynwave) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Dynwave_Compute = data.Result
+End Function
+
+Public Sub RunDynwave()
+    Dim data As TDynwave
+    data = Dynwave_Init(100#, 12.5, 3.2)
+    Call Dynwave_Compute(data)
+    Debug.Print "Dynamic Wave Solver: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- dynwave.lua \u2014 Dynamic Wave Solver
+-- SWMM5 Engine in Lua
+
+local dynwave = {}
+dynwave.__index = dynwave
+
+local GRAVITY = 32.2
+
+function dynwave.new(value, area, depth)
+    local self = setmetatable({}, dynwave)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function dynwave:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function dynwave:display()
+    print(string.format("Dynamic Wave Solver: %.4f", self.result))
+end
+
+local data = dynwave.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return dynwave`,
+    tcl: `# dynwave.tcl \u2014 Dynamic Wave Solver
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::dynwave {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Dynamic Wave Solver: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::dynwave::run 100 12.5 3.2`,
+    haskell: `-- dynwave.hs \u2014 Dynamic Wave Solver
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Dynwave where
+
+gravity :: Double
+gravity = 32.2
+
+data DynwaveData = DynwaveData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> DynwaveData
+mkData v a d = DynwaveData v a d 0.0
+
+compute :: DynwaveData -> DynwaveData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO DynwaveData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Dynamic Wave Solver: " ++ show (dResult dat)
+    return dat`,
+    scala: `// dynwave.scala \u2014 Dynamic Wave Solver
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Dynwave {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Dynamic Wave Solver: " + data.result)
+    data
+  }
+}`,
+    dart: `// dynwave.dart \u2014 Dynamic Wave Solver
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class DynwaveData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  DynwaveData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+DynwaveData compute(DynwaveData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(DynwaveData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Dynamic Wave Solver: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# dynwave.ex \u2014 Dynamic Wave Solver
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Dynwave do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Dynamic Wave Solver: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* dynwave.ml \u2014 Dynamic Wave Solver *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type dynwave_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Dynamic Wave Solver: %.4f\n" data.result;
+  data`,
   },
   "flowrout.c — Flow Routing Dispatch": {
     category: "Hydraulics",
@@ -4502,6 +5374,442 @@ class RoutingParams
     end
   end
 end`,
+    autolisp: `;;; flowrout.lsp \u2014 Flow Routing Dispatch
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:flowrout-init (/ data)
+  (setq data (list
+    (cons "module" "flowrout.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:flowrout-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-FLOWROUT (/ params res)
+  (setq params (swmm:flowrout-init))
+  (setq res (swmm:flowrout-compute params))
+  (princ (strcat "\nFlow Routing Dispatch: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; flowrout.lisp \u2014 Flow Routing Dispatch
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/flowrout
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/flowrout)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct flowrout-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (flowrout-data-value data))
+         (a (flowrout-data-area data))
+         (d (flowrout-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (flowrout-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-flowrout-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Flow Routing Dispatch: ~,4F~%"
+            (flowrout-data-result data))
+    data))`,
+    clojure: `;;; flowrout.clj \u2014 Flow Routing Dispatch
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.flowrout)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord FlowroutData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->FlowroutData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Flow Routing Dispatch: " (:result data)))
+    data))`,
+    scheme: `;;; flowrout.rkt \u2014 Flow Routing Dispatch
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct flowrout-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (flowrout-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (flowrout-data-value data)]
+         [a (flowrout-data-area data)]
+         [d (flowrout-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-flowrout-data-result! data r)
+          r)
+        (begin
+          (set-flowrout-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Flow Routing Dispatch: ~a~n"
+            (flowrout-data-result data))
+    data))`,
+    hy: `;;; flowrout.hy \u2014 Flow Routing Dispatch
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass FlowroutData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (FlowroutData value area depth))
+  (compute data)
+  (print (.format "Flow Routing Dispatch: {:.4f}" data.result))
+  data)`,
+    vba: `' flowrout.bas \u2014 Flow Routing Dispatch
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TFlowrout
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Flowrout_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TFlowrout
+    Dim data As TFlowrout
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Flowrout_Init = data
+End Function
+
+Public Function Flowrout_Compute( _
+        ByRef data As TFlowrout) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Flowrout_Compute = data.Result
+End Function
+
+Public Sub RunFlowrout()
+    Dim data As TFlowrout
+    data = Flowrout_Init(100#, 12.5, 3.2)
+    Call Flowrout_Compute(data)
+    Debug.Print "Flow Routing Dispatch: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- flowrout.lua \u2014 Flow Routing Dispatch
+-- SWMM5 Engine in Lua
+
+local flowrout = {}
+flowrout.__index = flowrout
+
+local GRAVITY = 32.2
+
+function flowrout.new(value, area, depth)
+    local self = setmetatable({}, flowrout)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function flowrout:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function flowrout:display()
+    print(string.format("Flow Routing Dispatch: %.4f", self.result))
+end
+
+local data = flowrout.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return flowrout`,
+    tcl: `# flowrout.tcl \u2014 Flow Routing Dispatch
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::flowrout {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Flow Routing Dispatch: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::flowrout::run 100 12.5 3.2`,
+    haskell: `-- flowrout.hs \u2014 Flow Routing Dispatch
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Flowrout where
+
+gravity :: Double
+gravity = 32.2
+
+data FlowroutData = FlowroutData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> FlowroutData
+mkData v a d = FlowroutData v a d 0.0
+
+compute :: FlowroutData -> FlowroutData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO FlowroutData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Flow Routing Dispatch: " ++ show (dResult dat)
+    return dat`,
+    scala: `// flowrout.scala \u2014 Flow Routing Dispatch
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Flowrout {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Flow Routing Dispatch: " + data.result)
+    data
+  }
+}`,
+    dart: `// flowrout.dart \u2014 Flow Routing Dispatch
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class FlowroutData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  FlowroutData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+FlowroutData compute(FlowroutData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(FlowroutData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Flow Routing Dispatch: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# flowrout.ex \u2014 Flow Routing Dispatch
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Flowrout do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Flow Routing Dispatch: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* flowrout.ml \u2014 Flow Routing Dispatch *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type flowrout_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Flow Routing Dispatch: %.4f\n" data.result;
+  data`,
   },
   "subcatch.c — Subcatchment Runoff": {
     category: "Hydrology",
@@ -6084,6 +7392,442 @@ class Subcatch
     [d_new, 0.0].max
   end
 end`,
+    autolisp: `;;; subcatch.lsp \u2014 Subcatchment Runoff
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:subcatch-init (/ data)
+  (setq data (list
+    (cons "module" "subcatch.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:subcatch-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-SUBCATCH (/ params res)
+  (setq params (swmm:subcatch-init))
+  (setq res (swmm:subcatch-compute params))
+  (princ (strcat "\nSubcatchment Runoff: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; subcatch.lisp \u2014 Subcatchment Runoff
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/subcatch
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/subcatch)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct subcatch-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (subcatch-data-value data))
+         (a (subcatch-data-area data))
+         (d (subcatch-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (subcatch-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-subcatch-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Subcatchment Runoff: ~,4F~%"
+            (subcatch-data-result data))
+    data))`,
+    clojure: `;;; subcatch.clj \u2014 Subcatchment Runoff
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.subcatch)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord SubcatchData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->SubcatchData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Subcatchment Runoff: " (:result data)))
+    data))`,
+    scheme: `;;; subcatch.rkt \u2014 Subcatchment Runoff
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct subcatch-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (subcatch-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (subcatch-data-value data)]
+         [a (subcatch-data-area data)]
+         [d (subcatch-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-subcatch-data-result! data r)
+          r)
+        (begin
+          (set-subcatch-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Subcatchment Runoff: ~a~n"
+            (subcatch-data-result data))
+    data))`,
+    hy: `;;; subcatch.hy \u2014 Subcatchment Runoff
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass SubcatchData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (SubcatchData value area depth))
+  (compute data)
+  (print (.format "Subcatchment Runoff: {:.4f}" data.result))
+  data)`,
+    vba: `' subcatch.bas \u2014 Subcatchment Runoff
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TSubcatch
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Subcatch_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TSubcatch
+    Dim data As TSubcatch
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Subcatch_Init = data
+End Function
+
+Public Function Subcatch_Compute( _
+        ByRef data As TSubcatch) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Subcatch_Compute = data.Result
+End Function
+
+Public Sub RunSubcatch()
+    Dim data As TSubcatch
+    data = Subcatch_Init(100#, 12.5, 3.2)
+    Call Subcatch_Compute(data)
+    Debug.Print "Subcatchment Runoff: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- subcatch.lua \u2014 Subcatchment Runoff
+-- SWMM5 Engine in Lua
+
+local subcatch = {}
+subcatch.__index = subcatch
+
+local GRAVITY = 32.2
+
+function subcatch.new(value, area, depth)
+    local self = setmetatable({}, subcatch)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function subcatch:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function subcatch:display()
+    print(string.format("Subcatchment Runoff: %.4f", self.result))
+end
+
+local data = subcatch.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return subcatch`,
+    tcl: `# subcatch.tcl \u2014 Subcatchment Runoff
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::subcatch {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Subcatchment Runoff: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::subcatch::run 100 12.5 3.2`,
+    haskell: `-- subcatch.hs \u2014 Subcatchment Runoff
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Subcatch where
+
+gravity :: Double
+gravity = 32.2
+
+data SubcatchData = SubcatchData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> SubcatchData
+mkData v a d = SubcatchData v a d 0.0
+
+compute :: SubcatchData -> SubcatchData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO SubcatchData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Subcatchment Runoff: " ++ show (dResult dat)
+    return dat`,
+    scala: `// subcatch.scala \u2014 Subcatchment Runoff
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Subcatch {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Subcatchment Runoff: " + data.result)
+    data
+  }
+}`,
+    dart: `// subcatch.dart \u2014 Subcatchment Runoff
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class SubcatchData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  SubcatchData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+SubcatchData compute(SubcatchData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(SubcatchData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Subcatchment Runoff: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# subcatch.ex \u2014 Subcatchment Runoff
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Subcatch do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Subcatchment Runoff: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* subcatch.ml \u2014 Subcatchment Runoff *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type subcatch_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Subcatchment Runoff: %.4f\n" data.result;
+  data`,
   },
   "infil.c — Infiltration Models": {
     category: "Hydrology",
@@ -7507,6 +9251,442 @@ def self.cn_infiltration(rainfall, cn)
   pe = (rainfall - ia)**2.0 / (rainfall - ia + s)
   rainfall - pe
 end`,
+    autolisp: `;;; infil.lsp \u2014 Infiltration Models
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:infil-init (/ data)
+  (setq data (list
+    (cons "module" "infil.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:infil-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-INFIL (/ params res)
+  (setq params (swmm:infil-init))
+  (setq res (swmm:infil-compute params))
+  (princ (strcat "\nInfiltration Models: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; infil.lisp \u2014 Infiltration Models
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/infil
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/infil)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct infil-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (infil-data-value data))
+         (a (infil-data-area data))
+         (d (infil-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (infil-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-infil-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Infiltration Models: ~,4F~%"
+            (infil-data-result data))
+    data))`,
+    clojure: `;;; infil.clj \u2014 Infiltration Models
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.infil)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord InfilData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->InfilData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Infiltration Models: " (:result data)))
+    data))`,
+    scheme: `;;; infil.rkt \u2014 Infiltration Models
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct infil-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (infil-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (infil-data-value data)]
+         [a (infil-data-area data)]
+         [d (infil-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-infil-data-result! data r)
+          r)
+        (begin
+          (set-infil-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Infiltration Models: ~a~n"
+            (infil-data-result data))
+    data))`,
+    hy: `;;; infil.hy \u2014 Infiltration Models
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass InfilData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (InfilData value area depth))
+  (compute data)
+  (print (.format "Infiltration Models: {:.4f}" data.result))
+  data)`,
+    vba: `' infil.bas \u2014 Infiltration Models
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TInfil
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Infil_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TInfil
+    Dim data As TInfil
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Infil_Init = data
+End Function
+
+Public Function Infil_Compute( _
+        ByRef data As TInfil) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Infil_Compute = data.Result
+End Function
+
+Public Sub RunInfil()
+    Dim data As TInfil
+    data = Infil_Init(100#, 12.5, 3.2)
+    Call Infil_Compute(data)
+    Debug.Print "Infiltration Models: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- infil.lua \u2014 Infiltration Models
+-- SWMM5 Engine in Lua
+
+local infil = {}
+infil.__index = infil
+
+local GRAVITY = 32.2
+
+function infil.new(value, area, depth)
+    local self = setmetatable({}, infil)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function infil:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function infil:display()
+    print(string.format("Infiltration Models: %.4f", self.result))
+end
+
+local data = infil.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return infil`,
+    tcl: `# infil.tcl \u2014 Infiltration Models
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::infil {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Infiltration Models: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::infil::run 100 12.5 3.2`,
+    haskell: `-- infil.hs \u2014 Infiltration Models
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Infil where
+
+gravity :: Double
+gravity = 32.2
+
+data InfilData = InfilData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> InfilData
+mkData v a d = InfilData v a d 0.0
+
+compute :: InfilData -> InfilData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO InfilData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Infiltration Models: " ++ show (dResult dat)
+    return dat`,
+    scala: `// infil.scala \u2014 Infiltration Models
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Infil {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Infiltration Models: " + data.result)
+    data
+  }
+}`,
+    dart: `// infil.dart \u2014 Infiltration Models
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class InfilData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  InfilData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+InfilData compute(InfilData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(InfilData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Infiltration Models: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# infil.ex \u2014 Infiltration Models
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Infil do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Infiltration Models: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* infil.ml \u2014 Infiltration Models *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type infil_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Infiltration Models: %.4f\n" data.result;
+  data`,
   },
   "lid.c — LID/Green Infrastructure": {
     category: "Hydrology",
@@ -9228,6 +11408,442 @@ class LidUnit
     [overflow, 0.0].max
   end
 end`,
+    autolisp: `;;; lid.lsp \u2014 LID/Green Infrastructure
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:lid-init (/ data)
+  (setq data (list
+    (cons "module" "lid.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:lid-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-LID (/ params res)
+  (setq params (swmm:lid-init))
+  (setq res (swmm:lid-compute params))
+  (princ (strcat "\nLID/Green Infrastructure: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; lid.lisp \u2014 LID/Green Infrastructure
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/lid
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/lid)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct lid-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (lid-data-value data))
+         (a (lid-data-area data))
+         (d (lid-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (lid-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-lid-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&LID/Green Infrastructure: ~,4F~%"
+            (lid-data-result data))
+    data))`,
+    clojure: `;;; lid.clj \u2014 LID/Green Infrastructure
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.lid)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord LidData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->LidData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "LID/Green Infrastructure: " (:result data)))
+    data))`,
+    scheme: `;;; lid.rkt \u2014 LID/Green Infrastructure
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct lid-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (lid-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (lid-data-value data)]
+         [a (lid-data-area data)]
+         [d (lid-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-lid-data-result! data r)
+          r)
+        (begin
+          (set-lid-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "LID/Green Infrastructure: ~a~n"
+            (lid-data-result data))
+    data))`,
+    hy: `;;; lid.hy \u2014 LID/Green Infrastructure
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass LidData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (LidData value area depth))
+  (compute data)
+  (print (.format "LID/Green Infrastructure: {:.4f}" data.result))
+  data)`,
+    vba: `' lid.bas \u2014 LID/Green Infrastructure
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TLid
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Lid_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TLid
+    Dim data As TLid
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Lid_Init = data
+End Function
+
+Public Function Lid_Compute( _
+        ByRef data As TLid) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Lid_Compute = data.Result
+End Function
+
+Public Sub RunLid()
+    Dim data As TLid
+    data = Lid_Init(100#, 12.5, 3.2)
+    Call Lid_Compute(data)
+    Debug.Print "LID/Green Infrastructure: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- lid.lua \u2014 LID/Green Infrastructure
+-- SWMM5 Engine in Lua
+
+local lid = {}
+lid.__index = lid
+
+local GRAVITY = 32.2
+
+function lid.new(value, area, depth)
+    local self = setmetatable({}, lid)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function lid:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function lid:display()
+    print(string.format("LID/Green Infrastructure: %.4f", self.result))
+end
+
+local data = lid.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return lid`,
+    tcl: `# lid.tcl \u2014 LID/Green Infrastructure
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::lid {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "LID/Green Infrastructure: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::lid::run 100 12.5 3.2`,
+    haskell: `-- lid.hs \u2014 LID/Green Infrastructure
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Lid where
+
+gravity :: Double
+gravity = 32.2
+
+data LidData = LidData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> LidData
+mkData v a d = LidData v a d 0.0
+
+compute :: LidData -> LidData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO LidData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "LID/Green Infrastructure: " ++ show (dResult dat)
+    return dat`,
+    scala: `// lid.scala \u2014 LID/Green Infrastructure
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Lid {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("LID/Green Infrastructure: " + data.result)
+    data
+  }
+}`,
+    dart: `// lid.dart \u2014 LID/Green Infrastructure
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class LidData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  LidData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+LidData compute(LidData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(LidData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('LID/Green Infrastructure: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# lid.ex \u2014 LID/Green Infrastructure
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Lid do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("LID/Green Infrastructure: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* lid.ml \u2014 LID/Green Infrastructure *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type lid_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "LID/Green Infrastructure: %.4f\n" data.result;
+  data`,
   },
   "link.c — Conduit Hydraulics": {
     category: "Hydraulics",
@@ -11733,6 +14349,442 @@ class Xsect
     (y_lo + y_hi) / 2.0
   end
 end`,
+    autolisp: `;;; link.lsp \u2014 Conduit Hydraulics
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:link-init (/ data)
+  (setq data (list
+    (cons "module" "link.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:link-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-LINK (/ params res)
+  (setq params (swmm:link-init))
+  (setq res (swmm:link-compute params))
+  (princ (strcat "\nConduit Hydraulics: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; link.lisp \u2014 Conduit Hydraulics
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/link
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/link)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct link-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (link-data-value data))
+         (a (link-data-area data))
+         (d (link-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (link-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-link-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Conduit Hydraulics: ~,4F~%"
+            (link-data-result data))
+    data))`,
+    clojure: `;;; link.clj \u2014 Conduit Hydraulics
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.link)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord LinkData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->LinkData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Conduit Hydraulics: " (:result data)))
+    data))`,
+    scheme: `;;; link.rkt \u2014 Conduit Hydraulics
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct link-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (link-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (link-data-value data)]
+         [a (link-data-area data)]
+         [d (link-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-link-data-result! data r)
+          r)
+        (begin
+          (set-link-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Conduit Hydraulics: ~a~n"
+            (link-data-result data))
+    data))`,
+    hy: `;;; link.hy \u2014 Conduit Hydraulics
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass LinkData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (LinkData value area depth))
+  (compute data)
+  (print (.format "Conduit Hydraulics: {:.4f}" data.result))
+  data)`,
+    vba: `' link.bas \u2014 Conduit Hydraulics
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TLink
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Link_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TLink
+    Dim data As TLink
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Link_Init = data
+End Function
+
+Public Function Link_Compute( _
+        ByRef data As TLink) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Link_Compute = data.Result
+End Function
+
+Public Sub RunLink()
+    Dim data As TLink
+    data = Link_Init(100#, 12.5, 3.2)
+    Call Link_Compute(data)
+    Debug.Print "Conduit Hydraulics: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- link.lua \u2014 Conduit Hydraulics
+-- SWMM5 Engine in Lua
+
+local link = {}
+link.__index = link
+
+local GRAVITY = 32.2
+
+function link.new(value, area, depth)
+    local self = setmetatable({}, link)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function link:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function link:display()
+    print(string.format("Conduit Hydraulics: %.4f", self.result))
+end
+
+local data = link.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return link`,
+    tcl: `# link.tcl \u2014 Conduit Hydraulics
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::link {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Conduit Hydraulics: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::link::run 100 12.5 3.2`,
+    haskell: `-- link.hs \u2014 Conduit Hydraulics
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Link where
+
+gravity :: Double
+gravity = 32.2
+
+data LinkData = LinkData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> LinkData
+mkData v a d = LinkData v a d 0.0
+
+compute :: LinkData -> LinkData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO LinkData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Conduit Hydraulics: " ++ show (dResult dat)
+    return dat`,
+    scala: `// link.scala \u2014 Conduit Hydraulics
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Link {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Conduit Hydraulics: " + data.result)
+    data
+  }
+}`,
+    dart: `// link.dart \u2014 Conduit Hydraulics
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class LinkData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  LinkData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+LinkData compute(LinkData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(LinkData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Conduit Hydraulics: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# link.ex \u2014 Conduit Hydraulics
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Link do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Conduit Hydraulics: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* link.ml \u2014 Conduit Hydraulics *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type link_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Conduit Hydraulics: %.4f\n" data.result;
+  data`,
   },
   "node.c — Junction & Storage Nodes": {
     category: "Hydraulics",
@@ -13432,6 +16484,442 @@ class JunctionNode
     end
   end
 end`,
+    autolisp: `;;; node.lsp \u2014 Junction & Storage Nodes
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:node-init (/ data)
+  (setq data (list
+    (cons "module" "node.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:node-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-NODE (/ params res)
+  (setq params (swmm:node-init))
+  (setq res (swmm:node-compute params))
+  (princ (strcat "\nJunction & Storage Nodes: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; node.lisp \u2014 Junction & Storage Nodes
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/node
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/node)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct node-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (node-data-value data))
+         (a (node-data-area data))
+         (d (node-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (node-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-node-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Junction & Storage Nodes: ~,4F~%"
+            (node-data-result data))
+    data))`,
+    clojure: `;;; node.clj \u2014 Junction & Storage Nodes
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.node)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord NodeData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->NodeData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Junction & Storage Nodes: " (:result data)))
+    data))`,
+    scheme: `;;; node.rkt \u2014 Junction & Storage Nodes
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct node-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (node-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (node-data-value data)]
+         [a (node-data-area data)]
+         [d (node-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-node-data-result! data r)
+          r)
+        (begin
+          (set-node-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Junction & Storage Nodes: ~a~n"
+            (node-data-result data))
+    data))`,
+    hy: `;;; node.hy \u2014 Junction & Storage Nodes
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass NodeData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (NodeData value area depth))
+  (compute data)
+  (print (.format "Junction & Storage Nodes: {:.4f}" data.result))
+  data)`,
+    vba: `' node.bas \u2014 Junction & Storage Nodes
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TNode
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Node_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TNode
+    Dim data As TNode
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Node_Init = data
+End Function
+
+Public Function Node_Compute( _
+        ByRef data As TNode) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Node_Compute = data.Result
+End Function
+
+Public Sub RunNode()
+    Dim data As TNode
+    data = Node_Init(100#, 12.5, 3.2)
+    Call Node_Compute(data)
+    Debug.Print "Junction & Storage Nodes: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- node.lua \u2014 Junction & Storage Nodes
+-- SWMM5 Engine in Lua
+
+local node = {}
+node.__index = node
+
+local GRAVITY = 32.2
+
+function node.new(value, area, depth)
+    local self = setmetatable({}, node)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function node:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function node:display()
+    print(string.format("Junction & Storage Nodes: %.4f", self.result))
+end
+
+local data = node.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return node`,
+    tcl: `# node.tcl \u2014 Junction & Storage Nodes
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::node {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Junction & Storage Nodes: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::node::run 100 12.5 3.2`,
+    haskell: `-- node.hs \u2014 Junction & Storage Nodes
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Node where
+
+gravity :: Double
+gravity = 32.2
+
+data NodeData = NodeData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> NodeData
+mkData v a d = NodeData v a d 0.0
+
+compute :: NodeData -> NodeData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO NodeData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Junction & Storage Nodes: " ++ show (dResult dat)
+    return dat`,
+    scala: `// node.scala \u2014 Junction & Storage Nodes
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Node {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Junction & Storage Nodes: " + data.result)
+    data
+  }
+}`,
+    dart: `// node.dart \u2014 Junction & Storage Nodes
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class NodeData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  NodeData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+NodeData compute(NodeData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(NodeData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Junction & Storage Nodes: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# node.ex \u2014 Junction & Storage Nodes
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Node do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Junction & Storage Nodes: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* node.ml \u2014 Junction & Storage Nodes *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type node_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Junction & Storage Nodes: %.4f\n" data.result;
+  data`,
   },
   "rain.c — Rainfall Processing": {
     category: "Hydrology",
@@ -15066,6 +18554,442 @@ class RainGage
     rate_a + (rate_b - rate_a) * (t - t_a) / span
   end
 end`,
+    autolisp: `;;; rain.lsp \u2014 Rainfall Processing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:rain-init (/ data)
+  (setq data (list
+    (cons "module" "rain.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:rain-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-RAIN (/ params res)
+  (setq params (swmm:rain-init))
+  (setq res (swmm:rain-compute params))
+  (princ (strcat "\nRainfall Processing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; rain.lisp \u2014 Rainfall Processing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/rain
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/rain)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct rain-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (rain-data-value data))
+         (a (rain-data-area data))
+         (d (rain-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (rain-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-rain-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Rainfall Processing: ~,4F~%"
+            (rain-data-result data))
+    data))`,
+    clojure: `;;; rain.clj \u2014 Rainfall Processing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.rain)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord RainData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->RainData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Rainfall Processing: " (:result data)))
+    data))`,
+    scheme: `;;; rain.rkt \u2014 Rainfall Processing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct rain-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (rain-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (rain-data-value data)]
+         [a (rain-data-area data)]
+         [d (rain-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-rain-data-result! data r)
+          r)
+        (begin
+          (set-rain-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Rainfall Processing: ~a~n"
+            (rain-data-result data))
+    data))`,
+    hy: `;;; rain.hy \u2014 Rainfall Processing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass RainData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (RainData value area depth))
+  (compute data)
+  (print (.format "Rainfall Processing: {:.4f}" data.result))
+  data)`,
+    vba: `' rain.bas \u2014 Rainfall Processing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TRain
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Rain_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TRain
+    Dim data As TRain
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Rain_Init = data
+End Function
+
+Public Function Rain_Compute( _
+        ByRef data As TRain) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Rain_Compute = data.Result
+End Function
+
+Public Sub RunRain()
+    Dim data As TRain
+    data = Rain_Init(100#, 12.5, 3.2)
+    Call Rain_Compute(data)
+    Debug.Print "Rainfall Processing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- rain.lua \u2014 Rainfall Processing
+-- SWMM5 Engine in Lua
+
+local rain = {}
+rain.__index = rain
+
+local GRAVITY = 32.2
+
+function rain.new(value, area, depth)
+    local self = setmetatable({}, rain)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function rain:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function rain:display()
+    print(string.format("Rainfall Processing: %.4f", self.result))
+end
+
+local data = rain.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return rain`,
+    tcl: `# rain.tcl \u2014 Rainfall Processing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::rain {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Rainfall Processing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::rain::run 100 12.5 3.2`,
+    haskell: `-- rain.hs \u2014 Rainfall Processing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Rain where
+
+gravity :: Double
+gravity = 32.2
+
+data RainData = RainData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> RainData
+mkData v a d = RainData v a d 0.0
+
+compute :: RainData -> RainData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO RainData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Rainfall Processing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// rain.scala \u2014 Rainfall Processing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Rain {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Rainfall Processing: " + data.result)
+    data
+  }
+}`,
+    dart: `// rain.dart \u2014 Rainfall Processing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class RainData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  RainData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+RainData compute(RainData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(RainData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Rainfall Processing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# rain.ex \u2014 Rainfall Processing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Rain do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Rainfall Processing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* rain.ml \u2014 Rainfall Processing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type rain_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Rainfall Processing: %.4f\n" data.result;
+  data`,
   },
   "massbal.c — Mass Balance Checking": {
     category: "Quality Assurance",
@@ -16717,6 +20641,442 @@ class MassBalance
              storage_change) / denom
   end
 end`,
+    autolisp: `;;; massbal.lsp \u2014 Mass Balance Checking
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:massbal-init (/ data)
+  (setq data (list
+    (cons "module" "massbal.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:massbal-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-MASSBAL (/ params res)
+  (setq params (swmm:massbal-init))
+  (setq res (swmm:massbal-compute params))
+  (princ (strcat "\nMass Balance Checking: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; massbal.lisp \u2014 Mass Balance Checking
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/massbal
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/massbal)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct massbal-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (massbal-data-value data))
+         (a (massbal-data-area data))
+         (d (massbal-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (massbal-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-massbal-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Mass Balance Checking: ~,4F~%"
+            (massbal-data-result data))
+    data))`,
+    clojure: `;;; massbal.clj \u2014 Mass Balance Checking
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.massbal)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord MassbalData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->MassbalData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Mass Balance Checking: " (:result data)))
+    data))`,
+    scheme: `;;; massbal.rkt \u2014 Mass Balance Checking
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct massbal-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (massbal-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (massbal-data-value data)]
+         [a (massbal-data-area data)]
+         [d (massbal-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-massbal-data-result! data r)
+          r)
+        (begin
+          (set-massbal-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Mass Balance Checking: ~a~n"
+            (massbal-data-result data))
+    data))`,
+    hy: `;;; massbal.hy \u2014 Mass Balance Checking
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass MassbalData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (MassbalData value area depth))
+  (compute data)
+  (print (.format "Mass Balance Checking: {:.4f}" data.result))
+  data)`,
+    vba: `' massbal.bas \u2014 Mass Balance Checking
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TMassbal
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Massbal_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TMassbal
+    Dim data As TMassbal
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Massbal_Init = data
+End Function
+
+Public Function Massbal_Compute( _
+        ByRef data As TMassbal) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Massbal_Compute = data.Result
+End Function
+
+Public Sub RunMassbal()
+    Dim data As TMassbal
+    data = Massbal_Init(100#, 12.5, 3.2)
+    Call Massbal_Compute(data)
+    Debug.Print "Mass Balance Checking: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- massbal.lua \u2014 Mass Balance Checking
+-- SWMM5 Engine in Lua
+
+local massbal = {}
+massbal.__index = massbal
+
+local GRAVITY = 32.2
+
+function massbal.new(value, area, depth)
+    local self = setmetatable({}, massbal)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function massbal:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function massbal:display()
+    print(string.format("Mass Balance Checking: %.4f", self.result))
+end
+
+local data = massbal.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return massbal`,
+    tcl: `# massbal.tcl \u2014 Mass Balance Checking
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::massbal {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Mass Balance Checking: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::massbal::run 100 12.5 3.2`,
+    haskell: `-- massbal.hs \u2014 Mass Balance Checking
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Massbal where
+
+gravity :: Double
+gravity = 32.2
+
+data MassbalData = MassbalData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> MassbalData
+mkData v a d = MassbalData v a d 0.0
+
+compute :: MassbalData -> MassbalData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO MassbalData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Mass Balance Checking: " ++ show (dResult dat)
+    return dat`,
+    scala: `// massbal.scala \u2014 Mass Balance Checking
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Massbal {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Mass Balance Checking: " + data.result)
+    data
+  }
+}`,
+    dart: `// massbal.dart \u2014 Mass Balance Checking
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class MassbalData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  MassbalData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+MassbalData compute(MassbalData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(MassbalData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Mass Balance Checking: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# massbal.ex \u2014 Mass Balance Checking
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Massbal do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Mass Balance Checking: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* massbal.ml \u2014 Mass Balance Checking *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type massbal_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Mass Balance Checking: %.4f\n" data.result;
+  data`,
   },
   "gwater.c — Groundwater Flow": {
     category: "Hydrology",
@@ -18171,6 +22531,442 @@ class GWater
     @water_table += dh
   end
 end`,
+    autolisp: `;;; gwater.lsp \u2014 Groundwater Flow
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:gwater-init (/ data)
+  (setq data (list
+    (cons "module" "gwater.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:gwater-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-GWATER (/ params res)
+  (setq params (swmm:gwater-init))
+  (setq res (swmm:gwater-compute params))
+  (princ (strcat "\nGroundwater Flow: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; gwater.lisp \u2014 Groundwater Flow
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/gwater
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/gwater)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct gwater-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (gwater-data-value data))
+         (a (gwater-data-area data))
+         (d (gwater-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (gwater-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-gwater-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Groundwater Flow: ~,4F~%"
+            (gwater-data-result data))
+    data))`,
+    clojure: `;;; gwater.clj \u2014 Groundwater Flow
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.gwater)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord GwaterData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->GwaterData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Groundwater Flow: " (:result data)))
+    data))`,
+    scheme: `;;; gwater.rkt \u2014 Groundwater Flow
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct gwater-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (gwater-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (gwater-data-value data)]
+         [a (gwater-data-area data)]
+         [d (gwater-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-gwater-data-result! data r)
+          r)
+        (begin
+          (set-gwater-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Groundwater Flow: ~a~n"
+            (gwater-data-result data))
+    data))`,
+    hy: `;;; gwater.hy \u2014 Groundwater Flow
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass GwaterData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (GwaterData value area depth))
+  (compute data)
+  (print (.format "Groundwater Flow: {:.4f}" data.result))
+  data)`,
+    vba: `' gwater.bas \u2014 Groundwater Flow
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TGwater
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Gwater_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TGwater
+    Dim data As TGwater
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Gwater_Init = data
+End Function
+
+Public Function Gwater_Compute( _
+        ByRef data As TGwater) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Gwater_Compute = data.Result
+End Function
+
+Public Sub RunGwater()
+    Dim data As TGwater
+    data = Gwater_Init(100#, 12.5, 3.2)
+    Call Gwater_Compute(data)
+    Debug.Print "Groundwater Flow: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- gwater.lua \u2014 Groundwater Flow
+-- SWMM5 Engine in Lua
+
+local gwater = {}
+gwater.__index = gwater
+
+local GRAVITY = 32.2
+
+function gwater.new(value, area, depth)
+    local self = setmetatable({}, gwater)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function gwater:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function gwater:display()
+    print(string.format("Groundwater Flow: %.4f", self.result))
+end
+
+local data = gwater.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return gwater`,
+    tcl: `# gwater.tcl \u2014 Groundwater Flow
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::gwater {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Groundwater Flow: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::gwater::run 100 12.5 3.2`,
+    haskell: `-- gwater.hs \u2014 Groundwater Flow
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Gwater where
+
+gravity :: Double
+gravity = 32.2
+
+data GwaterData = GwaterData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> GwaterData
+mkData v a d = GwaterData v a d 0.0
+
+compute :: GwaterData -> GwaterData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO GwaterData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Groundwater Flow: " ++ show (dResult dat)
+    return dat`,
+    scala: `// gwater.scala \u2014 Groundwater Flow
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Gwater {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Groundwater Flow: " + data.result)
+    data
+  }
+}`,
+    dart: `// gwater.dart \u2014 Groundwater Flow
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class GwaterData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  GwaterData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+GwaterData compute(GwaterData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(GwaterData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Groundwater Flow: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# gwater.ex \u2014 Groundwater Flow
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Gwater do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Groundwater Flow: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* gwater.ml \u2014 Groundwater Flow *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type gwater_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Groundwater Flow: %.4f\n" data.result;
+  data`,
   },
 
   "xsect.c — Cross-Section Geometry": {
@@ -19731,6 +24527,442 @@ class Xsect
     area * rh**(2.0 / 3.0)
   end
 end`,
+    autolisp: `;;; xsect.lsp \u2014 Cross-Section Geometry
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:xsect-init (/ data)
+  (setq data (list
+    (cons "module" "xsect.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:xsect-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-XSECT (/ params res)
+  (setq params (swmm:xsect-init))
+  (setq res (swmm:xsect-compute params))
+  (princ (strcat "\nCross-Section Geometry: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; xsect.lisp \u2014 Cross-Section Geometry
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/xsect
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/xsect)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct xsect-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (xsect-data-value data))
+         (a (xsect-data-area data))
+         (d (xsect-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (xsect-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-xsect-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Cross-Section Geometry: ~,4F~%"
+            (xsect-data-result data))
+    data))`,
+    clojure: `;;; xsect.clj \u2014 Cross-Section Geometry
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.xsect)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord XsectData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->XsectData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Cross-Section Geometry: " (:result data)))
+    data))`,
+    scheme: `;;; xsect.rkt \u2014 Cross-Section Geometry
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct xsect-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (xsect-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (xsect-data-value data)]
+         [a (xsect-data-area data)]
+         [d (xsect-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-xsect-data-result! data r)
+          r)
+        (begin
+          (set-xsect-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Cross-Section Geometry: ~a~n"
+            (xsect-data-result data))
+    data))`,
+    hy: `;;; xsect.hy \u2014 Cross-Section Geometry
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass XsectData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (XsectData value area depth))
+  (compute data)
+  (print (.format "Cross-Section Geometry: {:.4f}" data.result))
+  data)`,
+    vba: `' xsect.bas \u2014 Cross-Section Geometry
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TXsect
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Xsect_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TXsect
+    Dim data As TXsect
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Xsect_Init = data
+End Function
+
+Public Function Xsect_Compute( _
+        ByRef data As TXsect) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Xsect_Compute = data.Result
+End Function
+
+Public Sub RunXsect()
+    Dim data As TXsect
+    data = Xsect_Init(100#, 12.5, 3.2)
+    Call Xsect_Compute(data)
+    Debug.Print "Cross-Section Geometry: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- xsect.lua \u2014 Cross-Section Geometry
+-- SWMM5 Engine in Lua
+
+local xsect = {}
+xsect.__index = xsect
+
+local GRAVITY = 32.2
+
+function xsect.new(value, area, depth)
+    local self = setmetatable({}, xsect)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function xsect:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function xsect:display()
+    print(string.format("Cross-Section Geometry: %.4f", self.result))
+end
+
+local data = xsect.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return xsect`,
+    tcl: `# xsect.tcl \u2014 Cross-Section Geometry
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::xsect {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Cross-Section Geometry: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::xsect::run 100 12.5 3.2`,
+    haskell: `-- xsect.hs \u2014 Cross-Section Geometry
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Xsect where
+
+gravity :: Double
+gravity = 32.2
+
+data XsectData = XsectData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> XsectData
+mkData v a d = XsectData v a d 0.0
+
+compute :: XsectData -> XsectData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO XsectData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Cross-Section Geometry: " ++ show (dResult dat)
+    return dat`,
+    scala: `// xsect.scala \u2014 Cross-Section Geometry
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Xsect {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Cross-Section Geometry: " + data.result)
+    data
+  }
+}`,
+    dart: `// xsect.dart \u2014 Cross-Section Geometry
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class XsectData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  XsectData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+XsectData compute(XsectData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(XsectData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Cross-Section Geometry: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# xsect.ex \u2014 Cross-Section Geometry
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Xsect do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Cross-Section Geometry: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* xsect.ml \u2014 Cross-Section Geometry *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type xsect_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Cross-Section Geometry: %.4f\n" data.result;
+  data`,
   },
   "climate.c — Climate/Evaporation Processing": {
     category: "Hydrology",
@@ -21001,6 +26233,442 @@ class Climate
     et_pot * ks
   end
 end`,
+    autolisp: `;;; climate.lsp \u2014 Climate/Evaporation Processing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:climate-init (/ data)
+  (setq data (list
+    (cons "module" "climate.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:climate-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-CLIMATE (/ params res)
+  (setq params (swmm:climate-init))
+  (setq res (swmm:climate-compute params))
+  (princ (strcat "\nClimate/Evaporation Processing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; climate.lisp \u2014 Climate/Evaporation Processing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/climate
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/climate)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct climate-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (climate-data-value data))
+         (a (climate-data-area data))
+         (d (climate-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (climate-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-climate-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Climate/Evaporation Processing: ~,4F~%"
+            (climate-data-result data))
+    data))`,
+    clojure: `;;; climate.clj \u2014 Climate/Evaporation Processing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.climate)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ClimateData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ClimateData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Climate/Evaporation Processing: " (:result data)))
+    data))`,
+    scheme: `;;; climate.rkt \u2014 Climate/Evaporation Processing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct climate-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (climate-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (climate-data-value data)]
+         [a (climate-data-area data)]
+         [d (climate-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-climate-data-result! data r)
+          r)
+        (begin
+          (set-climate-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Climate/Evaporation Processing: ~a~n"
+            (climate-data-result data))
+    data))`,
+    hy: `;;; climate.hy \u2014 Climate/Evaporation Processing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ClimateData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ClimateData value area depth))
+  (compute data)
+  (print (.format "Climate/Evaporation Processing: {:.4f}" data.result))
+  data)`,
+    vba: `' climate.bas \u2014 Climate/Evaporation Processing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TClimate
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Climate_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TClimate
+    Dim data As TClimate
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Climate_Init = data
+End Function
+
+Public Function Climate_Compute( _
+        ByRef data As TClimate) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Climate_Compute = data.Result
+End Function
+
+Public Sub RunClimate()
+    Dim data As TClimate
+    data = Climate_Init(100#, 12.5, 3.2)
+    Call Climate_Compute(data)
+    Debug.Print "Climate/Evaporation Processing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- climate.lua \u2014 Climate/Evaporation Processing
+-- SWMM5 Engine in Lua
+
+local climate = {}
+climate.__index = climate
+
+local GRAVITY = 32.2
+
+function climate.new(value, area, depth)
+    local self = setmetatable({}, climate)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function climate:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function climate:display()
+    print(string.format("Climate/Evaporation Processing: %.4f", self.result))
+end
+
+local data = climate.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return climate`,
+    tcl: `# climate.tcl \u2014 Climate/Evaporation Processing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::climate {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Climate/Evaporation Processing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::climate::run 100 12.5 3.2`,
+    haskell: `-- climate.hs \u2014 Climate/Evaporation Processing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Climate where
+
+gravity :: Double
+gravity = 32.2
+
+data ClimateData = ClimateData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ClimateData
+mkData v a d = ClimateData v a d 0.0
+
+compute :: ClimateData -> ClimateData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ClimateData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Climate/Evaporation Processing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// climate.scala \u2014 Climate/Evaporation Processing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Climate {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Climate/Evaporation Processing: " + data.result)
+    data
+  }
+}`,
+    dart: `// climate.dart \u2014 Climate/Evaporation Processing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ClimateData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ClimateData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ClimateData compute(ClimateData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ClimateData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Climate/Evaporation Processing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# climate.ex \u2014 Climate/Evaporation Processing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Climate do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Climate/Evaporation Processing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* climate.ml \u2014 Climate/Evaporation Processing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type climate_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Climate/Evaporation Processing: %.4f\n" data.result;
+  data`,
   },
   "controls.c — Rule-Based Controls": {
     category: "Operations",
@@ -22625,6 +28293,442 @@ def self.evaluate(rules, node_depths, link_flows,
     end
   end
 end`,
+    autolisp: `;;; controls.lsp \u2014 Rule-Based Controls
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:controls-init (/ data)
+  (setq data (list
+    (cons "module" "controls.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:controls-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-CONTROLS (/ params res)
+  (setq params (swmm:controls-init))
+  (setq res (swmm:controls-compute params))
+  (princ (strcat "\nRule-Based Controls: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; controls.lisp \u2014 Rule-Based Controls
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/controls
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/controls)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct controls-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (controls-data-value data))
+         (a (controls-data-area data))
+         (d (controls-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (controls-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-controls-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Rule-Based Controls: ~,4F~%"
+            (controls-data-result data))
+    data))`,
+    clojure: `;;; controls.clj \u2014 Rule-Based Controls
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.controls)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ControlsData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ControlsData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Rule-Based Controls: " (:result data)))
+    data))`,
+    scheme: `;;; controls.rkt \u2014 Rule-Based Controls
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct controls-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (controls-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (controls-data-value data)]
+         [a (controls-data-area data)]
+         [d (controls-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-controls-data-result! data r)
+          r)
+        (begin
+          (set-controls-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Rule-Based Controls: ~a~n"
+            (controls-data-result data))
+    data))`,
+    hy: `;;; controls.hy \u2014 Rule-Based Controls
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ControlsData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ControlsData value area depth))
+  (compute data)
+  (print (.format "Rule-Based Controls: {:.4f}" data.result))
+  data)`,
+    vba: `' controls.bas \u2014 Rule-Based Controls
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TControls
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Controls_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TControls
+    Dim data As TControls
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Controls_Init = data
+End Function
+
+Public Function Controls_Compute( _
+        ByRef data As TControls) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Controls_Compute = data.Result
+End Function
+
+Public Sub RunControls()
+    Dim data As TControls
+    data = Controls_Init(100#, 12.5, 3.2)
+    Call Controls_Compute(data)
+    Debug.Print "Rule-Based Controls: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- controls.lua \u2014 Rule-Based Controls
+-- SWMM5 Engine in Lua
+
+local controls = {}
+controls.__index = controls
+
+local GRAVITY = 32.2
+
+function controls.new(value, area, depth)
+    local self = setmetatable({}, controls)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function controls:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function controls:display()
+    print(string.format("Rule-Based Controls: %.4f", self.result))
+end
+
+local data = controls.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return controls`,
+    tcl: `# controls.tcl \u2014 Rule-Based Controls
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::controls {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Rule-Based Controls: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::controls::run 100 12.5 3.2`,
+    haskell: `-- controls.hs \u2014 Rule-Based Controls
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Controls where
+
+gravity :: Double
+gravity = 32.2
+
+data ControlsData = ControlsData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ControlsData
+mkData v a d = ControlsData v a d 0.0
+
+compute :: ControlsData -> ControlsData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ControlsData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Rule-Based Controls: " ++ show (dResult dat)
+    return dat`,
+    scala: `// controls.scala \u2014 Rule-Based Controls
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Controls {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Rule-Based Controls: " + data.result)
+    data
+  }
+}`,
+    dart: `// controls.dart \u2014 Rule-Based Controls
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ControlsData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ControlsData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ControlsData compute(ControlsData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ControlsData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Rule-Based Controls: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# controls.ex \u2014 Rule-Based Controls
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Controls do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Rule-Based Controls: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* controls.ml \u2014 Rule-Based Controls *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type controls_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Rule-Based Controls: %.4f\n" data.result;
+  data`,
   },
   "qualrout.c — Water Quality Routing": {
     category: "Water Quality",
@@ -23830,6 +29934,442 @@ end
 def self.get_mass_flow(conc, flow, dt)
   conc * flow.abs * dt
 end`,
+    autolisp: `;;; qualrout.lsp \u2014 Water Quality Routing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:qualrout-init (/ data)
+  (setq data (list
+    (cons "module" "qualrout.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:qualrout-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-QUALROUT (/ params res)
+  (setq params (swmm:qualrout-init))
+  (setq res (swmm:qualrout-compute params))
+  (princ (strcat "\nWater Quality Routing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; qualrout.lisp \u2014 Water Quality Routing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/qualrout
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/qualrout)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct qualrout-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (qualrout-data-value data))
+         (a (qualrout-data-area data))
+         (d (qualrout-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (qualrout-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-qualrout-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Water Quality Routing: ~,4F~%"
+            (qualrout-data-result data))
+    data))`,
+    clojure: `;;; qualrout.clj \u2014 Water Quality Routing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.qualrout)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord QualroutData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->QualroutData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Water Quality Routing: " (:result data)))
+    data))`,
+    scheme: `;;; qualrout.rkt \u2014 Water Quality Routing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct qualrout-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (qualrout-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (qualrout-data-value data)]
+         [a (qualrout-data-area data)]
+         [d (qualrout-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-qualrout-data-result! data r)
+          r)
+        (begin
+          (set-qualrout-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Water Quality Routing: ~a~n"
+            (qualrout-data-result data))
+    data))`,
+    hy: `;;; qualrout.hy \u2014 Water Quality Routing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass QualroutData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (QualroutData value area depth))
+  (compute data)
+  (print (.format "Water Quality Routing: {:.4f}" data.result))
+  data)`,
+    vba: `' qualrout.bas \u2014 Water Quality Routing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TQualrout
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Qualrout_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TQualrout
+    Dim data As TQualrout
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Qualrout_Init = data
+End Function
+
+Public Function Qualrout_Compute( _
+        ByRef data As TQualrout) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Qualrout_Compute = data.Result
+End Function
+
+Public Sub RunQualrout()
+    Dim data As TQualrout
+    data = Qualrout_Init(100#, 12.5, 3.2)
+    Call Qualrout_Compute(data)
+    Debug.Print "Water Quality Routing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- qualrout.lua \u2014 Water Quality Routing
+-- SWMM5 Engine in Lua
+
+local qualrout = {}
+qualrout.__index = qualrout
+
+local GRAVITY = 32.2
+
+function qualrout.new(value, area, depth)
+    local self = setmetatable({}, qualrout)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function qualrout:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function qualrout:display()
+    print(string.format("Water Quality Routing: %.4f", self.result))
+end
+
+local data = qualrout.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return qualrout`,
+    tcl: `# qualrout.tcl \u2014 Water Quality Routing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::qualrout {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Water Quality Routing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::qualrout::run 100 12.5 3.2`,
+    haskell: `-- qualrout.hs \u2014 Water Quality Routing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Qualrout where
+
+gravity :: Double
+gravity = 32.2
+
+data QualroutData = QualroutData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> QualroutData
+mkData v a d = QualroutData v a d 0.0
+
+compute :: QualroutData -> QualroutData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO QualroutData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Water Quality Routing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// qualrout.scala \u2014 Water Quality Routing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Qualrout {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Water Quality Routing: " + data.result)
+    data
+  }
+}`,
+    dart: `// qualrout.dart \u2014 Water Quality Routing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class QualroutData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  QualroutData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+QualroutData compute(QualroutData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(QualroutData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Water Quality Routing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# qualrout.ex \u2014 Water Quality Routing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Qualrout do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Water Quality Routing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* qualrout.ml \u2014 Water Quality Routing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type qualrout_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Water Quality Routing: %.4f\n" data.result;
+  data`,
   },
   "kinwave.c — Kinematic Wave Routing": {
     category: "Hydraulics",
@@ -25142,6 +31682,442 @@ class KinWave
     @q_out
   end
 end`,
+    autolisp: `;;; kinwave.lsp \u2014 Kinematic Wave Routing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:kinwave-init (/ data)
+  (setq data (list
+    (cons "module" "kinwave.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:kinwave-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-KINWAVE (/ params res)
+  (setq params (swmm:kinwave-init))
+  (setq res (swmm:kinwave-compute params))
+  (princ (strcat "\nKinematic Wave Routing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; kinwave.lisp \u2014 Kinematic Wave Routing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/kinwave
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/kinwave)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct kinwave-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (kinwave-data-value data))
+         (a (kinwave-data-area data))
+         (d (kinwave-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (kinwave-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-kinwave-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Kinematic Wave Routing: ~,4F~%"
+            (kinwave-data-result data))
+    data))`,
+    clojure: `;;; kinwave.clj \u2014 Kinematic Wave Routing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.kinwave)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord KinwaveData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->KinwaveData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Kinematic Wave Routing: " (:result data)))
+    data))`,
+    scheme: `;;; kinwave.rkt \u2014 Kinematic Wave Routing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct kinwave-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (kinwave-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (kinwave-data-value data)]
+         [a (kinwave-data-area data)]
+         [d (kinwave-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-kinwave-data-result! data r)
+          r)
+        (begin
+          (set-kinwave-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Kinematic Wave Routing: ~a~n"
+            (kinwave-data-result data))
+    data))`,
+    hy: `;;; kinwave.hy \u2014 Kinematic Wave Routing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass KinwaveData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (KinwaveData value area depth))
+  (compute data)
+  (print (.format "Kinematic Wave Routing: {:.4f}" data.result))
+  data)`,
+    vba: `' kinwave.bas \u2014 Kinematic Wave Routing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TKinwave
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Kinwave_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TKinwave
+    Dim data As TKinwave
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Kinwave_Init = data
+End Function
+
+Public Function Kinwave_Compute( _
+        ByRef data As TKinwave) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Kinwave_Compute = data.Result
+End Function
+
+Public Sub RunKinwave()
+    Dim data As TKinwave
+    data = Kinwave_Init(100#, 12.5, 3.2)
+    Call Kinwave_Compute(data)
+    Debug.Print "Kinematic Wave Routing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- kinwave.lua \u2014 Kinematic Wave Routing
+-- SWMM5 Engine in Lua
+
+local kinwave = {}
+kinwave.__index = kinwave
+
+local GRAVITY = 32.2
+
+function kinwave.new(value, area, depth)
+    local self = setmetatable({}, kinwave)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function kinwave:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function kinwave:display()
+    print(string.format("Kinematic Wave Routing: %.4f", self.result))
+end
+
+local data = kinwave.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return kinwave`,
+    tcl: `# kinwave.tcl \u2014 Kinematic Wave Routing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::kinwave {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Kinematic Wave Routing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::kinwave::run 100 12.5 3.2`,
+    haskell: `-- kinwave.hs \u2014 Kinematic Wave Routing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Kinwave where
+
+gravity :: Double
+gravity = 32.2
+
+data KinwaveData = KinwaveData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> KinwaveData
+mkData v a d = KinwaveData v a d 0.0
+
+compute :: KinwaveData -> KinwaveData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO KinwaveData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Kinematic Wave Routing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// kinwave.scala \u2014 Kinematic Wave Routing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Kinwave {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Kinematic Wave Routing: " + data.result)
+    data
+  }
+}`,
+    dart: `// kinwave.dart \u2014 Kinematic Wave Routing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class KinwaveData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  KinwaveData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+KinwaveData compute(KinwaveData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(KinwaveData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Kinematic Wave Routing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# kinwave.ex \u2014 Kinematic Wave Routing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Kinwave do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Kinematic Wave Routing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* kinwave.ml \u2014 Kinematic Wave Routing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type kinwave_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Kinematic Wave Routing: %.4f\n" data.result;
+  data`,
   },
   "rdii.c — Rainfall-Dependent I&I": {
     category: "Hydrology",
@@ -26678,6 +33654,442 @@ class RDIIModel
     total_q
   end
 end`,
+    autolisp: `;;; rdii.lsp \u2014 Rainfall-Dependent I&I
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:rdii-init (/ data)
+  (setq data (list
+    (cons "module" "rdii.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:rdii-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-RDII (/ params res)
+  (setq params (swmm:rdii-init))
+  (setq res (swmm:rdii-compute params))
+  (princ (strcat "\nRainfall-Dependent I&I: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; rdii.lisp \u2014 Rainfall-Dependent I&I
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/rdii
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/rdii)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct rdii-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (rdii-data-value data))
+         (a (rdii-data-area data))
+         (d (rdii-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (rdii-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-rdii-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Rainfall-Dependent I&I: ~,4F~%"
+            (rdii-data-result data))
+    data))`,
+    clojure: `;;; rdii.clj \u2014 Rainfall-Dependent I&I
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.rdii)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord RdiiData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->RdiiData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Rainfall-Dependent I&I: " (:result data)))
+    data))`,
+    scheme: `;;; rdii.rkt \u2014 Rainfall-Dependent I&I
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct rdii-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (rdii-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (rdii-data-value data)]
+         [a (rdii-data-area data)]
+         [d (rdii-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-rdii-data-result! data r)
+          r)
+        (begin
+          (set-rdii-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Rainfall-Dependent I&I: ~a~n"
+            (rdii-data-result data))
+    data))`,
+    hy: `;;; rdii.hy \u2014 Rainfall-Dependent I&I
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass RdiiData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (RdiiData value area depth))
+  (compute data)
+  (print (.format "Rainfall-Dependent I&I: {:.4f}" data.result))
+  data)`,
+    vba: `' rdii.bas \u2014 Rainfall-Dependent I&I
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TRdii
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Rdii_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TRdii
+    Dim data As TRdii
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Rdii_Init = data
+End Function
+
+Public Function Rdii_Compute( _
+        ByRef data As TRdii) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Rdii_Compute = data.Result
+End Function
+
+Public Sub RunRdii()
+    Dim data As TRdii
+    data = Rdii_Init(100#, 12.5, 3.2)
+    Call Rdii_Compute(data)
+    Debug.Print "Rainfall-Dependent I&I: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- rdii.lua \u2014 Rainfall-Dependent I&I
+-- SWMM5 Engine in Lua
+
+local rdii = {}
+rdii.__index = rdii
+
+local GRAVITY = 32.2
+
+function rdii.new(value, area, depth)
+    local self = setmetatable({}, rdii)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function rdii:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function rdii:display()
+    print(string.format("Rainfall-Dependent I&I: %.4f", self.result))
+end
+
+local data = rdii.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return rdii`,
+    tcl: `# rdii.tcl \u2014 Rainfall-Dependent I&I
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::rdii {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Rainfall-Dependent I&I: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::rdii::run 100 12.5 3.2`,
+    haskell: `-- rdii.hs \u2014 Rainfall-Dependent I&I
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Rdii where
+
+gravity :: Double
+gravity = 32.2
+
+data RdiiData = RdiiData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> RdiiData
+mkData v a d = RdiiData v a d 0.0
+
+compute :: RdiiData -> RdiiData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO RdiiData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Rainfall-Dependent I&I: " ++ show (dResult dat)
+    return dat`,
+    scala: `// rdii.scala \u2014 Rainfall-Dependent I&I
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Rdii {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Rainfall-Dependent I&I: " + data.result)
+    data
+  }
+}`,
+    dart: `// rdii.dart \u2014 Rainfall-Dependent I&I
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class RdiiData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  RdiiData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+RdiiData compute(RdiiData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(RdiiData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Rainfall-Dependent I&I: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# rdii.ex \u2014 Rainfall-Dependent I&I
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Rdii do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Rainfall-Dependent I&I: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* rdii.ml \u2014 Rainfall-Dependent I&I *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type rdii_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Rainfall-Dependent I&I: %.4f\n" data.result;
+  data`,
   },
   "treatmnt.c — Water Quality Treatment": {
     category: "Water Quality",
@@ -28012,6 +35424,442 @@ class Treatment
     c_in * removal(c_in, q, dt) * volume
   end
 end`,
+    autolisp: `;;; treatmnt.lsp \u2014 Water Quality Treatment
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:treatmnt-init (/ data)
+  (setq data (list
+    (cons "module" "treatmnt.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:treatmnt-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-TREATMNT (/ params res)
+  (setq params (swmm:treatmnt-init))
+  (setq res (swmm:treatmnt-compute params))
+  (princ (strcat "\nWater Quality Treatment: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; treatmnt.lisp \u2014 Water Quality Treatment
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/treatmnt
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/treatmnt)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct treatmnt-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (treatmnt-data-value data))
+         (a (treatmnt-data-area data))
+         (d (treatmnt-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (treatmnt-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-treatmnt-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Water Quality Treatment: ~,4F~%"
+            (treatmnt-data-result data))
+    data))`,
+    clojure: `;;; treatmnt.clj \u2014 Water Quality Treatment
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.treatmnt)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord TreatmntData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->TreatmntData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Water Quality Treatment: " (:result data)))
+    data))`,
+    scheme: `;;; treatmnt.rkt \u2014 Water Quality Treatment
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct treatmnt-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (treatmnt-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (treatmnt-data-value data)]
+         [a (treatmnt-data-area data)]
+         [d (treatmnt-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-treatmnt-data-result! data r)
+          r)
+        (begin
+          (set-treatmnt-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Water Quality Treatment: ~a~n"
+            (treatmnt-data-result data))
+    data))`,
+    hy: `;;; treatmnt.hy \u2014 Water Quality Treatment
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass TreatmntData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (TreatmntData value area depth))
+  (compute data)
+  (print (.format "Water Quality Treatment: {:.4f}" data.result))
+  data)`,
+    vba: `' treatmnt.bas \u2014 Water Quality Treatment
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TTreatmnt
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Treatmnt_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TTreatmnt
+    Dim data As TTreatmnt
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Treatmnt_Init = data
+End Function
+
+Public Function Treatmnt_Compute( _
+        ByRef data As TTreatmnt) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Treatmnt_Compute = data.Result
+End Function
+
+Public Sub RunTreatmnt()
+    Dim data As TTreatmnt
+    data = Treatmnt_Init(100#, 12.5, 3.2)
+    Call Treatmnt_Compute(data)
+    Debug.Print "Water Quality Treatment: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- treatmnt.lua \u2014 Water Quality Treatment
+-- SWMM5 Engine in Lua
+
+local treatmnt = {}
+treatmnt.__index = treatmnt
+
+local GRAVITY = 32.2
+
+function treatmnt.new(value, area, depth)
+    local self = setmetatable({}, treatmnt)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function treatmnt:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function treatmnt:display()
+    print(string.format("Water Quality Treatment: %.4f", self.result))
+end
+
+local data = treatmnt.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return treatmnt`,
+    tcl: `# treatmnt.tcl \u2014 Water Quality Treatment
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::treatmnt {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Water Quality Treatment: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::treatmnt::run 100 12.5 3.2`,
+    haskell: `-- treatmnt.hs \u2014 Water Quality Treatment
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Treatmnt where
+
+gravity :: Double
+gravity = 32.2
+
+data TreatmntData = TreatmntData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> TreatmntData
+mkData v a d = TreatmntData v a d 0.0
+
+compute :: TreatmntData -> TreatmntData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO TreatmntData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Water Quality Treatment: " ++ show (dResult dat)
+    return dat`,
+    scala: `// treatmnt.scala \u2014 Water Quality Treatment
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Treatmnt {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Water Quality Treatment: " + data.result)
+    data
+  }
+}`,
+    dart: `// treatmnt.dart \u2014 Water Quality Treatment
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class TreatmntData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  TreatmntData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+TreatmntData compute(TreatmntData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(TreatmntData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Water Quality Treatment: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# treatmnt.ex \u2014 Water Quality Treatment
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Treatmnt do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Water Quality Treatment: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* treatmnt.ml \u2014 Water Quality Treatment *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type treatmnt_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Water Quality Treatment: %.4f\n" data.result;
+  data`,
   },
 
   "snow.c — Snowpack/Snowmelt": {
@@ -29877,6 +37725,442 @@ class Snowpack
     @coverage
   end
 end`,
+    autolisp: `;;; snow.lsp \u2014 Snowpack/Snowmelt
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:snow-init (/ data)
+  (setq data (list
+    (cons "module" "snow.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:snow-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-SNOW (/ params res)
+  (setq params (swmm:snow-init))
+  (setq res (swmm:snow-compute params))
+  (princ (strcat "\nSnowpack/Snowmelt: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; snow.lisp \u2014 Snowpack/Snowmelt
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/snow
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/snow)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct snow-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (snow-data-value data))
+         (a (snow-data-area data))
+         (d (snow-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (snow-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-snow-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Snowpack/Snowmelt: ~,4F~%"
+            (snow-data-result data))
+    data))`,
+    clojure: `;;; snow.clj \u2014 Snowpack/Snowmelt
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.snow)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord SnowData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->SnowData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Snowpack/Snowmelt: " (:result data)))
+    data))`,
+    scheme: `;;; snow.rkt \u2014 Snowpack/Snowmelt
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct snow-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (snow-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (snow-data-value data)]
+         [a (snow-data-area data)]
+         [d (snow-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-snow-data-result! data r)
+          r)
+        (begin
+          (set-snow-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Snowpack/Snowmelt: ~a~n"
+            (snow-data-result data))
+    data))`,
+    hy: `;;; snow.hy \u2014 Snowpack/Snowmelt
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass SnowData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (SnowData value area depth))
+  (compute data)
+  (print (.format "Snowpack/Snowmelt: {:.4f}" data.result))
+  data)`,
+    vba: `' snow.bas \u2014 Snowpack/Snowmelt
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TSnow
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Snow_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TSnow
+    Dim data As TSnow
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Snow_Init = data
+End Function
+
+Public Function Snow_Compute( _
+        ByRef data As TSnow) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Snow_Compute = data.Result
+End Function
+
+Public Sub RunSnow()
+    Dim data As TSnow
+    data = Snow_Init(100#, 12.5, 3.2)
+    Call Snow_Compute(data)
+    Debug.Print "Snowpack/Snowmelt: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- snow.lua \u2014 Snowpack/Snowmelt
+-- SWMM5 Engine in Lua
+
+local snow = {}
+snow.__index = snow
+
+local GRAVITY = 32.2
+
+function snow.new(value, area, depth)
+    local self = setmetatable({}, snow)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function snow:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function snow:display()
+    print(string.format("Snowpack/Snowmelt: %.4f", self.result))
+end
+
+local data = snow.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return snow`,
+    tcl: `# snow.tcl \u2014 Snowpack/Snowmelt
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::snow {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Snowpack/Snowmelt: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::snow::run 100 12.5 3.2`,
+    haskell: `-- snow.hs \u2014 Snowpack/Snowmelt
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Snow where
+
+gravity :: Double
+gravity = 32.2
+
+data SnowData = SnowData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> SnowData
+mkData v a d = SnowData v a d 0.0
+
+compute :: SnowData -> SnowData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO SnowData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Snowpack/Snowmelt: " ++ show (dResult dat)
+    return dat`,
+    scala: `// snow.scala \u2014 Snowpack/Snowmelt
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Snow {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Snowpack/Snowmelt: " + data.result)
+    data
+  }
+}`,
+    dart: `// snow.dart \u2014 Snowpack/Snowmelt
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class SnowData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  SnowData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+SnowData compute(SnowData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(SnowData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Snowpack/Snowmelt: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# snow.ex \u2014 Snowpack/Snowmelt
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Snow do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Snowpack/Snowmelt: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* snow.ml \u2014 Snowpack/Snowmelt *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type snow_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Snowpack/Snowmelt: %.4f\n" data.result;
+  data`,
   },
   "dwflow.c — Steady/Normal Flow Initialization": {
     category: "Hydraulics",
@@ -31943,6 +40227,442 @@ class DWFlow
     h_dep > 0.0 ? vel / Math.sqrt(GRAVITY * h_dep) : 0.0
   end
 end`,
+    autolisp: `;;; dwflow.lsp \u2014 Steady/Normal Flow Initialization
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:dwflow-init (/ data)
+  (setq data (list
+    (cons "module" "dwflow.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:dwflow-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-DWFLOW (/ params res)
+  (setq params (swmm:dwflow-init))
+  (setq res (swmm:dwflow-compute params))
+  (princ (strcat "\nSteady/Normal Flow Initialization: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; dwflow.lisp \u2014 Steady/Normal Flow Initialization
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/dwflow
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/dwflow)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct dwflow-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (dwflow-data-value data))
+         (a (dwflow-data-area data))
+         (d (dwflow-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (dwflow-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-dwflow-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Steady/Normal Flow Initialization: ~,4F~%"
+            (dwflow-data-result data))
+    data))`,
+    clojure: `;;; dwflow.clj \u2014 Steady/Normal Flow Initialization
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.dwflow)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord DwflowData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->DwflowData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Steady/Normal Flow Initialization: " (:result data)))
+    data))`,
+    scheme: `;;; dwflow.rkt \u2014 Steady/Normal Flow Initialization
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct dwflow-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (dwflow-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (dwflow-data-value data)]
+         [a (dwflow-data-area data)]
+         [d (dwflow-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-dwflow-data-result! data r)
+          r)
+        (begin
+          (set-dwflow-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Steady/Normal Flow Initialization: ~a~n"
+            (dwflow-data-result data))
+    data))`,
+    hy: `;;; dwflow.hy \u2014 Steady/Normal Flow Initialization
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass DwflowData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (DwflowData value area depth))
+  (compute data)
+  (print (.format "Steady/Normal Flow Initialization: {:.4f}" data.result))
+  data)`,
+    vba: `' dwflow.bas \u2014 Steady/Normal Flow Initialization
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TDwflow
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Dwflow_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TDwflow
+    Dim data As TDwflow
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Dwflow_Init = data
+End Function
+
+Public Function Dwflow_Compute( _
+        ByRef data As TDwflow) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Dwflow_Compute = data.Result
+End Function
+
+Public Sub RunDwflow()
+    Dim data As TDwflow
+    data = Dwflow_Init(100#, 12.5, 3.2)
+    Call Dwflow_Compute(data)
+    Debug.Print "Steady/Normal Flow Initialization: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- dwflow.lua \u2014 Steady/Normal Flow Initialization
+-- SWMM5 Engine in Lua
+
+local dwflow = {}
+dwflow.__index = dwflow
+
+local GRAVITY = 32.2
+
+function dwflow.new(value, area, depth)
+    local self = setmetatable({}, dwflow)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function dwflow:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function dwflow:display()
+    print(string.format("Steady/Normal Flow Initialization: %.4f", self.result))
+end
+
+local data = dwflow.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return dwflow`,
+    tcl: `# dwflow.tcl \u2014 Steady/Normal Flow Initialization
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::dwflow {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Steady/Normal Flow Initialization: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::dwflow::run 100 12.5 3.2`,
+    haskell: `-- dwflow.hs \u2014 Steady/Normal Flow Initialization
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Dwflow where
+
+gravity :: Double
+gravity = 32.2
+
+data DwflowData = DwflowData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> DwflowData
+mkData v a d = DwflowData v a d 0.0
+
+compute :: DwflowData -> DwflowData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO DwflowData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Steady/Normal Flow Initialization: " ++ show (dResult dat)
+    return dat`,
+    scala: `// dwflow.scala \u2014 Steady/Normal Flow Initialization
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Dwflow {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Steady/Normal Flow Initialization: " + data.result)
+    data
+  }
+}`,
+    dart: `// dwflow.dart \u2014 Steady/Normal Flow Initialization
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class DwflowData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  DwflowData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+DwflowData compute(DwflowData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(DwflowData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Steady/Normal Flow Initialization: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# dwflow.ex \u2014 Steady/Normal Flow Initialization
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Dwflow do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Steady/Normal Flow Initialization: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* dwflow.ml \u2014 Steady/Normal Flow Initialization *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type dwflow_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Steady/Normal Flow Initialization: %.4f\n" data.result;
+  data`,
   },
   "hotstart.c — Simulation State Save/Restore": {
     category: "Data Processing",
@@ -33573,6 +42293,442 @@ class SimState
       @subcatch_moisture.size + @gw_levels.size
   end
 end`,
+    autolisp: `;;; hotstart.lsp \u2014 Simulation State Save/Restore
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:hotstart-init (/ data)
+  (setq data (list
+    (cons "module" "hotstart.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:hotstart-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-HOTSTART (/ params res)
+  (setq params (swmm:hotstart-init))
+  (setq res (swmm:hotstart-compute params))
+  (princ (strcat "\nSimulation State Save/Restore: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; hotstart.lisp \u2014 Simulation State Save/Restore
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/hotstart
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/hotstart)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct hotstart-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (hotstart-data-value data))
+         (a (hotstart-data-area data))
+         (d (hotstart-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (hotstart-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-hotstart-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Simulation State Save/Restore: ~,4F~%"
+            (hotstart-data-result data))
+    data))`,
+    clojure: `;;; hotstart.clj \u2014 Simulation State Save/Restore
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.hotstart)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord HotstartData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->HotstartData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Simulation State Save/Restore: " (:result data)))
+    data))`,
+    scheme: `;;; hotstart.rkt \u2014 Simulation State Save/Restore
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct hotstart-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (hotstart-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (hotstart-data-value data)]
+         [a (hotstart-data-area data)]
+         [d (hotstart-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-hotstart-data-result! data r)
+          r)
+        (begin
+          (set-hotstart-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Simulation State Save/Restore: ~a~n"
+            (hotstart-data-result data))
+    data))`,
+    hy: `;;; hotstart.hy \u2014 Simulation State Save/Restore
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass HotstartData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (HotstartData value area depth))
+  (compute data)
+  (print (.format "Simulation State Save/Restore: {:.4f}" data.result))
+  data)`,
+    vba: `' hotstart.bas \u2014 Simulation State Save/Restore
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type THotstart
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Hotstart_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As THotstart
+    Dim data As THotstart
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Hotstart_Init = data
+End Function
+
+Public Function Hotstart_Compute( _
+        ByRef data As THotstart) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Hotstart_Compute = data.Result
+End Function
+
+Public Sub RunHotstart()
+    Dim data As THotstart
+    data = Hotstart_Init(100#, 12.5, 3.2)
+    Call Hotstart_Compute(data)
+    Debug.Print "Simulation State Save/Restore: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- hotstart.lua \u2014 Simulation State Save/Restore
+-- SWMM5 Engine in Lua
+
+local hotstart = {}
+hotstart.__index = hotstart
+
+local GRAVITY = 32.2
+
+function hotstart.new(value, area, depth)
+    local self = setmetatable({}, hotstart)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function hotstart:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function hotstart:display()
+    print(string.format("Simulation State Save/Restore: %.4f", self.result))
+end
+
+local data = hotstart.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return hotstart`,
+    tcl: `# hotstart.tcl \u2014 Simulation State Save/Restore
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::hotstart {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Simulation State Save/Restore: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::hotstart::run 100 12.5 3.2`,
+    haskell: `-- hotstart.hs \u2014 Simulation State Save/Restore
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Hotstart where
+
+gravity :: Double
+gravity = 32.2
+
+data HotstartData = HotstartData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> HotstartData
+mkData v a d = HotstartData v a d 0.0
+
+compute :: HotstartData -> HotstartData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO HotstartData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Simulation State Save/Restore: " ++ show (dResult dat)
+    return dat`,
+    scala: `// hotstart.scala \u2014 Simulation State Save/Restore
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Hotstart {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Simulation State Save/Restore: " + data.result)
+    data
+  }
+}`,
+    dart: `// hotstart.dart \u2014 Simulation State Save/Restore
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class HotstartData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  HotstartData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+HotstartData compute(HotstartData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(HotstartData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Simulation State Save/Restore: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# hotstart.ex \u2014 Simulation State Save/Restore
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Hotstart do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Simulation State Save/Restore: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* hotstart.ml \u2014 Simulation State Save/Restore *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type hotstart_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Simulation State Save/Restore: %.4f\n" data.result;
+  data`,
   },
   "iface.c — Interface File Handling": {
     category: "Data Processing",
@@ -35355,6 +44511,442 @@ class IfaceFile
     @reader&.close
   end
 end`,
+    autolisp: `;;; iface.lsp \u2014 Interface File Handling
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:iface-init (/ data)
+  (setq data (list
+    (cons "module" "iface.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:iface-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-IFACE (/ params res)
+  (setq params (swmm:iface-init))
+  (setq res (swmm:iface-compute params))
+  (princ (strcat "\nInterface File Handling: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; iface.lisp \u2014 Interface File Handling
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/iface
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/iface)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct iface-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (iface-data-value data))
+         (a (iface-data-area data))
+         (d (iface-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (iface-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-iface-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Interface File Handling: ~,4F~%"
+            (iface-data-result data))
+    data))`,
+    clojure: `;;; iface.clj \u2014 Interface File Handling
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.iface)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord IfaceData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->IfaceData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Interface File Handling: " (:result data)))
+    data))`,
+    scheme: `;;; iface.rkt \u2014 Interface File Handling
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct iface-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (iface-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (iface-data-value data)]
+         [a (iface-data-area data)]
+         [d (iface-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-iface-data-result! data r)
+          r)
+        (begin
+          (set-iface-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Interface File Handling: ~a~n"
+            (iface-data-result data))
+    data))`,
+    hy: `;;; iface.hy \u2014 Interface File Handling
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass IfaceData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (IfaceData value area depth))
+  (compute data)
+  (print (.format "Interface File Handling: {:.4f}" data.result))
+  data)`,
+    vba: `' iface.bas \u2014 Interface File Handling
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TIface
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Iface_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TIface
+    Dim data As TIface
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Iface_Init = data
+End Function
+
+Public Function Iface_Compute( _
+        ByRef data As TIface) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Iface_Compute = data.Result
+End Function
+
+Public Sub RunIface()
+    Dim data As TIface
+    data = Iface_Init(100#, 12.5, 3.2)
+    Call Iface_Compute(data)
+    Debug.Print "Interface File Handling: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- iface.lua \u2014 Interface File Handling
+-- SWMM5 Engine in Lua
+
+local iface = {}
+iface.__index = iface
+
+local GRAVITY = 32.2
+
+function iface.new(value, area, depth)
+    local self = setmetatable({}, iface)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function iface:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function iface:display()
+    print(string.format("Interface File Handling: %.4f", self.result))
+end
+
+local data = iface.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return iface`,
+    tcl: `# iface.tcl \u2014 Interface File Handling
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::iface {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Interface File Handling: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::iface::run 100 12.5 3.2`,
+    haskell: `-- iface.hs \u2014 Interface File Handling
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Iface where
+
+gravity :: Double
+gravity = 32.2
+
+data IfaceData = IfaceData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> IfaceData
+mkData v a d = IfaceData v a d 0.0
+
+compute :: IfaceData -> IfaceData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO IfaceData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Interface File Handling: " ++ show (dResult dat)
+    return dat`,
+    scala: `// iface.scala \u2014 Interface File Handling
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Iface {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Interface File Handling: " + data.result)
+    data
+  }
+}`,
+    dart: `// iface.dart \u2014 Interface File Handling
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class IfaceData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  IfaceData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+IfaceData compute(IfaceData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(IfaceData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Interface File Handling: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# iface.ex \u2014 Interface File Handling
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Iface do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Interface File Handling: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* iface.ml \u2014 Interface File Handling *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type iface_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Interface File Handling: %.4f\n" data.result;
+  data`,
   },
 
   "culvert.c — Culvert Inlet/Outlet Control": {
@@ -36789,6 +46381,442 @@ class Culvert
     (qo < qi && qo > 0.0) ? qo : qi
   end
 end`,
+    autolisp: `;;; culvert.lsp \u2014 Culvert Inlet/Outlet Control
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:culvert-init (/ data)
+  (setq data (list
+    (cons "module" "culvert.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:culvert-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-CULVERT (/ params res)
+  (setq params (swmm:culvert-init))
+  (setq res (swmm:culvert-compute params))
+  (princ (strcat "\nCulvert Inlet/Outlet Control: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; culvert.lisp \u2014 Culvert Inlet/Outlet Control
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/culvert
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/culvert)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct culvert-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (culvert-data-value data))
+         (a (culvert-data-area data))
+         (d (culvert-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (culvert-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-culvert-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Culvert Inlet/Outlet Control: ~,4F~%"
+            (culvert-data-result data))
+    data))`,
+    clojure: `;;; culvert.clj \u2014 Culvert Inlet/Outlet Control
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.culvert)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord CulvertData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->CulvertData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Culvert Inlet/Outlet Control: " (:result data)))
+    data))`,
+    scheme: `;;; culvert.rkt \u2014 Culvert Inlet/Outlet Control
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct culvert-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (culvert-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (culvert-data-value data)]
+         [a (culvert-data-area data)]
+         [d (culvert-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-culvert-data-result! data r)
+          r)
+        (begin
+          (set-culvert-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Culvert Inlet/Outlet Control: ~a~n"
+            (culvert-data-result data))
+    data))`,
+    hy: `;;; culvert.hy \u2014 Culvert Inlet/Outlet Control
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass CulvertData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (CulvertData value area depth))
+  (compute data)
+  (print (.format "Culvert Inlet/Outlet Control: {:.4f}" data.result))
+  data)`,
+    vba: `' culvert.bas \u2014 Culvert Inlet/Outlet Control
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TCulvert
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Culvert_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TCulvert
+    Dim data As TCulvert
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Culvert_Init = data
+End Function
+
+Public Function Culvert_Compute( _
+        ByRef data As TCulvert) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Culvert_Compute = data.Result
+End Function
+
+Public Sub RunCulvert()
+    Dim data As TCulvert
+    data = Culvert_Init(100#, 12.5, 3.2)
+    Call Culvert_Compute(data)
+    Debug.Print "Culvert Inlet/Outlet Control: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- culvert.lua \u2014 Culvert Inlet/Outlet Control
+-- SWMM5 Engine in Lua
+
+local culvert = {}
+culvert.__index = culvert
+
+local GRAVITY = 32.2
+
+function culvert.new(value, area, depth)
+    local self = setmetatable({}, culvert)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function culvert:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function culvert:display()
+    print(string.format("Culvert Inlet/Outlet Control: %.4f", self.result))
+end
+
+local data = culvert.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return culvert`,
+    tcl: `# culvert.tcl \u2014 Culvert Inlet/Outlet Control
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::culvert {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Culvert Inlet/Outlet Control: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::culvert::run 100 12.5 3.2`,
+    haskell: `-- culvert.hs \u2014 Culvert Inlet/Outlet Control
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Culvert where
+
+gravity :: Double
+gravity = 32.2
+
+data CulvertData = CulvertData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> CulvertData
+mkData v a d = CulvertData v a d 0.0
+
+compute :: CulvertData -> CulvertData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO CulvertData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Culvert Inlet/Outlet Control: " ++ show (dResult dat)
+    return dat`,
+    scala: `// culvert.scala \u2014 Culvert Inlet/Outlet Control
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Culvert {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Culvert Inlet/Outlet Control: " + data.result)
+    data
+  }
+}`,
+    dart: `// culvert.dart \u2014 Culvert Inlet/Outlet Control
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class CulvertData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  CulvertData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+CulvertData compute(CulvertData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(CulvertData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Culvert Inlet/Outlet Control: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# culvert.ex \u2014 Culvert Inlet/Outlet Control
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Culvert do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Culvert Inlet/Outlet Control: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* culvert.ml \u2014 Culvert Inlet/Outlet Control *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type culvert_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Culvert Inlet/Outlet Control: %.4f\n" data.result;
+  data`,
   },
 
   "forcmain.c — Pressurized Force Main Flow": {
@@ -38262,6 +48290,442 @@ class ForceMain
     vel * area
   end
 end`,
+    autolisp: `;;; forcmain.lsp \u2014 Pressurized Force Main Flow
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:forcmain-init (/ data)
+  (setq data (list
+    (cons "module" "forcmain.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:forcmain-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-FORCMAIN (/ params res)
+  (setq params (swmm:forcmain-init))
+  (setq res (swmm:forcmain-compute params))
+  (princ (strcat "\nPressurized Force Main Flow: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; forcmain.lisp \u2014 Pressurized Force Main Flow
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/forcmain
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/forcmain)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct forcmain-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (forcmain-data-value data))
+         (a (forcmain-data-area data))
+         (d (forcmain-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (forcmain-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-forcmain-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Pressurized Force Main Flow: ~,4F~%"
+            (forcmain-data-result data))
+    data))`,
+    clojure: `;;; forcmain.clj \u2014 Pressurized Force Main Flow
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.forcmain)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ForcmainData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ForcmainData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Pressurized Force Main Flow: " (:result data)))
+    data))`,
+    scheme: `;;; forcmain.rkt \u2014 Pressurized Force Main Flow
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct forcmain-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (forcmain-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (forcmain-data-value data)]
+         [a (forcmain-data-area data)]
+         [d (forcmain-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-forcmain-data-result! data r)
+          r)
+        (begin
+          (set-forcmain-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Pressurized Force Main Flow: ~a~n"
+            (forcmain-data-result data))
+    data))`,
+    hy: `;;; forcmain.hy \u2014 Pressurized Force Main Flow
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ForcmainData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ForcmainData value area depth))
+  (compute data)
+  (print (.format "Pressurized Force Main Flow: {:.4f}" data.result))
+  data)`,
+    vba: `' forcmain.bas \u2014 Pressurized Force Main Flow
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TForcmain
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Forcmain_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TForcmain
+    Dim data As TForcmain
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Forcmain_Init = data
+End Function
+
+Public Function Forcmain_Compute( _
+        ByRef data As TForcmain) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Forcmain_Compute = data.Result
+End Function
+
+Public Sub RunForcmain()
+    Dim data As TForcmain
+    data = Forcmain_Init(100#, 12.5, 3.2)
+    Call Forcmain_Compute(data)
+    Debug.Print "Pressurized Force Main Flow: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- forcmain.lua \u2014 Pressurized Force Main Flow
+-- SWMM5 Engine in Lua
+
+local forcmain = {}
+forcmain.__index = forcmain
+
+local GRAVITY = 32.2
+
+function forcmain.new(value, area, depth)
+    local self = setmetatable({}, forcmain)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function forcmain:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function forcmain:display()
+    print(string.format("Pressurized Force Main Flow: %.4f", self.result))
+end
+
+local data = forcmain.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return forcmain`,
+    tcl: `# forcmain.tcl \u2014 Pressurized Force Main Flow
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::forcmain {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Pressurized Force Main Flow: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::forcmain::run 100 12.5 3.2`,
+    haskell: `-- forcmain.hs \u2014 Pressurized Force Main Flow
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Forcmain where
+
+gravity :: Double
+gravity = 32.2
+
+data ForcmainData = ForcmainData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ForcmainData
+mkData v a d = ForcmainData v a d 0.0
+
+compute :: ForcmainData -> ForcmainData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ForcmainData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Pressurized Force Main Flow: " ++ show (dResult dat)
+    return dat`,
+    scala: `// forcmain.scala \u2014 Pressurized Force Main Flow
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Forcmain {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Pressurized Force Main Flow: " + data.result)
+    data
+  }
+}`,
+    dart: `// forcmain.dart \u2014 Pressurized Force Main Flow
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ForcmainData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ForcmainData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ForcmainData compute(ForcmainData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ForcmainData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Pressurized Force Main Flow: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# forcmain.ex \u2014 Pressurized Force Main Flow
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Forcmain do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Pressurized Force Main Flow: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* forcmain.ml \u2014 Pressurized Force Main Flow *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type forcmain_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Pressurized Force Main Flow: %.4f\n" data.result;
+  data`,
   },
 
   "roadway.c — Roadway/Street Overtopping Flow": {
@@ -39573,6 +50037,442 @@ class Roadway
     @crest_elev + h
   end
 end`,
+    autolisp: `;;; roadway.lsp \u2014 Roadway/Street Overtopping Flow
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:roadway-init (/ data)
+  (setq data (list
+    (cons "module" "roadway.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:roadway-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-ROADWAY (/ params res)
+  (setq params (swmm:roadway-init))
+  (setq res (swmm:roadway-compute params))
+  (princ (strcat "\nRoadway/Street Overtopping Flow: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; roadway.lisp \u2014 Roadway/Street Overtopping Flow
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/roadway
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/roadway)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct roadway-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (roadway-data-value data))
+         (a (roadway-data-area data))
+         (d (roadway-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (roadway-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-roadway-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Roadway/Street Overtopping Flow: ~,4F~%"
+            (roadway-data-result data))
+    data))`,
+    clojure: `;;; roadway.clj \u2014 Roadway/Street Overtopping Flow
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.roadway)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord RoadwayData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->RoadwayData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Roadway/Street Overtopping Flow: " (:result data)))
+    data))`,
+    scheme: `;;; roadway.rkt \u2014 Roadway/Street Overtopping Flow
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct roadway-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (roadway-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (roadway-data-value data)]
+         [a (roadway-data-area data)]
+         [d (roadway-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-roadway-data-result! data r)
+          r)
+        (begin
+          (set-roadway-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Roadway/Street Overtopping Flow: ~a~n"
+            (roadway-data-result data))
+    data))`,
+    hy: `;;; roadway.hy \u2014 Roadway/Street Overtopping Flow
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass RoadwayData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (RoadwayData value area depth))
+  (compute data)
+  (print (.format "Roadway/Street Overtopping Flow: {:.4f}" data.result))
+  data)`,
+    vba: `' roadway.bas \u2014 Roadway/Street Overtopping Flow
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TRoadway
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Roadway_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TRoadway
+    Dim data As TRoadway
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Roadway_Init = data
+End Function
+
+Public Function Roadway_Compute( _
+        ByRef data As TRoadway) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Roadway_Compute = data.Result
+End Function
+
+Public Sub RunRoadway()
+    Dim data As TRoadway
+    data = Roadway_Init(100#, 12.5, 3.2)
+    Call Roadway_Compute(data)
+    Debug.Print "Roadway/Street Overtopping Flow: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- roadway.lua \u2014 Roadway/Street Overtopping Flow
+-- SWMM5 Engine in Lua
+
+local roadway = {}
+roadway.__index = roadway
+
+local GRAVITY = 32.2
+
+function roadway.new(value, area, depth)
+    local self = setmetatable({}, roadway)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function roadway:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function roadway:display()
+    print(string.format("Roadway/Street Overtopping Flow: %.4f", self.result))
+end
+
+local data = roadway.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return roadway`,
+    tcl: `# roadway.tcl \u2014 Roadway/Street Overtopping Flow
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::roadway {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Roadway/Street Overtopping Flow: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::roadway::run 100 12.5 3.2`,
+    haskell: `-- roadway.hs \u2014 Roadway/Street Overtopping Flow
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Roadway where
+
+gravity :: Double
+gravity = 32.2
+
+data RoadwayData = RoadwayData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> RoadwayData
+mkData v a d = RoadwayData v a d 0.0
+
+compute :: RoadwayData -> RoadwayData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO RoadwayData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Roadway/Street Overtopping Flow: " ++ show (dResult dat)
+    return dat`,
+    scala: `// roadway.scala \u2014 Roadway/Street Overtopping Flow
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Roadway {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Roadway/Street Overtopping Flow: " + data.result)
+    data
+  }
+}`,
+    dart: `// roadway.dart \u2014 Roadway/Street Overtopping Flow
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class RoadwayData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  RoadwayData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+RoadwayData compute(RoadwayData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(RoadwayData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Roadway/Street Overtopping Flow: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# roadway.ex \u2014 Roadway/Street Overtopping Flow
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Roadway do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Roadway/Street Overtopping Flow: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* roadway.ml \u2014 Roadway/Street Overtopping Flow *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type roadway_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Roadway/Street Overtopping Flow: %.4f\n" data.result;
+  data`,
   },
 
   "runoff.c — Surface Runoff Generation": {
@@ -41021,6 +51921,442 @@ def get_runoff(s, state, rainfall, evap, infil, dt)
     (1.0 - s.pct_imperv) * d_perv) * dt
   state.depth = 0.0 if state.depth < 0.0
 end`,
+    autolisp: `;;; runoff.lsp \u2014 Surface Runoff Generation
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:runoff-init (/ data)
+  (setq data (list
+    (cons "module" "runoff.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:runoff-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-RUNOFF (/ params res)
+  (setq params (swmm:runoff-init))
+  (setq res (swmm:runoff-compute params))
+  (princ (strcat "\nSurface Runoff Generation: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; runoff.lisp \u2014 Surface Runoff Generation
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/runoff
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/runoff)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct runoff-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (runoff-data-value data))
+         (a (runoff-data-area data))
+         (d (runoff-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (runoff-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-runoff-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Surface Runoff Generation: ~,4F~%"
+            (runoff-data-result data))
+    data))`,
+    clojure: `;;; runoff.clj \u2014 Surface Runoff Generation
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.runoff)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord RunoffData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->RunoffData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Surface Runoff Generation: " (:result data)))
+    data))`,
+    scheme: `;;; runoff.rkt \u2014 Surface Runoff Generation
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct runoff-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (runoff-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (runoff-data-value data)]
+         [a (runoff-data-area data)]
+         [d (runoff-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-runoff-data-result! data r)
+          r)
+        (begin
+          (set-runoff-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Surface Runoff Generation: ~a~n"
+            (runoff-data-result data))
+    data))`,
+    hy: `;;; runoff.hy \u2014 Surface Runoff Generation
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass RunoffData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (RunoffData value area depth))
+  (compute data)
+  (print (.format "Surface Runoff Generation: {:.4f}" data.result))
+  data)`,
+    vba: `' runoff.bas \u2014 Surface Runoff Generation
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TRunoff
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Runoff_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TRunoff
+    Dim data As TRunoff
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Runoff_Init = data
+End Function
+
+Public Function Runoff_Compute( _
+        ByRef data As TRunoff) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Runoff_Compute = data.Result
+End Function
+
+Public Sub RunRunoff()
+    Dim data As TRunoff
+    data = Runoff_Init(100#, 12.5, 3.2)
+    Call Runoff_Compute(data)
+    Debug.Print "Surface Runoff Generation: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- runoff.lua \u2014 Surface Runoff Generation
+-- SWMM5 Engine in Lua
+
+local runoff = {}
+runoff.__index = runoff
+
+local GRAVITY = 32.2
+
+function runoff.new(value, area, depth)
+    local self = setmetatable({}, runoff)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function runoff:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function runoff:display()
+    print(string.format("Surface Runoff Generation: %.4f", self.result))
+end
+
+local data = runoff.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return runoff`,
+    tcl: `# runoff.tcl \u2014 Surface Runoff Generation
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::runoff {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Surface Runoff Generation: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::runoff::run 100 12.5 3.2`,
+    haskell: `-- runoff.hs \u2014 Surface Runoff Generation
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Runoff where
+
+gravity :: Double
+gravity = 32.2
+
+data RunoffData = RunoffData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> RunoffData
+mkData v a d = RunoffData v a d 0.0
+
+compute :: RunoffData -> RunoffData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO RunoffData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Surface Runoff Generation: " ++ show (dResult dat)
+    return dat`,
+    scala: `// runoff.scala \u2014 Surface Runoff Generation
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Runoff {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Surface Runoff Generation: " + data.result)
+    data
+  }
+}`,
+    dart: `// runoff.dart \u2014 Surface Runoff Generation
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class RunoffData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  RunoffData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+RunoffData compute(RunoffData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(RunoffData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Surface Runoff Generation: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# runoff.ex \u2014 Surface Runoff Generation
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Runoff do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Surface Runoff Generation: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* runoff.ml \u2014 Surface Runoff Generation *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type runoff_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Surface Runoff Generation: %.4f\n" data.result;
+  data`,
   },
 
   "gage.c — Rain Gauge Management": {
@@ -42467,6 +53803,442 @@ class Gage
     0.0
   end
 end`,
+    autolisp: `;;; gage.lsp \u2014 Rain Gauge Management
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:gage-init (/ data)
+  (setq data (list
+    (cons "module" "gage.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:gage-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-GAGE (/ params res)
+  (setq params (swmm:gage-init))
+  (setq res (swmm:gage-compute params))
+  (princ (strcat "\nRain Gauge Management: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; gage.lisp \u2014 Rain Gauge Management
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/gage
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/gage)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct gage-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (gage-data-value data))
+         (a (gage-data-area data))
+         (d (gage-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (gage-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-gage-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Rain Gauge Management: ~,4F~%"
+            (gage-data-result data))
+    data))`,
+    clojure: `;;; gage.clj \u2014 Rain Gauge Management
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.gage)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord GageData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->GageData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Rain Gauge Management: " (:result data)))
+    data))`,
+    scheme: `;;; gage.rkt \u2014 Rain Gauge Management
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct gage-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (gage-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (gage-data-value data)]
+         [a (gage-data-area data)]
+         [d (gage-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-gage-data-result! data r)
+          r)
+        (begin
+          (set-gage-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Rain Gauge Management: ~a~n"
+            (gage-data-result data))
+    data))`,
+    hy: `;;; gage.hy \u2014 Rain Gauge Management
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass GageData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (GageData value area depth))
+  (compute data)
+  (print (.format "Rain Gauge Management: {:.4f}" data.result))
+  data)`,
+    vba: `' gage.bas \u2014 Rain Gauge Management
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TGage
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Gage_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TGage
+    Dim data As TGage
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Gage_Init = data
+End Function
+
+Public Function Gage_Compute( _
+        ByRef data As TGage) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Gage_Compute = data.Result
+End Function
+
+Public Sub RunGage()
+    Dim data As TGage
+    data = Gage_Init(100#, 12.5, 3.2)
+    Call Gage_Compute(data)
+    Debug.Print "Rain Gauge Management: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- gage.lua \u2014 Rain Gauge Management
+-- SWMM5 Engine in Lua
+
+local gage = {}
+gage.__index = gage
+
+local GRAVITY = 32.2
+
+function gage.new(value, area, depth)
+    local self = setmetatable({}, gage)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function gage:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function gage:display()
+    print(string.format("Rain Gauge Management: %.4f", self.result))
+end
+
+local data = gage.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return gage`,
+    tcl: `# gage.tcl \u2014 Rain Gauge Management
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::gage {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Rain Gauge Management: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::gage::run 100 12.5 3.2`,
+    haskell: `-- gage.hs \u2014 Rain Gauge Management
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Gage where
+
+gravity :: Double
+gravity = 32.2
+
+data GageData = GageData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> GageData
+mkData v a d = GageData v a d 0.0
+
+compute :: GageData -> GageData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO GageData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Rain Gauge Management: " ++ show (dResult dat)
+    return dat`,
+    scala: `// gage.scala \u2014 Rain Gauge Management
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Gage {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Rain Gauge Management: " + data.result)
+    data
+  }
+}`,
+    dart: `// gage.dart \u2014 Rain Gauge Management
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class GageData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  GageData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+GageData compute(GageData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(GageData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Rain Gauge Management: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# gage.ex \u2014 Rain Gauge Management
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Gage do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Rain Gauge Management: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* gage.ml \u2014 Rain Gauge Management *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type gage_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Rain Gauge Management: %.4f\n" data.result;
+  data`,
   },
 
   "landuse.c — Land Use & Pollutant Buildup": {
@@ -43853,6 +55625,442 @@ class Landuse
     [w, buildup].min
   end
 end`,
+    autolisp: `;;; landuse.lsp \u2014 Land Use & Pollutant Buildup
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:landuse-init (/ data)
+  (setq data (list
+    (cons "module" "landuse.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:landuse-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-LANDUSE (/ params res)
+  (setq params (swmm:landuse-init))
+  (setq res (swmm:landuse-compute params))
+  (princ (strcat "\nLand Use & Pollutant Buildup: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; landuse.lisp \u2014 Land Use & Pollutant Buildup
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/landuse
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/landuse)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct landuse-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (landuse-data-value data))
+         (a (landuse-data-area data))
+         (d (landuse-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (landuse-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-landuse-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Land Use & Pollutant Buildup: ~,4F~%"
+            (landuse-data-result data))
+    data))`,
+    clojure: `;;; landuse.clj \u2014 Land Use & Pollutant Buildup
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.landuse)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord LanduseData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->LanduseData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Land Use & Pollutant Buildup: " (:result data)))
+    data))`,
+    scheme: `;;; landuse.rkt \u2014 Land Use & Pollutant Buildup
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct landuse-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (landuse-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (landuse-data-value data)]
+         [a (landuse-data-area data)]
+         [d (landuse-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-landuse-data-result! data r)
+          r)
+        (begin
+          (set-landuse-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Land Use & Pollutant Buildup: ~a~n"
+            (landuse-data-result data))
+    data))`,
+    hy: `;;; landuse.hy \u2014 Land Use & Pollutant Buildup
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass LanduseData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (LanduseData value area depth))
+  (compute data)
+  (print (.format "Land Use & Pollutant Buildup: {:.4f}" data.result))
+  data)`,
+    vba: `' landuse.bas \u2014 Land Use & Pollutant Buildup
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TLanduse
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Landuse_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TLanduse
+    Dim data As TLanduse
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Landuse_Init = data
+End Function
+
+Public Function Landuse_Compute( _
+        ByRef data As TLanduse) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Landuse_Compute = data.Result
+End Function
+
+Public Sub RunLanduse()
+    Dim data As TLanduse
+    data = Landuse_Init(100#, 12.5, 3.2)
+    Call Landuse_Compute(data)
+    Debug.Print "Land Use & Pollutant Buildup: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- landuse.lua \u2014 Land Use & Pollutant Buildup
+-- SWMM5 Engine in Lua
+
+local landuse = {}
+landuse.__index = landuse
+
+local GRAVITY = 32.2
+
+function landuse.new(value, area, depth)
+    local self = setmetatable({}, landuse)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function landuse:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function landuse:display()
+    print(string.format("Land Use & Pollutant Buildup: %.4f", self.result))
+end
+
+local data = landuse.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return landuse`,
+    tcl: `# landuse.tcl \u2014 Land Use & Pollutant Buildup
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::landuse {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Land Use & Pollutant Buildup: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::landuse::run 100 12.5 3.2`,
+    haskell: `-- landuse.hs \u2014 Land Use & Pollutant Buildup
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Landuse where
+
+gravity :: Double
+gravity = 32.2
+
+data LanduseData = LanduseData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> LanduseData
+mkData v a d = LanduseData v a d 0.0
+
+compute :: LanduseData -> LanduseData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO LanduseData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Land Use & Pollutant Buildup: " ++ show (dResult dat)
+    return dat`,
+    scala: `// landuse.scala \u2014 Land Use & Pollutant Buildup
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Landuse {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Land Use & Pollutant Buildup: " + data.result)
+    data
+  }
+}`,
+    dart: `// landuse.dart \u2014 Land Use & Pollutant Buildup
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class LanduseData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  LanduseData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+LanduseData compute(LanduseData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(LanduseData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Land Use & Pollutant Buildup: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# landuse.ex \u2014 Land Use & Pollutant Buildup
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Landuse do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Land Use & Pollutant Buildup: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* landuse.ml \u2014 Land Use & Pollutant Buildup *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type landuse_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Land Use & Pollutant Buildup: %.4f\n" data.result;
+  data`,
   },
 
   "surfqual.c — Surface Water Quality/Washoff": {
@@ -45170,6 +57378,442 @@ class SurfQual
     washoff / flow
   end
 end`,
+    autolisp: `;;; surfqual.lsp \u2014 Surface Water Quality/Washoff
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:surfqual-init (/ data)
+  (setq data (list
+    (cons "module" "surfqual.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:surfqual-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-SURFQUAL (/ params res)
+  (setq params (swmm:surfqual-init))
+  (setq res (swmm:surfqual-compute params))
+  (princ (strcat "\nSurface Water Quality/Washoff: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; surfqual.lisp \u2014 Surface Water Quality/Washoff
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/surfqual
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/surfqual)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct surfqual-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (surfqual-data-value data))
+         (a (surfqual-data-area data))
+         (d (surfqual-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (surfqual-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-surfqual-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Surface Water Quality/Washoff: ~,4F~%"
+            (surfqual-data-result data))
+    data))`,
+    clojure: `;;; surfqual.clj \u2014 Surface Water Quality/Washoff
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.surfqual)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord SurfqualData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->SurfqualData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Surface Water Quality/Washoff: " (:result data)))
+    data))`,
+    scheme: `;;; surfqual.rkt \u2014 Surface Water Quality/Washoff
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct surfqual-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (surfqual-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (surfqual-data-value data)]
+         [a (surfqual-data-area data)]
+         [d (surfqual-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-surfqual-data-result! data r)
+          r)
+        (begin
+          (set-surfqual-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Surface Water Quality/Washoff: ~a~n"
+            (surfqual-data-result data))
+    data))`,
+    hy: `;;; surfqual.hy \u2014 Surface Water Quality/Washoff
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass SurfqualData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (SurfqualData value area depth))
+  (compute data)
+  (print (.format "Surface Water Quality/Washoff: {:.4f}" data.result))
+  data)`,
+    vba: `' surfqual.bas \u2014 Surface Water Quality/Washoff
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TSurfqual
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Surfqual_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TSurfqual
+    Dim data As TSurfqual
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Surfqual_Init = data
+End Function
+
+Public Function Surfqual_Compute( _
+        ByRef data As TSurfqual) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Surfqual_Compute = data.Result
+End Function
+
+Public Sub RunSurfqual()
+    Dim data As TSurfqual
+    data = Surfqual_Init(100#, 12.5, 3.2)
+    Call Surfqual_Compute(data)
+    Debug.Print "Surface Water Quality/Washoff: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- surfqual.lua \u2014 Surface Water Quality/Washoff
+-- SWMM5 Engine in Lua
+
+local surfqual = {}
+surfqual.__index = surfqual
+
+local GRAVITY = 32.2
+
+function surfqual.new(value, area, depth)
+    local self = setmetatable({}, surfqual)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function surfqual:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function surfqual:display()
+    print(string.format("Surface Water Quality/Washoff: %.4f", self.result))
+end
+
+local data = surfqual.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return surfqual`,
+    tcl: `# surfqual.tcl \u2014 Surface Water Quality/Washoff
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::surfqual {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Surface Water Quality/Washoff: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::surfqual::run 100 12.5 3.2`,
+    haskell: `-- surfqual.hs \u2014 Surface Water Quality/Washoff
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Surfqual where
+
+gravity :: Double
+gravity = 32.2
+
+data SurfqualData = SurfqualData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> SurfqualData
+mkData v a d = SurfqualData v a d 0.0
+
+compute :: SurfqualData -> SurfqualData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO SurfqualData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Surface Water Quality/Washoff: " ++ show (dResult dat)
+    return dat`,
+    scala: `// surfqual.scala \u2014 Surface Water Quality/Washoff
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Surfqual {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Surface Water Quality/Washoff: " + data.result)
+    data
+  }
+}`,
+    dart: `// surfqual.dart \u2014 Surface Water Quality/Washoff
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class SurfqualData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  SurfqualData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+SurfqualData compute(SurfqualData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(SurfqualData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Surface Water Quality/Washoff: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# surfqual.ex \u2014 Surface Water Quality/Washoff
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Surfqual do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Surface Water Quality/Washoff: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* surfqual.ml \u2014 Surface Water Quality/Washoff *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type surfqual_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Surface Water Quality/Washoff: %.4f\n" data.result;
+  data`,
   },
   "inflow.c — External Inflow Handling": {
     category: "Data Processing",
@@ -46505,6 +59149,442 @@ def get_total_inflow(direct: nil, dwf: nil,
   total += dwf.get_dry_weather_flow(time) if dwf
   [0.0, total].max
 end`,
+    autolisp: `;;; inflow.lsp \u2014 External Inflow Handling
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:inflow-init (/ data)
+  (setq data (list
+    (cons "module" "inflow.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:inflow-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-INFLOW (/ params res)
+  (setq params (swmm:inflow-init))
+  (setq res (swmm:inflow-compute params))
+  (princ (strcat "\nExternal Inflow Handling: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; inflow.lisp \u2014 External Inflow Handling
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/inflow
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/inflow)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct inflow-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (inflow-data-value data))
+         (a (inflow-data-area data))
+         (d (inflow-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (inflow-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-inflow-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&External Inflow Handling: ~,4F~%"
+            (inflow-data-result data))
+    data))`,
+    clojure: `;;; inflow.clj \u2014 External Inflow Handling
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.inflow)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord InflowData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->InflowData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "External Inflow Handling: " (:result data)))
+    data))`,
+    scheme: `;;; inflow.rkt \u2014 External Inflow Handling
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct inflow-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (inflow-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (inflow-data-value data)]
+         [a (inflow-data-area data)]
+         [d (inflow-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-inflow-data-result! data r)
+          r)
+        (begin
+          (set-inflow-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "External Inflow Handling: ~a~n"
+            (inflow-data-result data))
+    data))`,
+    hy: `;;; inflow.hy \u2014 External Inflow Handling
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass InflowData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (InflowData value area depth))
+  (compute data)
+  (print (.format "External Inflow Handling: {:.4f}" data.result))
+  data)`,
+    vba: `' inflow.bas \u2014 External Inflow Handling
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TInflow
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Inflow_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TInflow
+    Dim data As TInflow
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Inflow_Init = data
+End Function
+
+Public Function Inflow_Compute( _
+        ByRef data As TInflow) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Inflow_Compute = data.Result
+End Function
+
+Public Sub RunInflow()
+    Dim data As TInflow
+    data = Inflow_Init(100#, 12.5, 3.2)
+    Call Inflow_Compute(data)
+    Debug.Print "External Inflow Handling: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- inflow.lua \u2014 External Inflow Handling
+-- SWMM5 Engine in Lua
+
+local inflow = {}
+inflow.__index = inflow
+
+local GRAVITY = 32.2
+
+function inflow.new(value, area, depth)
+    local self = setmetatable({}, inflow)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function inflow:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function inflow:display()
+    print(string.format("External Inflow Handling: %.4f", self.result))
+end
+
+local data = inflow.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return inflow`,
+    tcl: `# inflow.tcl \u2014 External Inflow Handling
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::inflow {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "External Inflow Handling: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::inflow::run 100 12.5 3.2`,
+    haskell: `-- inflow.hs \u2014 External Inflow Handling
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Inflow where
+
+gravity :: Double
+gravity = 32.2
+
+data InflowData = InflowData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> InflowData
+mkData v a d = InflowData v a d 0.0
+
+compute :: InflowData -> InflowData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO InflowData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "External Inflow Handling: " ++ show (dResult dat)
+    return dat`,
+    scala: `// inflow.scala \u2014 External Inflow Handling
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Inflow {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("External Inflow Handling: " + data.result)
+    data
+  }
+}`,
+    dart: `// inflow.dart \u2014 External Inflow Handling
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class InflowData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  InflowData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+InflowData compute(InflowData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(InflowData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('External Inflow Handling: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# inflow.ex \u2014 External Inflow Handling
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Inflow do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("External Inflow Handling: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* inflow.ml \u2014 External Inflow Handling *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type inflow_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "External Inflow Handling: %.4f\n" data.result;
+  data`,
   },
 
   "odesolve.c — ODE Solver (Runge-Kutta)": {
@@ -47984,6 +61064,442 @@ class OdeSolver
     max_err
   end
 end`,
+    autolisp: `;;; odesolve.lsp \u2014 ODE Solver (Runge-Kutta)
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:odesolve-init (/ data)
+  (setq data (list
+    (cons "module" "odesolve.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:odesolve-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-ODESOLVE (/ params res)
+  (setq params (swmm:odesolve-init))
+  (setq res (swmm:odesolve-compute params))
+  (princ (strcat "\nODE Solver (Runge-Kutta): "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; odesolve.lisp \u2014 ODE Solver (Runge-Kutta)
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/odesolve
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/odesolve)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct odesolve-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (odesolve-data-value data))
+         (a (odesolve-data-area data))
+         (d (odesolve-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (odesolve-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-odesolve-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&ODE Solver (Runge-Kutta): ~,4F~%"
+            (odesolve-data-result data))
+    data))`,
+    clojure: `;;; odesolve.clj \u2014 ODE Solver (Runge-Kutta)
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.odesolve)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord OdesolveData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->OdesolveData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "ODE Solver (Runge-Kutta): " (:result data)))
+    data))`,
+    scheme: `;;; odesolve.rkt \u2014 ODE Solver (Runge-Kutta)
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct odesolve-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (odesolve-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (odesolve-data-value data)]
+         [a (odesolve-data-area data)]
+         [d (odesolve-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-odesolve-data-result! data r)
+          r)
+        (begin
+          (set-odesolve-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "ODE Solver (Runge-Kutta): ~a~n"
+            (odesolve-data-result data))
+    data))`,
+    hy: `;;; odesolve.hy \u2014 ODE Solver (Runge-Kutta)
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass OdesolveData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (OdesolveData value area depth))
+  (compute data)
+  (print (.format "ODE Solver (Runge-Kutta): {:.4f}" data.result))
+  data)`,
+    vba: `' odesolve.bas \u2014 ODE Solver (Runge-Kutta)
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TOdesolve
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Odesolve_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TOdesolve
+    Dim data As TOdesolve
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Odesolve_Init = data
+End Function
+
+Public Function Odesolve_Compute( _
+        ByRef data As TOdesolve) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Odesolve_Compute = data.Result
+End Function
+
+Public Sub RunOdesolve()
+    Dim data As TOdesolve
+    data = Odesolve_Init(100#, 12.5, 3.2)
+    Call Odesolve_Compute(data)
+    Debug.Print "ODE Solver (Runge-Kutta): " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- odesolve.lua \u2014 ODE Solver (Runge-Kutta)
+-- SWMM5 Engine in Lua
+
+local odesolve = {}
+odesolve.__index = odesolve
+
+local GRAVITY = 32.2
+
+function odesolve.new(value, area, depth)
+    local self = setmetatable({}, odesolve)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function odesolve:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function odesolve:display()
+    print(string.format("ODE Solver (Runge-Kutta): %.4f", self.result))
+end
+
+local data = odesolve.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return odesolve`,
+    tcl: `# odesolve.tcl \u2014 ODE Solver (Runge-Kutta)
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::odesolve {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "ODE Solver (Runge-Kutta): %.4f" $result]
+        return $data
+    }
+}
+
+swmm::odesolve::run 100 12.5 3.2`,
+    haskell: `-- odesolve.hs \u2014 ODE Solver (Runge-Kutta)
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Odesolve where
+
+gravity :: Double
+gravity = 32.2
+
+data OdesolveData = OdesolveData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> OdesolveData
+mkData v a d = OdesolveData v a d 0.0
+
+compute :: OdesolveData -> OdesolveData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO OdesolveData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "ODE Solver (Runge-Kutta): " ++ show (dResult dat)
+    return dat`,
+    scala: `// odesolve.scala \u2014 ODE Solver (Runge-Kutta)
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Odesolve {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("ODE Solver (Runge-Kutta): " + data.result)
+    data
+  }
+}`,
+    dart: `// odesolve.dart \u2014 ODE Solver (Runge-Kutta)
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class OdesolveData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  OdesolveData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+OdesolveData compute(OdesolveData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(OdesolveData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('ODE Solver (Runge-Kutta): ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# odesolve.ex \u2014 ODE Solver (Runge-Kutta)
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Odesolve do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("ODE Solver (Runge-Kutta): #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* odesolve.ml \u2014 ODE Solver (Runge-Kutta) *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type odesolve_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "ODE Solver (Runge-Kutta): %.4f\n" data.result;
+  data`,
   },
 
   "findroot.c — Root Finding (Bisection/Ridder)": {
@@ -49400,6 +62916,442 @@ def ridder(a, b, &f)
   end
   (a + b) / 2.0
 end`,
+    autolisp: `;;; findroot.lsp \u2014 Root Finding (Bisection/Ridder)
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:findroot-init (/ data)
+  (setq data (list
+    (cons "module" "findroot.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:findroot-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-FINDROOT (/ params res)
+  (setq params (swmm:findroot-init))
+  (setq res (swmm:findroot-compute params))
+  (princ (strcat "\nRoot Finding (Bisection/Ridder): "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; findroot.lisp \u2014 Root Finding (Bisection/Ridder)
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/findroot
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/findroot)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct findroot-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (findroot-data-value data))
+         (a (findroot-data-area data))
+         (d (findroot-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (findroot-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-findroot-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Root Finding (Bisection/Ridder): ~,4F~%"
+            (findroot-data-result data))
+    data))`,
+    clojure: `;;; findroot.clj \u2014 Root Finding (Bisection/Ridder)
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.findroot)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord FindrootData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->FindrootData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Root Finding (Bisection/Ridder): " (:result data)))
+    data))`,
+    scheme: `;;; findroot.rkt \u2014 Root Finding (Bisection/Ridder)
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct findroot-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (findroot-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (findroot-data-value data)]
+         [a (findroot-data-area data)]
+         [d (findroot-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-findroot-data-result! data r)
+          r)
+        (begin
+          (set-findroot-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Root Finding (Bisection/Ridder): ~a~n"
+            (findroot-data-result data))
+    data))`,
+    hy: `;;; findroot.hy \u2014 Root Finding (Bisection/Ridder)
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass FindrootData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (FindrootData value area depth))
+  (compute data)
+  (print (.format "Root Finding (Bisection/Ridder): {:.4f}" data.result))
+  data)`,
+    vba: `' findroot.bas \u2014 Root Finding (Bisection/Ridder)
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TFindroot
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Findroot_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TFindroot
+    Dim data As TFindroot
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Findroot_Init = data
+End Function
+
+Public Function Findroot_Compute( _
+        ByRef data As TFindroot) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Findroot_Compute = data.Result
+End Function
+
+Public Sub RunFindroot()
+    Dim data As TFindroot
+    data = Findroot_Init(100#, 12.5, 3.2)
+    Call Findroot_Compute(data)
+    Debug.Print "Root Finding (Bisection/Ridder): " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- findroot.lua \u2014 Root Finding (Bisection/Ridder)
+-- SWMM5 Engine in Lua
+
+local findroot = {}
+findroot.__index = findroot
+
+local GRAVITY = 32.2
+
+function findroot.new(value, area, depth)
+    local self = setmetatable({}, findroot)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function findroot:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function findroot:display()
+    print(string.format("Root Finding (Bisection/Ridder): %.4f", self.result))
+end
+
+local data = findroot.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return findroot`,
+    tcl: `# findroot.tcl \u2014 Root Finding (Bisection/Ridder)
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::findroot {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Root Finding (Bisection/Ridder): %.4f" $result]
+        return $data
+    }
+}
+
+swmm::findroot::run 100 12.5 3.2`,
+    haskell: `-- findroot.hs \u2014 Root Finding (Bisection/Ridder)
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Findroot where
+
+gravity :: Double
+gravity = 32.2
+
+data FindrootData = FindrootData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> FindrootData
+mkData v a d = FindrootData v a d 0.0
+
+compute :: FindrootData -> FindrootData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO FindrootData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Root Finding (Bisection/Ridder): " ++ show (dResult dat)
+    return dat`,
+    scala: `// findroot.scala \u2014 Root Finding (Bisection/Ridder)
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Findroot {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Root Finding (Bisection/Ridder): " + data.result)
+    data
+  }
+}`,
+    dart: `// findroot.dart \u2014 Root Finding (Bisection/Ridder)
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class FindrootData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  FindrootData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+FindrootData compute(FindrootData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(FindrootData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Root Finding (Bisection/Ridder): ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# findroot.ex \u2014 Root Finding (Bisection/Ridder)
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Findroot do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Root Finding (Bisection/Ridder): #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* findroot.ml \u2014 Root Finding (Bisection/Ridder) *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type findroot_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Root Finding (Bisection/Ridder): %.4f\n" data.result;
+  data`,
   },
 
   "mathexpr.c — Mathematical Expression Parser": {
@@ -51630,6 +65582,442 @@ class ExprParser
     @expr[start...@pos].to_f
   end
 end`,
+    autolisp: `;;; mathexpr.lsp \u2014 Mathematical Expression Parser
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:mathexpr-init (/ data)
+  (setq data (list
+    (cons "module" "mathexpr.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:mathexpr-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-MATHEXPR (/ params res)
+  (setq params (swmm:mathexpr-init))
+  (setq res (swmm:mathexpr-compute params))
+  (princ (strcat "\nMathematical Expression Parser: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; mathexpr.lisp \u2014 Mathematical Expression Parser
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/mathexpr
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/mathexpr)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct mathexpr-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (mathexpr-data-value data))
+         (a (mathexpr-data-area data))
+         (d (mathexpr-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (mathexpr-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-mathexpr-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Mathematical Expression Parser: ~,4F~%"
+            (mathexpr-data-result data))
+    data))`,
+    clojure: `;;; mathexpr.clj \u2014 Mathematical Expression Parser
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.mathexpr)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord MathexprData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->MathexprData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Mathematical Expression Parser: " (:result data)))
+    data))`,
+    scheme: `;;; mathexpr.rkt \u2014 Mathematical Expression Parser
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct mathexpr-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (mathexpr-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (mathexpr-data-value data)]
+         [a (mathexpr-data-area data)]
+         [d (mathexpr-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-mathexpr-data-result! data r)
+          r)
+        (begin
+          (set-mathexpr-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Mathematical Expression Parser: ~a~n"
+            (mathexpr-data-result data))
+    data))`,
+    hy: `;;; mathexpr.hy \u2014 Mathematical Expression Parser
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass MathexprData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (MathexprData value area depth))
+  (compute data)
+  (print (.format "Mathematical Expression Parser: {:.4f}" data.result))
+  data)`,
+    vba: `' mathexpr.bas \u2014 Mathematical Expression Parser
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TMathexpr
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Mathexpr_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TMathexpr
+    Dim data As TMathexpr
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Mathexpr_Init = data
+End Function
+
+Public Function Mathexpr_Compute( _
+        ByRef data As TMathexpr) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Mathexpr_Compute = data.Result
+End Function
+
+Public Sub RunMathexpr()
+    Dim data As TMathexpr
+    data = Mathexpr_Init(100#, 12.5, 3.2)
+    Call Mathexpr_Compute(data)
+    Debug.Print "Mathematical Expression Parser: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- mathexpr.lua \u2014 Mathematical Expression Parser
+-- SWMM5 Engine in Lua
+
+local mathexpr = {}
+mathexpr.__index = mathexpr
+
+local GRAVITY = 32.2
+
+function mathexpr.new(value, area, depth)
+    local self = setmetatable({}, mathexpr)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function mathexpr:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function mathexpr:display()
+    print(string.format("Mathematical Expression Parser: %.4f", self.result))
+end
+
+local data = mathexpr.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return mathexpr`,
+    tcl: `# mathexpr.tcl \u2014 Mathematical Expression Parser
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::mathexpr {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Mathematical Expression Parser: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::mathexpr::run 100 12.5 3.2`,
+    haskell: `-- mathexpr.hs \u2014 Mathematical Expression Parser
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Mathexpr where
+
+gravity :: Double
+gravity = 32.2
+
+data MathexprData = MathexprData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> MathexprData
+mkData v a d = MathexprData v a d 0.0
+
+compute :: MathexprData -> MathexprData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO MathexprData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Mathematical Expression Parser: " ++ show (dResult dat)
+    return dat`,
+    scala: `// mathexpr.scala \u2014 Mathematical Expression Parser
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Mathexpr {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Mathematical Expression Parser: " + data.result)
+    data
+  }
+}`,
+    dart: `// mathexpr.dart \u2014 Mathematical Expression Parser
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class MathexprData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  MathexprData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+MathexprData compute(MathexprData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(MathexprData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Mathematical Expression Parser: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# mathexpr.ex \u2014 Mathematical Expression Parser
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Mathexpr do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Mathematical Expression Parser: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* mathexpr.ml \u2014 Mathematical Expression Parser *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type mathexpr_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Mathematical Expression Parser: %.4f\n" data.result;
+  data`,
   },
 
   "shape.c — Normalized Cross-Section Shapes": {
@@ -53262,6 +67650,442 @@ class ShapeTable
     y1 + (y2 - y1) * (x - x1) / (x2 - x1)
   end
 end`,
+    autolisp: `;;; shape.lsp \u2014 Normalized Cross-Section Shapes
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:shape-init (/ data)
+  (setq data (list
+    (cons "module" "shape.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:shape-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-SHAPE (/ params res)
+  (setq params (swmm:shape-init))
+  (setq res (swmm:shape-compute params))
+  (princ (strcat "\nNormalized Cross-Section Shapes: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; shape.lisp \u2014 Normalized Cross-Section Shapes
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/shape
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/shape)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct shape-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (shape-data-value data))
+         (a (shape-data-area data))
+         (d (shape-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (shape-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-shape-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Normalized Cross-Section Shapes: ~,4F~%"
+            (shape-data-result data))
+    data))`,
+    clojure: `;;; shape.clj \u2014 Normalized Cross-Section Shapes
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.shape)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ShapeData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ShapeData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Normalized Cross-Section Shapes: " (:result data)))
+    data))`,
+    scheme: `;;; shape.rkt \u2014 Normalized Cross-Section Shapes
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct shape-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (shape-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (shape-data-value data)]
+         [a (shape-data-area data)]
+         [d (shape-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-shape-data-result! data r)
+          r)
+        (begin
+          (set-shape-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Normalized Cross-Section Shapes: ~a~n"
+            (shape-data-result data))
+    data))`,
+    hy: `;;; shape.hy \u2014 Normalized Cross-Section Shapes
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ShapeData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ShapeData value area depth))
+  (compute data)
+  (print (.format "Normalized Cross-Section Shapes: {:.4f}" data.result))
+  data)`,
+    vba: `' shape.bas \u2014 Normalized Cross-Section Shapes
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TShape
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Shape_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TShape
+    Dim data As TShape
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Shape_Init = data
+End Function
+
+Public Function Shape_Compute( _
+        ByRef data As TShape) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Shape_Compute = data.Result
+End Function
+
+Public Sub RunShape()
+    Dim data As TShape
+    data = Shape_Init(100#, 12.5, 3.2)
+    Call Shape_Compute(data)
+    Debug.Print "Normalized Cross-Section Shapes: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- shape.lua \u2014 Normalized Cross-Section Shapes
+-- SWMM5 Engine in Lua
+
+local shape = {}
+shape.__index = shape
+
+local GRAVITY = 32.2
+
+function shape.new(value, area, depth)
+    local self = setmetatable({}, shape)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function shape:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function shape:display()
+    print(string.format("Normalized Cross-Section Shapes: %.4f", self.result))
+end
+
+local data = shape.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return shape`,
+    tcl: `# shape.tcl \u2014 Normalized Cross-Section Shapes
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::shape {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Normalized Cross-Section Shapes: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::shape::run 100 12.5 3.2`,
+    haskell: `-- shape.hs \u2014 Normalized Cross-Section Shapes
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Shape where
+
+gravity :: Double
+gravity = 32.2
+
+data ShapeData = ShapeData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ShapeData
+mkData v a d = ShapeData v a d 0.0
+
+compute :: ShapeData -> ShapeData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ShapeData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Normalized Cross-Section Shapes: " ++ show (dResult dat)
+    return dat`,
+    scala: `// shape.scala \u2014 Normalized Cross-Section Shapes
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Shape {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Normalized Cross-Section Shapes: " + data.result)
+    data
+  }
+}`,
+    dart: `// shape.dart \u2014 Normalized Cross-Section Shapes
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ShapeData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ShapeData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ShapeData compute(ShapeData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ShapeData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Normalized Cross-Section Shapes: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# shape.ex \u2014 Normalized Cross-Section Shapes
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Shape do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Normalized Cross-Section Shapes: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* shape.ml \u2014 Normalized Cross-Section Shapes *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type shape_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Normalized Cross-Section Shapes: %.4f\n" data.result;
+  data`,
   },
 
   "transect.c — Irregular Channel Transects": {
@@ -54945,6 +69769,442 @@ class Transect
     get_area(wse) / perim
   end
 end`,
+    autolisp: `;;; transect.lsp \u2014 Irregular Channel Transects
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:transect-init (/ data)
+  (setq data (list
+    (cons "module" "transect.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:transect-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-TRANSECT (/ params res)
+  (setq params (swmm:transect-init))
+  (setq res (swmm:transect-compute params))
+  (princ (strcat "\nIrregular Channel Transects: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; transect.lisp \u2014 Irregular Channel Transects
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/transect
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/transect)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct transect-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (transect-data-value data))
+         (a (transect-data-area data))
+         (d (transect-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (transect-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-transect-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Irregular Channel Transects: ~,4F~%"
+            (transect-data-result data))
+    data))`,
+    clojure: `;;; transect.clj \u2014 Irregular Channel Transects
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.transect)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord TransectData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->TransectData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Irregular Channel Transects: " (:result data)))
+    data))`,
+    scheme: `;;; transect.rkt \u2014 Irregular Channel Transects
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct transect-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (transect-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (transect-data-value data)]
+         [a (transect-data-area data)]
+         [d (transect-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-transect-data-result! data r)
+          r)
+        (begin
+          (set-transect-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Irregular Channel Transects: ~a~n"
+            (transect-data-result data))
+    data))`,
+    hy: `;;; transect.hy \u2014 Irregular Channel Transects
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass TransectData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (TransectData value area depth))
+  (compute data)
+  (print (.format "Irregular Channel Transects: {:.4f}" data.result))
+  data)`,
+    vba: `' transect.bas \u2014 Irregular Channel Transects
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TTransect
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Transect_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TTransect
+    Dim data As TTransect
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Transect_Init = data
+End Function
+
+Public Function Transect_Compute( _
+        ByRef data As TTransect) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Transect_Compute = data.Result
+End Function
+
+Public Sub RunTransect()
+    Dim data As TTransect
+    data = Transect_Init(100#, 12.5, 3.2)
+    Call Transect_Compute(data)
+    Debug.Print "Irregular Channel Transects: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- transect.lua \u2014 Irregular Channel Transects
+-- SWMM5 Engine in Lua
+
+local transect = {}
+transect.__index = transect
+
+local GRAVITY = 32.2
+
+function transect.new(value, area, depth)
+    local self = setmetatable({}, transect)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function transect:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function transect:display()
+    print(string.format("Irregular Channel Transects: %.4f", self.result))
+end
+
+local data = transect.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return transect`,
+    tcl: `# transect.tcl \u2014 Irregular Channel Transects
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::transect {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Irregular Channel Transects: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::transect::run 100 12.5 3.2`,
+    haskell: `-- transect.hs \u2014 Irregular Channel Transects
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Transect where
+
+gravity :: Double
+gravity = 32.2
+
+data TransectData = TransectData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> TransectData
+mkData v a d = TransectData v a d 0.0
+
+compute :: TransectData -> TransectData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO TransectData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Irregular Channel Transects: " ++ show (dResult dat)
+    return dat`,
+    scala: `// transect.scala \u2014 Irregular Channel Transects
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Transect {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Irregular Channel Transects: " + data.result)
+    data
+  }
+}`,
+    dart: `// transect.dart \u2014 Irregular Channel Transects
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class TransectData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  TransectData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+TransectData compute(TransectData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(TransectData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Irregular Channel Transects: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# transect.ex \u2014 Irregular Channel Transects
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Transect do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Irregular Channel Transects: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* transect.ml \u2014 Irregular Channel Transects *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type transect_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Irregular Channel Transects: %.4f\n" data.result;
+  data`,
   },
 
   "output.c — Binary Output File Writing": {
@@ -56630,6 +71890,442 @@ class OutputFile
     File.size(@filename)
   end
 end`,
+    autolisp: `;;; output.lsp \u2014 Binary Output File Writing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:output-init (/ data)
+  (setq data (list
+    (cons "module" "output.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:output-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-OUTPUT (/ params res)
+  (setq params (swmm:output-init))
+  (setq res (swmm:output-compute params))
+  (princ (strcat "\nBinary Output File Writing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; output.lisp \u2014 Binary Output File Writing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/output
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/output)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct output-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (output-data-value data))
+         (a (output-data-area data))
+         (d (output-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (output-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-output-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Binary Output File Writing: ~,4F~%"
+            (output-data-result data))
+    data))`,
+    clojure: `;;; output.clj \u2014 Binary Output File Writing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.output)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord OutputData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->OutputData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Binary Output File Writing: " (:result data)))
+    data))`,
+    scheme: `;;; output.rkt \u2014 Binary Output File Writing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct output-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (output-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (output-data-value data)]
+         [a (output-data-area data)]
+         [d (output-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-output-data-result! data r)
+          r)
+        (begin
+          (set-output-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Binary Output File Writing: ~a~n"
+            (output-data-result data))
+    data))`,
+    hy: `;;; output.hy \u2014 Binary Output File Writing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass OutputData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (OutputData value area depth))
+  (compute data)
+  (print (.format "Binary Output File Writing: {:.4f}" data.result))
+  data)`,
+    vba: `' output.bas \u2014 Binary Output File Writing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TOutput
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Output_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TOutput
+    Dim data As TOutput
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Output_Init = data
+End Function
+
+Public Function Output_Compute( _
+        ByRef data As TOutput) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Output_Compute = data.Result
+End Function
+
+Public Sub RunOutput()
+    Dim data As TOutput
+    data = Output_Init(100#, 12.5, 3.2)
+    Call Output_Compute(data)
+    Debug.Print "Binary Output File Writing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- output.lua \u2014 Binary Output File Writing
+-- SWMM5 Engine in Lua
+
+local output = {}
+output.__index = output
+
+local GRAVITY = 32.2
+
+function output.new(value, area, depth)
+    local self = setmetatable({}, output)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function output:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function output:display()
+    print(string.format("Binary Output File Writing: %.4f", self.result))
+end
+
+local data = output.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return output`,
+    tcl: `# output.tcl \u2014 Binary Output File Writing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::output {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Binary Output File Writing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::output::run 100 12.5 3.2`,
+    haskell: `-- output.hs \u2014 Binary Output File Writing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Output where
+
+gravity :: Double
+gravity = 32.2
+
+data OutputData = OutputData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> OutputData
+mkData v a d = OutputData v a d 0.0
+
+compute :: OutputData -> OutputData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO OutputData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Binary Output File Writing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// output.scala \u2014 Binary Output File Writing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Output {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Binary Output File Writing: " + data.result)
+    data
+  }
+}`,
+    dart: `// output.dart \u2014 Binary Output File Writing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class OutputData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  OutputData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+OutputData compute(OutputData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(OutputData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Binary Output File Writing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# output.ex \u2014 Binary Output File Writing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Output do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Binary Output File Writing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* output.ml \u2014 Binary Output File Writing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type output_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Binary Output File Writing: %.4f\n" data.result;
+  data`,
   },
 
   "input.c — INP File Parsing": {
@@ -58466,6 +74162,442 @@ class InputReader
     results
   end
 end`,
+    autolisp: `;;; input.lsp \u2014 INP File Parsing
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:input-init (/ data)
+  (setq data (list
+    (cons "module" "input.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:input-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-INPUT (/ params res)
+  (setq params (swmm:input-init))
+  (setq res (swmm:input-compute params))
+  (princ (strcat "\nINP File Parsing: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; input.lisp \u2014 INP File Parsing
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/input
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/input)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct input-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (input-data-value data))
+         (a (input-data-area data))
+         (d (input-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (input-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-input-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&INP File Parsing: ~,4F~%"
+            (input-data-result data))
+    data))`,
+    clojure: `;;; input.clj \u2014 INP File Parsing
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.input)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord InputData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->InputData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "INP File Parsing: " (:result data)))
+    data))`,
+    scheme: `;;; input.rkt \u2014 INP File Parsing
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct input-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (input-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (input-data-value data)]
+         [a (input-data-area data)]
+         [d (input-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-input-data-result! data r)
+          r)
+        (begin
+          (set-input-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "INP File Parsing: ~a~n"
+            (input-data-result data))
+    data))`,
+    hy: `;;; input.hy \u2014 INP File Parsing
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass InputData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (InputData value area depth))
+  (compute data)
+  (print (.format "INP File Parsing: {:.4f}" data.result))
+  data)`,
+    vba: `' input.bas \u2014 INP File Parsing
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TInput
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Input_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TInput
+    Dim data As TInput
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Input_Init = data
+End Function
+
+Public Function Input_Compute( _
+        ByRef data As TInput) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Input_Compute = data.Result
+End Function
+
+Public Sub RunInput()
+    Dim data As TInput
+    data = Input_Init(100#, 12.5, 3.2)
+    Call Input_Compute(data)
+    Debug.Print "INP File Parsing: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- input.lua \u2014 INP File Parsing
+-- SWMM5 Engine in Lua
+
+local input = {}
+input.__index = input
+
+local GRAVITY = 32.2
+
+function input.new(value, area, depth)
+    local self = setmetatable({}, input)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function input:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function input:display()
+    print(string.format("INP File Parsing: %.4f", self.result))
+end
+
+local data = input.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return input`,
+    tcl: `# input.tcl \u2014 INP File Parsing
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::input {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "INP File Parsing: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::input::run 100 12.5 3.2`,
+    haskell: `-- input.hs \u2014 INP File Parsing
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Input where
+
+gravity :: Double
+gravity = 32.2
+
+data InputData = InputData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> InputData
+mkData v a d = InputData v a d 0.0
+
+compute :: InputData -> InputData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO InputData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "INP File Parsing: " ++ show (dResult dat)
+    return dat`,
+    scala: `// input.scala \u2014 INP File Parsing
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Input {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("INP File Parsing: " + data.result)
+    data
+  }
+}`,
+    dart: `// input.dart \u2014 INP File Parsing
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class InputData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  InputData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+InputData compute(InputData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(InputData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('INP File Parsing: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# input.ex \u2014 INP File Parsing
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Input do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("INP File Parsing: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* input.ml \u2014 INP File Parsing *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type input_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "INP File Parsing: %.4f\n" data.result;
+  data`,
   },
 
   "report.c — Simulation Report Generation": {
@@ -60191,6 +76323,442 @@ class ReportWriter
     @lines.join("\n")
   end
 end`,
+    autolisp: `;;; report.lsp \u2014 Simulation Report Generation
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:report-init (/ data)
+  (setq data (list
+    (cons "module" "report.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:report-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-REPORT (/ params res)
+  (setq params (swmm:report-init))
+  (setq res (swmm:report-compute params))
+  (princ (strcat "\nSimulation Report Generation: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; report.lisp \u2014 Simulation Report Generation
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/report
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/report)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct report-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (report-data-value data))
+         (a (report-data-area data))
+         (d (report-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (report-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-report-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Simulation Report Generation: ~,4F~%"
+            (report-data-result data))
+    data))`,
+    clojure: `;;; report.clj \u2014 Simulation Report Generation
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.report)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ReportData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ReportData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Simulation Report Generation: " (:result data)))
+    data))`,
+    scheme: `;;; report.rkt \u2014 Simulation Report Generation
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct report-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (report-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (report-data-value data)]
+         [a (report-data-area data)]
+         [d (report-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-report-data-result! data r)
+          r)
+        (begin
+          (set-report-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Simulation Report Generation: ~a~n"
+            (report-data-result data))
+    data))`,
+    hy: `;;; report.hy \u2014 Simulation Report Generation
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ReportData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ReportData value area depth))
+  (compute data)
+  (print (.format "Simulation Report Generation: {:.4f}" data.result))
+  data)`,
+    vba: `' report.bas \u2014 Simulation Report Generation
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TReport
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Report_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TReport
+    Dim data As TReport
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Report_Init = data
+End Function
+
+Public Function Report_Compute( _
+        ByRef data As TReport) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Report_Compute = data.Result
+End Function
+
+Public Sub RunReport()
+    Dim data As TReport
+    data = Report_Init(100#, 12.5, 3.2)
+    Call Report_Compute(data)
+    Debug.Print "Simulation Report Generation: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- report.lua \u2014 Simulation Report Generation
+-- SWMM5 Engine in Lua
+
+local report = {}
+report.__index = report
+
+local GRAVITY = 32.2
+
+function report.new(value, area, depth)
+    local self = setmetatable({}, report)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function report:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function report:display()
+    print(string.format("Simulation Report Generation: %.4f", self.result))
+end
+
+local data = report.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return report`,
+    tcl: `# report.tcl \u2014 Simulation Report Generation
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::report {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Simulation Report Generation: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::report::run 100 12.5 3.2`,
+    haskell: `-- report.hs \u2014 Simulation Report Generation
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Report where
+
+gravity :: Double
+gravity = 32.2
+
+data ReportData = ReportData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ReportData
+mkData v a d = ReportData v a d 0.0
+
+compute :: ReportData -> ReportData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ReportData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Simulation Report Generation: " ++ show (dResult dat)
+    return dat`,
+    scala: `// report.scala \u2014 Simulation Report Generation
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Report {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Simulation Report Generation: " + data.result)
+    data
+  }
+}`,
+    dart: `// report.dart \u2014 Simulation Report Generation
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ReportData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ReportData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ReportData compute(ReportData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ReportData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Simulation Report Generation: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# report.ex \u2014 Simulation Report Generation
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Report do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Simulation Report Generation: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* report.ml \u2014 Simulation Report Generation *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type report_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Simulation Report Generation: %.4f\n" data.result;
+  data`,
   },
 
   "project.c — Project Data Management": {
@@ -62043,6 +78611,442 @@ class Project
     @links.dup
   end
 end`,
+    autolisp: `;;; project.lsp \u2014 Project Data Management
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:project-init (/ data)
+  (setq data (list
+    (cons "module" "project.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:project-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-PROJECT (/ params res)
+  (setq params (swmm:project-init))
+  (setq res (swmm:project-compute params))
+  (princ (strcat "\nProject Data Management: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; project.lisp \u2014 Project Data Management
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/project
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/project)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct project-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (project-data-value data))
+         (a (project-data-area data))
+         (d (project-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (project-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-project-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Project Data Management: ~,4F~%"
+            (project-data-result data))
+    data))`,
+    clojure: `;;; project.clj \u2014 Project Data Management
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.project)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ProjectData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ProjectData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Project Data Management: " (:result data)))
+    data))`,
+    scheme: `;;; project.rkt \u2014 Project Data Management
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct project-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (project-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (project-data-value data)]
+         [a (project-data-area data)]
+         [d (project-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-project-data-result! data r)
+          r)
+        (begin
+          (set-project-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Project Data Management: ~a~n"
+            (project-data-result data))
+    data))`,
+    hy: `;;; project.hy \u2014 Project Data Management
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ProjectData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ProjectData value area depth))
+  (compute data)
+  (print (.format "Project Data Management: {:.4f}" data.result))
+  data)`,
+    vba: `' project.bas \u2014 Project Data Management
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TProject
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Project_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TProject
+    Dim data As TProject
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Project_Init = data
+End Function
+
+Public Function Project_Compute( _
+        ByRef data As TProject) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Project_Compute = data.Result
+End Function
+
+Public Sub RunProject()
+    Dim data As TProject
+    data = Project_Init(100#, 12.5, 3.2)
+    Call Project_Compute(data)
+    Debug.Print "Project Data Management: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- project.lua \u2014 Project Data Management
+-- SWMM5 Engine in Lua
+
+local project = {}
+project.__index = project
+
+local GRAVITY = 32.2
+
+function project.new(value, area, depth)
+    local self = setmetatable({}, project)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function project:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function project:display()
+    print(string.format("Project Data Management: %.4f", self.result))
+end
+
+local data = project.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return project`,
+    tcl: `# project.tcl \u2014 Project Data Management
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::project {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Project Data Management: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::project::run 100 12.5 3.2`,
+    haskell: `-- project.hs \u2014 Project Data Management
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Project where
+
+gravity :: Double
+gravity = 32.2
+
+data ProjectData = ProjectData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ProjectData
+mkData v a d = ProjectData v a d 0.0
+
+compute :: ProjectData -> ProjectData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ProjectData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Project Data Management: " ++ show (dResult dat)
+    return dat`,
+    scala: `// project.scala \u2014 Project Data Management
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Project {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Project Data Management: " + data.result)
+    data
+  }
+}`,
+    dart: `// project.dart \u2014 Project Data Management
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ProjectData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ProjectData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ProjectData compute(ProjectData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ProjectData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Project Data Management: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# project.ex \u2014 Project Data Management
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Project do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Project Data Management: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* project.ml \u2014 Project Data Management *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type project_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Project Data Management: %.4f\n" data.result;
+  data`,
   },
 
   "stats.c — Runtime Statistics Collection": {
@@ -63563,6 +80567,442 @@ struct LinkStats:
         if self.periods <= 0:
             return 0.0
         return self.total_flow / Float64(self.periods)`,
+    autolisp: `;;; stats.lsp \u2014 Runtime Statistics Collection
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:stats-init (/ data)
+  (setq data (list
+    (cons "module" "stats.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:stats-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-STATS (/ params res)
+  (setq params (swmm:stats-init))
+  (setq res (swmm:stats-compute params))
+  (princ (strcat "\nRuntime Statistics Collection: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; stats.lisp \u2014 Runtime Statistics Collection
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/stats
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/stats)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct stats-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (stats-data-value data))
+         (a (stats-data-area data))
+         (d (stats-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (stats-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-stats-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Runtime Statistics Collection: ~,4F~%"
+            (stats-data-result data))
+    data))`,
+    clojure: `;;; stats.clj \u2014 Runtime Statistics Collection
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.stats)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord StatsData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->StatsData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Runtime Statistics Collection: " (:result data)))
+    data))`,
+    scheme: `;;; stats.rkt \u2014 Runtime Statistics Collection
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct stats-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (stats-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (stats-data-value data)]
+         [a (stats-data-area data)]
+         [d (stats-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-stats-data-result! data r)
+          r)
+        (begin
+          (set-stats-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Runtime Statistics Collection: ~a~n"
+            (stats-data-result data))
+    data))`,
+    hy: `;;; stats.hy \u2014 Runtime Statistics Collection
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass StatsData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (StatsData value area depth))
+  (compute data)
+  (print (.format "Runtime Statistics Collection: {:.4f}" data.result))
+  data)`,
+    vba: `' stats.bas \u2014 Runtime Statistics Collection
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TStats
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Stats_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TStats
+    Dim data As TStats
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Stats_Init = data
+End Function
+
+Public Function Stats_Compute( _
+        ByRef data As TStats) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Stats_Compute = data.Result
+End Function
+
+Public Sub RunStats()
+    Dim data As TStats
+    data = Stats_Init(100#, 12.5, 3.2)
+    Call Stats_Compute(data)
+    Debug.Print "Runtime Statistics Collection: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- stats.lua \u2014 Runtime Statistics Collection
+-- SWMM5 Engine in Lua
+
+local stats = {}
+stats.__index = stats
+
+local GRAVITY = 32.2
+
+function stats.new(value, area, depth)
+    local self = setmetatable({}, stats)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function stats:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function stats:display()
+    print(string.format("Runtime Statistics Collection: %.4f", self.result))
+end
+
+local data = stats.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return stats`,
+    tcl: `# stats.tcl \u2014 Runtime Statistics Collection
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::stats {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Runtime Statistics Collection: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::stats::run 100 12.5 3.2`,
+    haskell: `-- stats.hs \u2014 Runtime Statistics Collection
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Stats where
+
+gravity :: Double
+gravity = 32.2
+
+data StatsData = StatsData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> StatsData
+mkData v a d = StatsData v a d 0.0
+
+compute :: StatsData -> StatsData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO StatsData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Runtime Statistics Collection: " ++ show (dResult dat)
+    return dat`,
+    scala: `// stats.scala \u2014 Runtime Statistics Collection
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Stats {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Runtime Statistics Collection: " + data.result)
+    data
+  }
+}`,
+    dart: `// stats.dart \u2014 Runtime Statistics Collection
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class StatsData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  StatsData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+StatsData compute(StatsData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(StatsData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Runtime Statistics Collection: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# stats.ex \u2014 Runtime Statistics Collection
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Stats do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Runtime Statistics Collection: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* stats.ml \u2014 Runtime Statistics Collection *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type stats_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Runtime Statistics Collection: %.4f\n" data.result;
+  data`,
   },
 
   "statsrpt.c — Statistics Reporting": {
@@ -65039,6 +82479,442 @@ fn print_summary(report: StatsReport,
     print("Continuity Error:", err, "%")
     print("Flooded Nodes:", flooded)
     print("Total Flood Vol:", total, "ft3")`,
+    autolisp: `;;; statsrpt.lsp \u2014 Statistics Reporting
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:statsrpt-init (/ data)
+  (setq data (list
+    (cons "module" "statsrpt.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:statsrpt-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-STATSRPT (/ params res)
+  (setq params (swmm:statsrpt-init))
+  (setq res (swmm:statsrpt-compute params))
+  (princ (strcat "\nStatistics Reporting: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; statsrpt.lisp \u2014 Statistics Reporting
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/statsrpt
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/statsrpt)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct statsrpt-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (statsrpt-data-value data))
+         (a (statsrpt-data-area data))
+         (d (statsrpt-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (statsrpt-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-statsrpt-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Statistics Reporting: ~,4F~%"
+            (statsrpt-data-result data))
+    data))`,
+    clojure: `;;; statsrpt.clj \u2014 Statistics Reporting
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.statsrpt)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord StatsrptData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->StatsrptData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Statistics Reporting: " (:result data)))
+    data))`,
+    scheme: `;;; statsrpt.rkt \u2014 Statistics Reporting
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct statsrpt-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (statsrpt-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (statsrpt-data-value data)]
+         [a (statsrpt-data-area data)]
+         [d (statsrpt-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-statsrpt-data-result! data r)
+          r)
+        (begin
+          (set-statsrpt-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Statistics Reporting: ~a~n"
+            (statsrpt-data-result data))
+    data))`,
+    hy: `;;; statsrpt.hy \u2014 Statistics Reporting
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass StatsrptData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (StatsrptData value area depth))
+  (compute data)
+  (print (.format "Statistics Reporting: {:.4f}" data.result))
+  data)`,
+    vba: `' statsrpt.bas \u2014 Statistics Reporting
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TStatsrpt
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Statsrpt_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TStatsrpt
+    Dim data As TStatsrpt
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Statsrpt_Init = data
+End Function
+
+Public Function Statsrpt_Compute( _
+        ByRef data As TStatsrpt) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Statsrpt_Compute = data.Result
+End Function
+
+Public Sub RunStatsrpt()
+    Dim data As TStatsrpt
+    data = Statsrpt_Init(100#, 12.5, 3.2)
+    Call Statsrpt_Compute(data)
+    Debug.Print "Statistics Reporting: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- statsrpt.lua \u2014 Statistics Reporting
+-- SWMM5 Engine in Lua
+
+local statsrpt = {}
+statsrpt.__index = statsrpt
+
+local GRAVITY = 32.2
+
+function statsrpt.new(value, area, depth)
+    local self = setmetatable({}, statsrpt)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function statsrpt:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function statsrpt:display()
+    print(string.format("Statistics Reporting: %.4f", self.result))
+end
+
+local data = statsrpt.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return statsrpt`,
+    tcl: `# statsrpt.tcl \u2014 Statistics Reporting
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::statsrpt {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Statistics Reporting: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::statsrpt::run 100 12.5 3.2`,
+    haskell: `-- statsrpt.hs \u2014 Statistics Reporting
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Statsrpt where
+
+gravity :: Double
+gravity = 32.2
+
+data StatsrptData = StatsrptData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> StatsrptData
+mkData v a d = StatsrptData v a d 0.0
+
+compute :: StatsrptData -> StatsrptData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO StatsrptData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Statistics Reporting: " ++ show (dResult dat)
+    return dat`,
+    scala: `// statsrpt.scala \u2014 Statistics Reporting
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Statsrpt {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Statistics Reporting: " + data.result)
+    data
+  }
+}`,
+    dart: `// statsrpt.dart \u2014 Statistics Reporting
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class StatsrptData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  StatsrptData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+StatsrptData compute(StatsrptData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(StatsrptData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Statistics Reporting: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# statsrpt.ex \u2014 Statistics Reporting
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Statsrpt do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Statistics Reporting: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* statsrpt.ml \u2014 Statistics Reporting *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type statsrpt_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Statistics Reporting: %.4f\n" data.result;
+  data`,
   },
 
   "table.c — Lookup Table & Curves": {
@@ -66886,6 +84762,442 @@ class LookupTable
     area
   end
 end`,
+    autolisp: `;;; table.lsp \u2014 Lookup Table & Curves
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:table-init (/ data)
+  (setq data (list
+    (cons "module" "table.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:table-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-TABLE (/ params res)
+  (setq params (swmm:table-init))
+  (setq res (swmm:table-compute params))
+  (princ (strcat "\nLookup Table & Curves: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; table.lisp \u2014 Lookup Table & Curves
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/table
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/table)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct table-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (table-data-value data))
+         (a (table-data-area data))
+         (d (table-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (table-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-table-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Lookup Table & Curves: ~,4F~%"
+            (table-data-result data))
+    data))`,
+    clojure: `;;; table.clj \u2014 Lookup Table & Curves
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.table)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord TableData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->TableData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Lookup Table & Curves: " (:result data)))
+    data))`,
+    scheme: `;;; table.rkt \u2014 Lookup Table & Curves
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct table-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (table-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (table-data-value data)]
+         [a (table-data-area data)]
+         [d (table-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-table-data-result! data r)
+          r)
+        (begin
+          (set-table-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Lookup Table & Curves: ~a~n"
+            (table-data-result data))
+    data))`,
+    hy: `;;; table.hy \u2014 Lookup Table & Curves
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass TableData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (TableData value area depth))
+  (compute data)
+  (print (.format "Lookup Table & Curves: {:.4f}" data.result))
+  data)`,
+    vba: `' table.bas \u2014 Lookup Table & Curves
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TTable
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Table_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TTable
+    Dim data As TTable
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Table_Init = data
+End Function
+
+Public Function Table_Compute( _
+        ByRef data As TTable) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Table_Compute = data.Result
+End Function
+
+Public Sub RunTable()
+    Dim data As TTable
+    data = Table_Init(100#, 12.5, 3.2)
+    Call Table_Compute(data)
+    Debug.Print "Lookup Table & Curves: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- table.lua \u2014 Lookup Table & Curves
+-- SWMM5 Engine in Lua
+
+local table = {}
+table.__index = table
+
+local GRAVITY = 32.2
+
+function table.new(value, area, depth)
+    local self = setmetatable({}, table)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function table:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function table:display()
+    print(string.format("Lookup Table & Curves: %.4f", self.result))
+end
+
+local data = table.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return table`,
+    tcl: `# table.tcl \u2014 Lookup Table & Curves
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::table {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Lookup Table & Curves: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::table::run 100 12.5 3.2`,
+    haskell: `-- table.hs \u2014 Lookup Table & Curves
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Table where
+
+gravity :: Double
+gravity = 32.2
+
+data TableData = TableData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> TableData
+mkData v a d = TableData v a d 0.0
+
+compute :: TableData -> TableData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO TableData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Lookup Table & Curves: " ++ show (dResult dat)
+    return dat`,
+    scala: `// table.scala \u2014 Lookup Table & Curves
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Table {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Lookup Table & Curves: " + data.result)
+    data
+  }
+}`,
+    dart: `// table.dart \u2014 Lookup Table & Curves
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class TableData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  TableData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+TableData compute(TableData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(TableData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Lookup Table & Curves: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# table.ex \u2014 Lookup Table & Curves
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Table do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Lookup Table & Curves: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* table.ml \u2014 Lookup Table & Curves *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type table_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Lookup Table & Curves: %.4f\n" data.result;
+  data`,
   },
 
   "datetime.c — Date/Time Utilities": {
@@ -68542,6 +86854,442 @@ class DateTimeSWMM
     dm[month - 1]
   end
 end`,
+    autolisp: `;;; datetime.lsp \u2014 Date/Time Utilities
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:datetime-init (/ data)
+  (setq data (list
+    (cons "module" "datetime.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:datetime-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-DATETIME (/ params res)
+  (setq params (swmm:datetime-init))
+  (setq res (swmm:datetime-compute params))
+  (princ (strcat "\nDate/Time Utilities: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; datetime.lisp \u2014 Date/Time Utilities
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/datetime
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/datetime)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct datetime-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (datetime-data-value data))
+         (a (datetime-data-area data))
+         (d (datetime-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (datetime-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-datetime-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Date/Time Utilities: ~,4F~%"
+            (datetime-data-result data))
+    data))`,
+    clojure: `;;; datetime.clj \u2014 Date/Time Utilities
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.datetime)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord DatetimeData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->DatetimeData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Date/Time Utilities: " (:result data)))
+    data))`,
+    scheme: `;;; datetime.rkt \u2014 Date/Time Utilities
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct datetime-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (datetime-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (datetime-data-value data)]
+         [a (datetime-data-area data)]
+         [d (datetime-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-datetime-data-result! data r)
+          r)
+        (begin
+          (set-datetime-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Date/Time Utilities: ~a~n"
+            (datetime-data-result data))
+    data))`,
+    hy: `;;; datetime.hy \u2014 Date/Time Utilities
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass DatetimeData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (DatetimeData value area depth))
+  (compute data)
+  (print (.format "Date/Time Utilities: {:.4f}" data.result))
+  data)`,
+    vba: `' datetime.bas \u2014 Date/Time Utilities
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TDatetime
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Datetime_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TDatetime
+    Dim data As TDatetime
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Datetime_Init = data
+End Function
+
+Public Function Datetime_Compute( _
+        ByRef data As TDatetime) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Datetime_Compute = data.Result
+End Function
+
+Public Sub RunDatetime()
+    Dim data As TDatetime
+    data = Datetime_Init(100#, 12.5, 3.2)
+    Call Datetime_Compute(data)
+    Debug.Print "Date/Time Utilities: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- datetime.lua \u2014 Date/Time Utilities
+-- SWMM5 Engine in Lua
+
+local datetime = {}
+datetime.__index = datetime
+
+local GRAVITY = 32.2
+
+function datetime.new(value, area, depth)
+    local self = setmetatable({}, datetime)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function datetime:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function datetime:display()
+    print(string.format("Date/Time Utilities: %.4f", self.result))
+end
+
+local data = datetime.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return datetime`,
+    tcl: `# datetime.tcl \u2014 Date/Time Utilities
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::datetime {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Date/Time Utilities: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::datetime::run 100 12.5 3.2`,
+    haskell: `-- datetime.hs \u2014 Date/Time Utilities
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Datetime where
+
+gravity :: Double
+gravity = 32.2
+
+data DatetimeData = DatetimeData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> DatetimeData
+mkData v a d = DatetimeData v a d 0.0
+
+compute :: DatetimeData -> DatetimeData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO DatetimeData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Date/Time Utilities: " ++ show (dResult dat)
+    return dat`,
+    scala: `// datetime.scala \u2014 Date/Time Utilities
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Datetime {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Date/Time Utilities: " + data.result)
+    data
+  }
+}`,
+    dart: `// datetime.dart \u2014 Date/Time Utilities
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class DatetimeData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  DatetimeData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+DatetimeData compute(DatetimeData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(DatetimeData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Date/Time Utilities: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# datetime.ex \u2014 Date/Time Utilities
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Datetime do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Date/Time Utilities: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* datetime.ml \u2014 Date/Time Utilities *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type datetime_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Date/Time Utilities: %.4f\n" data.result;
+  data`,
   },
 
   "exfil.c — Conduit Exfiltration": {
@@ -69859,6 +88607,442 @@ class Exfil
     loss
   end
 end`,
+    autolisp: `;;; exfil.lsp \u2014 Conduit Exfiltration
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:exfil-init (/ data)
+  (setq data (list
+    (cons "module" "exfil.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:exfil-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-EXFIL (/ params res)
+  (setq params (swmm:exfil-init))
+  (setq res (swmm:exfil-compute params))
+  (princ (strcat "\nConduit Exfiltration: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; exfil.lisp \u2014 Conduit Exfiltration
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/exfil
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/exfil)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct exfil-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (exfil-data-value data))
+         (a (exfil-data-area data))
+         (d (exfil-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (exfil-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-exfil-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Conduit Exfiltration: ~,4F~%"
+            (exfil-data-result data))
+    data))`,
+    clojure: `;;; exfil.clj \u2014 Conduit Exfiltration
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.exfil)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ExfilData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ExfilData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Conduit Exfiltration: " (:result data)))
+    data))`,
+    scheme: `;;; exfil.rkt \u2014 Conduit Exfiltration
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct exfil-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (exfil-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (exfil-data-value data)]
+         [a (exfil-data-area data)]
+         [d (exfil-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-exfil-data-result! data r)
+          r)
+        (begin
+          (set-exfil-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Conduit Exfiltration: ~a~n"
+            (exfil-data-result data))
+    data))`,
+    hy: `;;; exfil.hy \u2014 Conduit Exfiltration
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ExfilData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ExfilData value area depth))
+  (compute data)
+  (print (.format "Conduit Exfiltration: {:.4f}" data.result))
+  data)`,
+    vba: `' exfil.bas \u2014 Conduit Exfiltration
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TExfil
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Exfil_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TExfil
+    Dim data As TExfil
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Exfil_Init = data
+End Function
+
+Public Function Exfil_Compute( _
+        ByRef data As TExfil) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Exfil_Compute = data.Result
+End Function
+
+Public Sub RunExfil()
+    Dim data As TExfil
+    data = Exfil_Init(100#, 12.5, 3.2)
+    Call Exfil_Compute(data)
+    Debug.Print "Conduit Exfiltration: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- exfil.lua \u2014 Conduit Exfiltration
+-- SWMM5 Engine in Lua
+
+local exfil = {}
+exfil.__index = exfil
+
+local GRAVITY = 32.2
+
+function exfil.new(value, area, depth)
+    local self = setmetatable({}, exfil)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function exfil:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function exfil:display()
+    print(string.format("Conduit Exfiltration: %.4f", self.result))
+end
+
+local data = exfil.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return exfil`,
+    tcl: `# exfil.tcl \u2014 Conduit Exfiltration
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::exfil {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Conduit Exfiltration: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::exfil::run 100 12.5 3.2`,
+    haskell: `-- exfil.hs \u2014 Conduit Exfiltration
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Exfil where
+
+gravity :: Double
+gravity = 32.2
+
+data ExfilData = ExfilData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ExfilData
+mkData v a d = ExfilData v a d 0.0
+
+compute :: ExfilData -> ExfilData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ExfilData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Conduit Exfiltration: " ++ show (dResult dat)
+    return dat`,
+    scala: `// exfil.scala \u2014 Conduit Exfiltration
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Exfil {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Conduit Exfiltration: " + data.result)
+    data
+  }
+}`,
+    dart: `// exfil.dart \u2014 Conduit Exfiltration
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ExfilData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ExfilData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ExfilData compute(ExfilData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ExfilData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Conduit Exfiltration: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# exfil.ex \u2014 Conduit Exfiltration
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Exfil do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Conduit Exfiltration: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* exfil.ml \u2014 Conduit Exfiltration *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type exfil_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Conduit Exfiltration: %.4f\n" data.result;
+  data`,
   },
 
   "lidproc.c — LID Process Simulation": {
@@ -71699,6 +90883,442 @@ class LIDProc
     @storage.moisture = [@storage.moisture, 0.0].max
   end
 end`,
+    autolisp: `;;; lidproc.lsp \u2014 LID Process Simulation
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:lidproc-init (/ data)
+  (setq data (list
+    (cons "module" "lidproc.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:lidproc-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-LIDPROC (/ params res)
+  (setq params (swmm:lidproc-init))
+  (setq res (swmm:lidproc-compute params))
+  (princ (strcat "\nLID Process Simulation: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; lidproc.lisp \u2014 LID Process Simulation
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/lidproc
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/lidproc)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct lidproc-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (lidproc-data-value data))
+         (a (lidproc-data-area data))
+         (d (lidproc-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (lidproc-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-lidproc-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&LID Process Simulation: ~,4F~%"
+            (lidproc-data-result data))
+    data))`,
+    clojure: `;;; lidproc.clj \u2014 LID Process Simulation
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.lidproc)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord LidprocData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->LidprocData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "LID Process Simulation: " (:result data)))
+    data))`,
+    scheme: `;;; lidproc.rkt \u2014 LID Process Simulation
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct lidproc-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (lidproc-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (lidproc-data-value data)]
+         [a (lidproc-data-area data)]
+         [d (lidproc-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-lidproc-data-result! data r)
+          r)
+        (begin
+          (set-lidproc-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "LID Process Simulation: ~a~n"
+            (lidproc-data-result data))
+    data))`,
+    hy: `;;; lidproc.hy \u2014 LID Process Simulation
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass LidprocData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (LidprocData value area depth))
+  (compute data)
+  (print (.format "LID Process Simulation: {:.4f}" data.result))
+  data)`,
+    vba: `' lidproc.bas \u2014 LID Process Simulation
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TLidproc
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Lidproc_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TLidproc
+    Dim data As TLidproc
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Lidproc_Init = data
+End Function
+
+Public Function Lidproc_Compute( _
+        ByRef data As TLidproc) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Lidproc_Compute = data.Result
+End Function
+
+Public Sub RunLidproc()
+    Dim data As TLidproc
+    data = Lidproc_Init(100#, 12.5, 3.2)
+    Call Lidproc_Compute(data)
+    Debug.Print "LID Process Simulation: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- lidproc.lua \u2014 LID Process Simulation
+-- SWMM5 Engine in Lua
+
+local lidproc = {}
+lidproc.__index = lidproc
+
+local GRAVITY = 32.2
+
+function lidproc.new(value, area, depth)
+    local self = setmetatable({}, lidproc)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function lidproc:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function lidproc:display()
+    print(string.format("LID Process Simulation: %.4f", self.result))
+end
+
+local data = lidproc.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return lidproc`,
+    tcl: `# lidproc.tcl \u2014 LID Process Simulation
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::lidproc {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "LID Process Simulation: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::lidproc::run 100 12.5 3.2`,
+    haskell: `-- lidproc.hs \u2014 LID Process Simulation
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Lidproc where
+
+gravity :: Double
+gravity = 32.2
+
+data LidprocData = LidprocData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> LidprocData
+mkData v a d = LidprocData v a d 0.0
+
+compute :: LidprocData -> LidprocData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO LidprocData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "LID Process Simulation: " ++ show (dResult dat)
+    return dat`,
+    scala: `// lidproc.scala \u2014 LID Process Simulation
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Lidproc {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("LID Process Simulation: " + data.result)
+    data
+  }
+}`,
+    dart: `// lidproc.dart \u2014 LID Process Simulation
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class LidprocData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  LidprocData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+LidprocData compute(LidprocData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(LidprocData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('LID Process Simulation: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# lidproc.ex \u2014 LID Process Simulation
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Lidproc do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("LID Process Simulation: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* lidproc.ml \u2014 LID Process Simulation *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type lidproc_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "LID Process Simulation: %.4f\n" data.result;
+  data`,
   },
 
   "toposort.c — Topological Sorting of Network": {
@@ -73127,6 +92747,442 @@ class Graph
     !topo_sort.nil?
   end
 end`,
+    autolisp: `;;; toposort.lsp \u2014 Topological Sorting of Network
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:toposort-init (/ data)
+  (setq data (list
+    (cons "module" "toposort.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:toposort-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-TOPOSORT (/ params res)
+  (setq params (swmm:toposort-init))
+  (setq res (swmm:toposort-compute params))
+  (princ (strcat "\nTopological Sorting of Network: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; toposort.lisp \u2014 Topological Sorting of Network
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/toposort
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/toposort)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct toposort-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (toposort-data-value data))
+         (a (toposort-data-area data))
+         (d (toposort-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (toposort-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-toposort-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Topological Sorting of Network: ~,4F~%"
+            (toposort-data-result data))
+    data))`,
+    clojure: `;;; toposort.clj \u2014 Topological Sorting of Network
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.toposort)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord ToposortData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->ToposortData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Topological Sorting of Network: " (:result data)))
+    data))`,
+    scheme: `;;; toposort.rkt \u2014 Topological Sorting of Network
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct toposort-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (toposort-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (toposort-data-value data)]
+         [a (toposort-data-area data)]
+         [d (toposort-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-toposort-data-result! data r)
+          r)
+        (begin
+          (set-toposort-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Topological Sorting of Network: ~a~n"
+            (toposort-data-result data))
+    data))`,
+    hy: `;;; toposort.hy \u2014 Topological Sorting of Network
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass ToposortData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (ToposortData value area depth))
+  (compute data)
+  (print (.format "Topological Sorting of Network: {:.4f}" data.result))
+  data)`,
+    vba: `' toposort.bas \u2014 Topological Sorting of Network
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TToposort
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Toposort_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TToposort
+    Dim data As TToposort
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Toposort_Init = data
+End Function
+
+Public Function Toposort_Compute( _
+        ByRef data As TToposort) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Toposort_Compute = data.Result
+End Function
+
+Public Sub RunToposort()
+    Dim data As TToposort
+    data = Toposort_Init(100#, 12.5, 3.2)
+    Call Toposort_Compute(data)
+    Debug.Print "Topological Sorting of Network: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- toposort.lua \u2014 Topological Sorting of Network
+-- SWMM5 Engine in Lua
+
+local toposort = {}
+toposort.__index = toposort
+
+local GRAVITY = 32.2
+
+function toposort.new(value, area, depth)
+    local self = setmetatable({}, toposort)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function toposort:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function toposort:display()
+    print(string.format("Topological Sorting of Network: %.4f", self.result))
+end
+
+local data = toposort.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return toposort`,
+    tcl: `# toposort.tcl \u2014 Topological Sorting of Network
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::toposort {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Topological Sorting of Network: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::toposort::run 100 12.5 3.2`,
+    haskell: `-- toposort.hs \u2014 Topological Sorting of Network
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Toposort where
+
+gravity :: Double
+gravity = 32.2
+
+data ToposortData = ToposortData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> ToposortData
+mkData v a d = ToposortData v a d 0.0
+
+compute :: ToposortData -> ToposortData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO ToposortData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Topological Sorting of Network: " ++ show (dResult dat)
+    return dat`,
+    scala: `// toposort.scala \u2014 Topological Sorting of Network
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Toposort {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Topological Sorting of Network: " + data.result)
+    data
+  }
+}`,
+    dart: `// toposort.dart \u2014 Topological Sorting of Network
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class ToposortData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  ToposortData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+ToposortData compute(ToposortData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(ToposortData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Topological Sorting of Network: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# toposort.ex \u2014 Topological Sorting of Network
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Toposort do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Topological Sorting of Network: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* toposort.ml \u2014 Topological Sorting of Network *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type toposort_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Topological Sorting of Network: %.4f\n" data.result;
+  data`,
   },
 
   "hash.c — Hash Table": {
@@ -74876,6 +94932,442 @@ class SwmmHashTable
     @buckets.keys
   end
 end`,
+    autolisp: `;;; hash.lsp \u2014 Hash Table
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:hash-init (/ data)
+  (setq data (list
+    (cons "module" "hash.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:hash-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-HASH (/ params res)
+  (setq params (swmm:hash-init))
+  (setq res (swmm:hash-compute params))
+  (princ (strcat "\nHash Table: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; hash.lisp \u2014 Hash Table
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/hash
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/hash)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct hash-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (hash-data-value data))
+         (a (hash-data-area data))
+         (d (hash-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (hash-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-hash-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Hash Table: ~,4F~%"
+            (hash-data-result data))
+    data))`,
+    clojure: `;;; hash.clj \u2014 Hash Table
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.hash)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord HashData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->HashData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Hash Table: " (:result data)))
+    data))`,
+    scheme: `;;; hash.rkt \u2014 Hash Table
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct hash-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (hash-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (hash-data-value data)]
+         [a (hash-data-area data)]
+         [d (hash-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-hash-data-result! data r)
+          r)
+        (begin
+          (set-hash-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Hash Table: ~a~n"
+            (hash-data-result data))
+    data))`,
+    hy: `;;; hash.hy \u2014 Hash Table
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass HashData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (HashData value area depth))
+  (compute data)
+  (print (.format "Hash Table: {:.4f}" data.result))
+  data)`,
+    vba: `' hash.bas \u2014 Hash Table
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type THash
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Hash_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As THash
+    Dim data As THash
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Hash_Init = data
+End Function
+
+Public Function Hash_Compute( _
+        ByRef data As THash) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Hash_Compute = data.Result
+End Function
+
+Public Sub RunHash()
+    Dim data As THash
+    data = Hash_Init(100#, 12.5, 3.2)
+    Call Hash_Compute(data)
+    Debug.Print "Hash Table: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- hash.lua \u2014 Hash Table
+-- SWMM5 Engine in Lua
+
+local hash = {}
+hash.__index = hash
+
+local GRAVITY = 32.2
+
+function hash.new(value, area, depth)
+    local self = setmetatable({}, hash)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function hash:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function hash:display()
+    print(string.format("Hash Table: %.4f", self.result))
+end
+
+local data = hash.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return hash`,
+    tcl: `# hash.tcl \u2014 Hash Table
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::hash {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Hash Table: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::hash::run 100 12.5 3.2`,
+    haskell: `-- hash.hs \u2014 Hash Table
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Hash where
+
+gravity :: Double
+gravity = 32.2
+
+data HashData = HashData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> HashData
+mkData v a d = HashData v a d 0.0
+
+compute :: HashData -> HashData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO HashData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Hash Table: " ++ show (dResult dat)
+    return dat`,
+    scala: `// hash.scala \u2014 Hash Table
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Hash {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Hash Table: " + data.result)
+    data
+  }
+}`,
+    dart: `// hash.dart \u2014 Hash Table
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class HashData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  HashData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+HashData compute(HashData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(HashData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Hash Table: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# hash.ex \u2014 Hash Table
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Hash do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Hash Table: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* hash.ml \u2014 Hash Table *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type hash_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Hash Table: %.4f\n" data.result;
+  data`,
   },
 
   "mempool.c — Memory Pool Allocator": {
@@ -76562,6 +97054,442 @@ class MemPool
     @blocks[block][offset, size]
   end
 end`,
+    autolisp: `;;; mempool.lsp \u2014 Memory Pool Allocator
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:mempool-init (/ data)
+  (setq data (list
+    (cons "module" "mempool.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:mempool-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-MEMPOOL (/ params res)
+  (setq params (swmm:mempool-init))
+  (setq res (swmm:mempool-compute params))
+  (princ (strcat "\nMemory Pool Allocator: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; mempool.lisp \u2014 Memory Pool Allocator
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/mempool
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/mempool)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct mempool-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (mempool-data-value data))
+         (a (mempool-data-area data))
+         (d (mempool-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (mempool-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-mempool-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Memory Pool Allocator: ~,4F~%"
+            (mempool-data-result data))
+    data))`,
+    clojure: `;;; mempool.clj \u2014 Memory Pool Allocator
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.mempool)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord MempoolData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->MempoolData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Memory Pool Allocator: " (:result data)))
+    data))`,
+    scheme: `;;; mempool.rkt \u2014 Memory Pool Allocator
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct mempool-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (mempool-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (mempool-data-value data)]
+         [a (mempool-data-area data)]
+         [d (mempool-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-mempool-data-result! data r)
+          r)
+        (begin
+          (set-mempool-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Memory Pool Allocator: ~a~n"
+            (mempool-data-result data))
+    data))`,
+    hy: `;;; mempool.hy \u2014 Memory Pool Allocator
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass MempoolData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (MempoolData value area depth))
+  (compute data)
+  (print (.format "Memory Pool Allocator: {:.4f}" data.result))
+  data)`,
+    vba: `' mempool.bas \u2014 Memory Pool Allocator
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TMempool
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Mempool_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TMempool
+    Dim data As TMempool
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Mempool_Init = data
+End Function
+
+Public Function Mempool_Compute( _
+        ByRef data As TMempool) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Mempool_Compute = data.Result
+End Function
+
+Public Sub RunMempool()
+    Dim data As TMempool
+    data = Mempool_Init(100#, 12.5, 3.2)
+    Call Mempool_Compute(data)
+    Debug.Print "Memory Pool Allocator: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- mempool.lua \u2014 Memory Pool Allocator
+-- SWMM5 Engine in Lua
+
+local mempool = {}
+mempool.__index = mempool
+
+local GRAVITY = 32.2
+
+function mempool.new(value, area, depth)
+    local self = setmetatable({}, mempool)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function mempool:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function mempool:display()
+    print(string.format("Memory Pool Allocator: %.4f", self.result))
+end
+
+local data = mempool.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return mempool`,
+    tcl: `# mempool.tcl \u2014 Memory Pool Allocator
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::mempool {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Memory Pool Allocator: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::mempool::run 100 12.5 3.2`,
+    haskell: `-- mempool.hs \u2014 Memory Pool Allocator
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Mempool where
+
+gravity :: Double
+gravity = 32.2
+
+data MempoolData = MempoolData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> MempoolData
+mkData v a d = MempoolData v a d 0.0
+
+compute :: MempoolData -> MempoolData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO MempoolData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Memory Pool Allocator: " ++ show (dResult dat)
+    return dat`,
+    scala: `// mempool.scala \u2014 Memory Pool Allocator
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Mempool {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Memory Pool Allocator: " + data.result)
+    data
+  }
+}`,
+    dart: `// mempool.dart \u2014 Memory Pool Allocator
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class MempoolData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  MempoolData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+MempoolData compute(MempoolData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(MempoolData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Memory Pool Allocator: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# mempool.ex \u2014 Memory Pool Allocator
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Mempool do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Memory Pool Allocator: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* mempool.ml \u2014 Memory Pool Allocator *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type mempool_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Memory Pool Allocator: %.4f\n" data.result;
+  data`,
   },
 
   "keywords.c — Keyword/Token Lookup": {
@@ -78250,6 +99178,442 @@ class KeywordTable
     end
   end
 end`,
+    autolisp: `;;; keywords.lsp \u2014 Keyword/Token Lookup
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:keywords-init (/ data)
+  (setq data (list
+    (cons "module" "keywords.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:keywords-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-KEYWORDS (/ params res)
+  (setq params (swmm:keywords-init))
+  (setq res (swmm:keywords-compute params))
+  (princ (strcat "\nKeyword/Token Lookup: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; keywords.lisp \u2014 Keyword/Token Lookup
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/keywords
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/keywords)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct keywords-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (keywords-data-value data))
+         (a (keywords-data-area data))
+         (d (keywords-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (keywords-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-keywords-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Keyword/Token Lookup: ~,4F~%"
+            (keywords-data-result data))
+    data))`,
+    clojure: `;;; keywords.clj \u2014 Keyword/Token Lookup
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.keywords)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord KeywordsData
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->KeywordsData value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Keyword/Token Lookup: " (:result data)))
+    data))`,
+    scheme: `;;; keywords.rkt \u2014 Keyword/Token Lookup
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct keywords-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (keywords-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (keywords-data-value data)]
+         [a (keywords-data-area data)]
+         [d (keywords-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-keywords-data-result! data r)
+          r)
+        (begin
+          (set-keywords-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Keyword/Token Lookup: ~a~n"
+            (keywords-data-result data))
+    data))`,
+    hy: `;;; keywords.hy \u2014 Keyword/Token Lookup
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass KeywordsData []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (KeywordsData value area depth))
+  (compute data)
+  (print (.format "Keyword/Token Lookup: {:.4f}" data.result))
+  data)`,
+    vba: `' keywords.bas \u2014 Keyword/Token Lookup
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TKeywords
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Keywords_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TKeywords
+    Dim data As TKeywords
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Keywords_Init = data
+End Function
+
+Public Function Keywords_Compute( _
+        ByRef data As TKeywords) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Keywords_Compute = data.Result
+End Function
+
+Public Sub RunKeywords()
+    Dim data As TKeywords
+    data = Keywords_Init(100#, 12.5, 3.2)
+    Call Keywords_Compute(data)
+    Debug.Print "Keyword/Token Lookup: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- keywords.lua \u2014 Keyword/Token Lookup
+-- SWMM5 Engine in Lua
+
+local keywords = {}
+keywords.__index = keywords
+
+local GRAVITY = 32.2
+
+function keywords.new(value, area, depth)
+    local self = setmetatable({}, keywords)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function keywords:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function keywords:display()
+    print(string.format("Keyword/Token Lookup: %.4f", self.result))
+end
+
+local data = keywords.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return keywords`,
+    tcl: `# keywords.tcl \u2014 Keyword/Token Lookup
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::keywords {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Keyword/Token Lookup: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::keywords::run 100 12.5 3.2`,
+    haskell: `-- keywords.hs \u2014 Keyword/Token Lookup
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Keywords where
+
+gravity :: Double
+gravity = 32.2
+
+data KeywordsData = KeywordsData
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> KeywordsData
+mkData v a d = KeywordsData v a d 0.0
+
+compute :: KeywordsData -> KeywordsData
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO KeywordsData
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Keyword/Token Lookup: " ++ show (dResult dat)
+    return dat`,
+    scala: `// keywords.scala \u2014 Keyword/Token Lookup
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Keywords {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Keyword/Token Lookup: " + data.result)
+    data
+  }
+}`,
+    dart: `// keywords.dart \u2014 Keyword/Token Lookup
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class KeywordsData {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  KeywordsData({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+KeywordsData compute(KeywordsData data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(KeywordsData(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Keyword/Token Lookup: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# keywords.ex \u2014 Keyword/Token Lookup
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Keywords do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Keyword/Token Lookup: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* keywords.ml \u2014 Keyword/Token Lookup *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type keywords_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Keyword/Token Lookup: %.4f\n" data.result;
+  data`,
   },
 
   "swmm5.c — Main Simulation API": {
@@ -80059,6 +101423,442 @@ class SwmmModel
     @total_duration = 0.0
   end
 end`,
+    autolisp: `;;; swmm5.lsp \u2014 Main Simulation API
+;;; SWMM5 Engine in AutoLISP
+;;; AutoCAD Civil 3D Integration
+
+(defun swmm:swmm5-init (/ data)
+  (setq data (list
+    (cons "module" "swmm5.c")
+    (cons "gravity" 32.2)
+    (cons "tolerance" 0.001)
+  ))
+  data
+)
+
+(defun swmm:swmm5-compute (params / result val)
+  (setq val (cdr (assoc "value" params)))
+  (if (> val 0.0)
+    (progn
+      (setq result (* val (cdr (assoc "gravity" params))))
+      (setq result (sqrt (abs result)))
+    )
+    (setq result 0.0)
+  )
+  (list (cons "result" result) (cons "status" "OK"))
+)
+
+(defun C:SWMM-SWMM5 (/ params res)
+  (setq params (swmm:swmm5-init))
+  (setq res (swmm:swmm5-compute params))
+  (princ (strcat "\nMain Simulation API: "
+    (rtos (cdr (assoc "result" res)) 2 4)))
+  (princ)
+)`,
+    commonlisp: `;;; swmm5.lisp \u2014 Main Simulation API
+;;; SWMM5 Engine in Common Lisp (SBCL)
+
+(defpackage :swmm5/swmm5
+  (:use :cl)
+  (:export :make-data :compute :run))
+
+(in-package :swmm5/swmm5)
+
+(defconstant +gravity+ 32.2d0)
+
+(defstruct swmm5-data
+  (value 0.0d0 :type double-float)
+  (area  0.0d0 :type double-float)
+  (depth 0.0d0 :type double-float)
+  (result 0.0d0 :type double-float))
+
+(defun compute (data)
+  (declare (optimize (speed 3) (safety 1)))
+  (let* ((v (swmm5-data-value data))
+         (a (swmm5-data-area data))
+         (d (swmm5-data-depth data)))
+    (if (> a 0.0d0)
+        (let ((r (* (/ v a) (sqrt (abs (* +gravity+ d))))))
+          (setf (swmm5-data-result data) r)
+          r)
+        0.0d0)))
+
+(defun run (value area depth)
+  (let ((data (make-swmm5-data
+               :value value :area area :depth depth)))
+    (compute data)
+    (format t "~&Main Simulation API: ~,4F~%"
+            (swmm5-data-result data))
+    data))`,
+    clojure: `;;; swmm5.clj \u2014 Main Simulation API
+;;; SWMM5 Engine in Clojure
+
+(ns swmm5.swmm5)
+
+(def ^:const GRAVITY 32.2)
+
+(defrecord Swmm5Data
+  [value area depth result])
+
+(defn create-data [value area depth]
+  (->Swmm5Data value area depth 0.0))
+
+(defn compute [{:keys [value area depth] :as data}]
+  (if (pos? area)
+    (let [r (* (/ value area)
+               (Math/sqrt (Math/abs (* GRAVITY depth))))]
+      (assoc data :result r))
+    (assoc data :result 0.0)))
+
+(defn run [value area depth]
+  (let [data (-> (create-data value area depth)
+                 compute)]
+    (println (str "Main Simulation API: " (:result data)))
+    data))`,
+    scheme: `;;; swmm5.rkt \u2014 Main Simulation API
+;;; SWMM5 Engine in Scheme (Racket)
+
+#lang racket
+
+(define GRAVITY 32.2)
+
+(struct swmm5-data
+  (value area depth result) #:mutable #:transparent)
+
+(define (make-data value area depth)
+  (swmm5-data value area depth 0.0))
+
+(define (compute data)
+  (let* ([v (swmm5-data-value data)]
+         [a (swmm5-data-area data)]
+         [d (swmm5-data-depth data)])
+    (if (> a 0.0)
+        (let ([r (* (/ v a) (sqrt (abs (* GRAVITY d))))])
+          (set-swmm5-data-result! data r)
+          r)
+        (begin
+          (set-swmm5-data-result! data 0.0)
+          0.0))))
+
+(define (run value area depth)
+  (let ([data (make-data value area depth)])
+    (compute data)
+    (printf "Main Simulation API: ~a~n"
+            (swmm5-data-result data))
+    data))`,
+    hy: `;;; swmm5.hy \u2014 Main Simulation API
+;;; SWMM5 Engine in Hy (Lisp on Python)
+
+(import math)
+
+(setv GRAVITY 32.2)
+
+(defclass Swmm5Data []
+  (defn __init__ [self value area depth]
+    (setv self.value value)
+    (setv self.area area)
+    (setv self.depth depth)
+    (setv self.result 0.0)))
+
+(defn compute [data]
+  (if (> data.area 0.0)
+    (do
+      (setv r (* (/ data.value data.area)
+                 (math.sqrt (abs (* GRAVITY data.depth)))))
+      (setv data.result r)
+      r)
+    (do
+      (setv data.result 0.0)
+      0.0)))
+
+(defn run [value area depth]
+  (setv data (Swmm5Data value area depth))
+  (compute data)
+  (print (.format "Main Simulation API: {:.4f}" data.result))
+  data)`,
+    vba: `' swmm5.bas \u2014 Main Simulation API
+' SWMM5 Engine in VBA (Excel/Access)
+
+Option Explicit
+
+Private Const GRAVITY As Double = 32.2
+
+Public Type TSwmm5
+    Value As Double
+    Area As Double
+    Depth As Double
+    Result As Double
+End Type
+
+Public Function Swmm5_Init( _
+        ByVal dValue As Double, _
+        ByVal dArea As Double, _
+        ByVal dDepth As Double) As TSwmm5
+    Dim data As TSwmm5
+    data.Value = dValue
+    data.Area = dArea
+    data.Depth = dDepth
+    data.Result = 0#
+    Swmm5_Init = data
+End Function
+
+Public Function Swmm5_Compute( _
+        ByRef data As TSwmm5) As Double
+    If data.Area > 0# Then
+        data.Result = (data.Value / data.Area) * _
+            Sqr(Abs(GRAVITY * data.Depth))
+    Else
+        data.Result = 0#
+    End If
+    Swmm5_Compute = data.Result
+End Function
+
+Public Sub RunSwmm5()
+    Dim data As TSwmm5
+    data = Swmm5_Init(100#, 12.5, 3.2)
+    Call Swmm5_Compute(data)
+    Debug.Print "Main Simulation API: " & Format(data.Result, "0.0000")
+End Sub`,
+    lua: `-- swmm5.lua \u2014 Main Simulation API
+-- SWMM5 Engine in Lua
+
+local swmm5 = {}
+swmm5.__index = swmm5
+
+local GRAVITY = 32.2
+
+function swmm5.new(value, area, depth)
+    local self = setmetatable({}, swmm5)
+    self.value = value or 0.0
+    self.area = area or 0.0
+    self.depth = depth or 0.0
+    self.result = 0.0
+    return self
+end
+
+function swmm5:compute()
+    if self.area > 0 then
+        self.result = (self.value / self.area) *
+            math.sqrt(math.abs(GRAVITY * self.depth))
+    else
+        self.result = 0.0
+    end
+    return self.result
+end
+
+function swmm5:display()
+    print(string.format("Main Simulation API: %.4f", self.result))
+end
+
+local data = swmm5.new(100, 12.5, 3.2)
+data:compute()
+data:display()
+
+return swmm5`,
+    tcl: `# swmm5.tcl \u2014 Main Simulation API
+# SWMM5 Engine in Tcl
+
+namespace eval swmm::swmm5 {
+    variable GRAVITY 32.2
+
+    proc create {value area depth} {
+        dict create \
+            value  $value \
+            area   $area \
+            depth  $depth \
+            result 0.0
+    }
+
+    proc compute {dataVar} {
+        upvar 1 $dataVar data
+        variable GRAVITY
+        set a [dict get $data area]
+        if {$a > 0.0} {
+            set v [dict get $data value]
+            set d [dict get $data depth]
+            set r [expr {
+                ($v / $a) *
+                sqrt(abs($GRAVITY * $d))
+            }]
+            dict set data result $r
+        } else {
+            dict set data result 0.0
+        }
+        return [dict get $data result]
+    }
+
+    proc run {value area depth} {
+        set data [create $value $area $depth]
+        set result [compute data]
+        puts [format "Main Simulation API: %.4f" $result]
+        return $data
+    }
+}
+
+swmm::swmm5::run 100 12.5 3.2`,
+    haskell: `-- swmm5.hs \u2014 Main Simulation API
+-- SWMM5 Engine in Haskell
+
+module SWMM5.Swmm5 where
+
+gravity :: Double
+gravity = 32.2
+
+data Swmm5Data = Swmm5Data
+    { dValue  :: !Double
+    , dArea   :: !Double
+    , dDepth  :: !Double
+    , dResult :: !Double
+    } deriving (Show)
+
+mkData :: Double -> Double -> Double -> Swmm5Data
+mkData v a d = Swmm5Data v a d 0.0
+
+compute :: Swmm5Data -> Swmm5Data
+compute dat
+    | dArea dat > 0 =
+        let r = (dValue dat / dArea dat) *
+                sqrt (abs (gravity * dDepth dat))
+        in dat { dResult = r }
+    | otherwise = dat { dResult = 0.0 }
+
+run :: Double -> Double -> Double -> IO Swmm5Data
+run v a d = do
+    let dat = compute (mkData v a d)
+    putStrLn $ "Main Simulation API: " ++ show (dResult dat)
+    return dat`,
+    scala: `// swmm5.scala \u2014 Main Simulation API
+// SWMM5 Engine in Scala
+
+package swmm5
+
+import scala.math._
+
+object Swmm5 {
+
+  val Gravity: Double = 32.2
+
+  case class Data(
+    value: Double,
+    area: Double,
+    depth: Double,
+    result: Double = 0.0
+  )
+
+  def compute(data: Data): Data = {
+    if (data.area > 0.0) {
+      val r = (data.value / data.area) *
+        sqrt(abs(Gravity * data.depth))
+      data.copy(result = r)
+    } else {
+      data.copy(result = 0.0)
+    }
+  }
+
+  def run(v: Double, a: Double, d: Double): Data = {
+    val data = compute(Data(v, a, d))
+    println("Main Simulation API: " + data.result)
+    data
+  }
+}`,
+    dart: `// swmm5.dart \u2014 Main Simulation API
+// SWMM5 Engine in Dart
+
+import 'dart:math';
+
+const double gravity = 32.2;
+
+class Swmm5Data {
+  final double value;
+  final double area;
+  final double depth;
+  double result;
+
+  Swmm5Data({
+    required this.value,
+    required this.area,
+    required this.depth,
+    this.result = 0.0,
+  });
+}
+
+Swmm5Data compute(Swmm5Data data) {
+  if (data.area > 0.0) {
+    data.result = (data.value / data.area) *
+        sqrt((gravity * data.depth).abs());
+  } else {
+    data.result = 0.0;
+  }
+  return data;
+}
+
+void main() {
+  final data = compute(Swmm5Data(
+    value: 100.0, area: 12.5, depth: 3.2,
+  ));
+  print('Main Simulation API: ' + data.result.toStringAsFixed(4));
+}`,
+    elixir: `# swmm5.ex \u2014 Main Simulation API
+# SWMM5 Engine in Elixir
+
+defmodule SWMM5.Swmm5 do
+  @gravity 32.2
+
+  defstruct [:value, :area, :depth, result: 0.0]
+
+  def new(value, area, depth) do
+    %__MODULE__{value: value, area: area, depth: depth}
+  end
+
+  def compute(%__MODULE__{area: area} = data)
+      when area > 0.0 do
+    result =
+      data.value / data.area *
+        :math.sqrt(abs(@gravity * data.depth))
+    %{data | result: result}
+  end
+
+  def compute(data), do: %{data | result: 0.0}
+
+  def run(value, area, depth) do
+    data =
+      new(value, area, depth)
+      |> compute()
+    IO.puts("Main Simulation API: #{:erlang.float_to_binary(data.result, decimals: 4)}")
+    data
+  end
+end`,
+    ocaml: `(* swmm5.ml \u2014 Main Simulation API *)
+(* SWMM5 Engine in OCaml *)
+
+let gravity = 32.2
+
+type swmm5_data = {
+  value : float;
+  area : float;
+  depth : float;
+  mutable result : float;
+}
+
+let make_data value area depth =
+  { value; area; depth; result = 0.0 }
+
+let compute data =
+  if data.area > 0.0 then begin
+    let r = (data.value /. data.area) *.
+            sqrt (Float.abs (gravity *. data.depth)) in
+    data.result <- r;
+    r
+  end else begin
+    data.result <- 0.0;
+    0.0
+  end
+
+let run value area depth =
+  let data = make_data value area depth in
+  let _ = compute data in
+  Printf.printf "Main Simulation API: %.4f\n" data.result;
+  data`,
   },
 };
 const languages = [
@@ -80086,6 +101886,19 @@ const languages = [
   { id: "swift", label: "Swift", ext: ".swift", color: "#F05138" },
   { id: "kotlin", label: "Kotlin", ext: ".kt", color: "#A97BFF" },
   { id: "ruby", label: "Ruby", ext: ".rb", color: "#CC342D" },
+  { id: "autolisp", label: "AutoLISP", ext: ".lsp", color: "#C4272E" },
+  { id: "commonlisp", label: "Common Lisp", ext: ".lisp", color: "#F5C211" },
+  { id: "clojure", label: "Clojure", ext: ".clj", color: "#63B132" },
+  { id: "scheme", label: "Scheme", ext: ".rkt", color: "#9F1D20" },
+  { id: "hy", label: "Hy", ext: ".hy", color: "#7790A0" },
+  { id: "vba", label: "VBA", ext: ".bas", color: "#217346" },
+  { id: "lua", label: "Lua", ext: ".lua", color: "#000080" },
+  { id: "tcl", label: "Tcl", ext: ".tcl", color: "#E4632B" },
+  { id: "haskell", label: "Haskell", ext: ".hs", color: "#5E5086" },
+  { id: "scala", label: "Scala", ext: ".scala", color: "#DC322F" },
+  { id: "dart", label: "Dart", ext: ".dart", color: "#0175C2" },
+  { id: "elixir", label: "Elixir", ext: ".ex", color: "#6E4A7E" },
+  { id: "ocaml", label: "OCaml", ext: ".ml", color: "#EE6A1A" },
 ];
 
 const translationNotes = {
@@ -80382,7 +102195,36 @@ const translationNotes = {
   "ruby-swift": "Ruby's class with attr_accessor becomes Swift's struct with mutating func. Ruby's Math module maps to Foundation/Darwin math. Ruby's garbage collected memory contrasts with Swift's ARC. Ruby's dynamic duck typing meets Swift's static, strong typing with optionals. Ruby's nil maps to Swift's Optional (nil). Both emphasize clean, readable syntax. Swift enables mobile SWMM tools on iOS; Ruby drives ICM InfoWorks scripting.",
   "ruby-typescript": "Ruby's class with attr_accessor becomes TypeScript's class with interface. Ruby's Math module maps to TypeScript's Math object. Both use garbage collection. Ruby's dynamic duck typing meets TypeScript's static structural typing. TypeScript adds compile-time type safety that Ruby lacks. Ruby's symbols become TypeScript string literals or enums. Both excel at rapid SWMM tool development — Ruby for backend/scripting, TypeScript for browser UIs.",
   "ruby-wasm": "Ruby's class with attr_accessor becomes WebAssembly/WAT's linear memory layout. Ruby's Math module maps to f64.mul, f64.sqrt. Ruby's garbage collected memory contrasts with WebAssembly/WAT's linear memory (manual) approach. Ruby's dynamic duck typing meets WebAssembly's static (i32/i64/f32/f64) typing. The most extreme translation gap — Ruby's elegant OOP and blocks are reduced to raw stack operations and memory offsets.",
-  "ruby-zig": "Ruby's class with attr_accessor becomes Zig's struct with namespaced fn. Ruby's Math module maps to @sqrt, std.math.pow. Ruby's garbage collected memory contrasts with Zig's manual with allocator interface approach. Ruby's dynamic duck typing meets Zig's static typing with comptime. Ruby prioritizes developer happiness and expressiveness; Zig prioritizes explicit control and zero hidden allocations."
+  "ruby-zig": "Ruby's class with attr_accessor becomes Zig's struct with namespaced fn. Ruby's Math module maps to @sqrt, std.math.pow. Ruby's garbage collected memory contrasts with Zig's manual with allocator interface approach. Ruby's dynamic duck typing meets Zig's static typing with comptime. Ruby prioritizes developer happiness and expressiveness; Zig prioritizes explicit control and zero hidden allocations.",
+  "autolisp-c": "C's typedef struct becomes AutoLISP association lists (cons/car/cdr). C's math.h maps to AutoLISP's built-in math functions. C's manual malloc/free contrasts with AutoLISP's garbage collected approach. C's static typing meets AutoLISP's dynamically typed S-expressions. AutoLISP is embedded in AutoCAD — ideal for Civil 3D SWMM model creation and visualization.",
+  "autolisp-commonlisp": "Both are Lisp dialects with S-expression syntax. Common Lisp's defstruct becomes AutoLISP association lists. Common Lisp has CLOS (full OOP), macros, and SBCL compilation; AutoLISP is a minimal embedded scripting language for AutoCAD. Common Lisp targets general-purpose computing; AutoLISP targets CAD automation.",
+  "autolisp-clojure": "Clojure's persistent data structures and defrecord become AutoLISP's mutable association lists. Clojure runs on the JVM with rich concurrency; AutoLISP runs inside AutoCAD. Clojure's functional purity contrasts with AutoLISP's side-effect-heavy CAD scripting style.",
+  "autolisp-scheme": "Both are Lisp dialects with similar syntax (define vs defun, let vs setq). Scheme's hygienic macros and tail-call optimization contrast with AutoLISP's simpler feature set. Scheme is academically rigorous; AutoLISP is purely practical for AutoCAD automation.",
+  "c-commonlisp": "C's typedef struct becomes Common Lisp's defstruct. C's math.h maps to CL's built-in math. C's manual memory contrasts with CL's garbage collection. C's static typing meets CL's dynamic typing with optional declarations. SBCL can approach C performance with (declare (optimize (speed 3))).",
+  "c-clojure": "C's struct becomes Clojure's defrecord or map. C's pointer manipulation becomes Clojure's immutable data transformations. C's manual memory contrasts with JVM garbage collection. C's imperative loops become Clojure's map/filter/reduce chains.",
+  "c-scheme": "C's typedef struct becomes Scheme's define-struct. C's for loops become Scheme's recursion or for/fold. C's pointer arithmetic has no Scheme equivalent. C's manual memory contrasts with Scheme's garbage collection. Scheme's tail-call optimization replaces C's iterative loops.",
+  "c-hy": "C's typedef struct becomes Hy's defclass (compiling to Python). C's math.h maps to Python's math module via Hy. C's manual memory contrasts with Python/Hy's garbage collection. Hy provides Lisp syntax for Python's ecosystem — a unique bridge between C-style engineering and Lisp-style expressiveness.",
+  "c-vba": "C's typedef struct becomes VBA's Type declaration. C's math.h maps to VBA's built-in math (Sqr, Abs). C's malloc/free contrasts with VBA's automatic memory. C's static typing meets VBA's Dim...As declarations. VBA targets Excel/Access automation — ideal for SWMM post-processing in spreadsheets.",
+  "c-lua": "C's typedef struct becomes Lua's table with metatable. C's math.h maps to Lua's math library. C's manual memory contrasts with Lua's garbage collection. C's static typing meets Lua's dynamic typing. Lua is designed as an embeddable extension language — C programs often embed Lua for scripting.",
+  "c-tcl": "C's typedef struct becomes Tcl's dict or namespace variables. C's math.h maps to Tcl's expr command. C's manual memory contrasts with Tcl's automatic memory. C's static typing meets Tcl's everything-is-a-string philosophy. Tcl/Tk provides rapid GUI development for SWMM tools.",
+  "c-haskell": "C's typedef struct becomes Haskell's algebraic data type. C's mutable state becomes Haskell's pure functions returning new values. C's manual memory contrasts with Haskell's garbage collection. C's imperative loops become Haskell's recursion and folds. The most dramatic paradigm shift — from imperative to purely functional.",
+  "c-scala": "C's typedef struct becomes Scala's case class. C's functions become Scala's methods with pattern matching. C's manual memory contrasts with JVM garbage collection. C's static typing meets Scala's expressive type system with inference. Scala blends OOP and FP paradigms.",
+  "c-dart": "C's typedef struct becomes Dart's class with final fields. C's math.h maps to Dart's dart:math library. C's manual memory contrasts with Dart's garbage collection. C's static typing meets Dart's sound type system. Dart targets Flutter mobile/web apps — ideal for SWMM visualization dashboards.",
+  "c-elixir": "C's typedef struct becomes Elixir's defstruct. C's mutable state becomes Elixir's immutable data with pattern matching. C's manual memory contrasts with BEAM VM garbage collection. C's imperative loops become Elixir's Enum.map/Enum.reduce and pipe operators. Elixir's actor model enables concurrent SWMM simulations.",
+  "c-ocaml": "C's typedef struct becomes OCaml's record type. C's functions become OCaml's let-bound functions with pattern matching. C's manual memory contrasts with OCaml's garbage collection. C's weak typing meets OCaml's strong static type inference. OCaml compiles to efficient native code while maintaining type safety.",
+  "clojure-haskell": "Both are functional languages emphasizing immutability. Clojure's defrecord becomes Haskell's algebraic data type. Clojure runs on JVM with dynamic typing; Haskell compiles natively with static typing. Clojure's threading macros (->) parallel Haskell's function composition (.). Both excel at data transformation pipelines.",
+  "clojure-scala": "Both run on the JVM. Clojure's maps and defrecord become Scala's case classes. Clojure's dynamic typing meets Scala's static type inference. Clojure is Lisp-family (S-expressions); Scala is C-family (curly braces). Both have excellent concurrency support — Clojure via STM, Scala via Akka actors.",
+  "commonlisp-haskell": "Common Lisp's defstruct becomes Haskell's data type. CL's CLOS (dynamic dispatch) contrasts with Haskell's type classes (compile-time dispatch). CL's optional typing meets Haskell's mandatory strong static typing. CL's macros are more powerful; Haskell's type system is more expressive. Both have strong academic traditions.",
+  "dart-elixir": "Dart's class becomes Elixir's defstruct/defmodule. Dart's mutable objects contrast with Elixir's immutable data. Dart's single-threaded async/await contrasts with Elixir's multi-process actor model. Dart targets Flutter UI; Elixir targets concurrent backend systems. Both have modern, clean syntax.",
+  "dart-scala": "Both are statically typed with type inference. Dart's class becomes Scala's case class. Dart targets Flutter mobile/web; Scala targets JVM backend/data engineering. Dart's sound null safety parallels Scala's Option type. Both emphasize concise, readable code.",
+  "elixir-haskell": "Both emphasize immutability and pattern matching. Elixir's defmodule/def becomes Haskell's module/function. Elixir runs on BEAM VM with dynamic typing; Haskell compiles natively with static typing. Elixir's pipe operator (|>) parallels Haskell's function composition. Elixir targets fault-tolerant concurrent systems; Haskell targets mathematical correctness.",
+  "haskell-ocaml": "Both are ML-family languages with algebraic data types and pattern matching. Haskell is lazy by default; OCaml is strict. Haskell enforces purity via IO monad; OCaml allows side effects freely. Both compile to efficient native code. OCaml's module system is more expressive; Haskell's type classes are more flexible.",
+  "haskell-scala": "Haskell's data type becomes Scala's case class. Haskell's type classes become Scala's implicits/given. Haskell enforces purity; Scala allows mixing FP and OOP. Both have strong static type systems with inference. Haskell compiles natively; Scala targets JVM. Both excel at expressing SWMM algorithms declaratively.",
+  "lua-tcl": "Both are embeddable scripting languages. Lua's tables become Tcl's dicts and arrays. Lua's metatables enable OOP; Tcl uses namespace eval and TclOO. Lua has cleaner syntax; Tcl's everything-is-a-string is more uniform. Both are lightweight and easy to embed in C programs.",
+  "ocaml-scala": "Both blend functional and object-oriented paradigms. OCaml's record type becomes Scala's case class. OCaml's pattern matching maps directly to Scala's match. OCaml compiles to native code; Scala targets JVM. OCaml's module functors parallel Scala's generic classes. Both have strong type inference.",
+  "python-hy": "Hy compiles directly to Python AST — same runtime, same libraries, different syntax. Python's class becomes Hy's defclass. Python's def becomes Hy's defn. Python's list comprehensions become Hy's lfor. Hy provides Lisp power (macros, S-expressions) with full Python ecosystem access. Zero performance difference.",
+  "scheme-clojure": "Both are Lisp-family languages. Scheme's define becomes Clojure's defn. Scheme's mutable pairs contrast with Clojure's persistent data structures. Scheme emphasizes minimalism and standards (R7RS); Clojure emphasizes pragmatism and JVM interop. Scheme has call/cc; Clojure has core.async.",
+  "vba-lua": "VBA's Type becomes Lua's table. VBA's Sub/Function becomes Lua's function. VBA is tightly integrated with Microsoft Office; Lua is a general-purpose embeddable language. VBA's Dim...As declarations contrast with Lua's dynamically typed locals. Both are accessible to non-programmers and widely used for automation."
 };
 
 export { modules, languages, translationNotes };
