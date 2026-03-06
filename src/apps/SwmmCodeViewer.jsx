@@ -215,6 +215,7 @@ export default function SwmmCodeViewer({ theme }) {
           <button
             key={eng.id}
             onClick={() => setSelectedLang(eng.id)}
+            title={eng.desc}
             style={{
               padding: '4px 10px', borderRadius: 5,
               border: selectedLang === eng.id ? `2px solid ${eng.color}` : `1px solid ${t.border}`,

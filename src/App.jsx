@@ -1136,12 +1136,13 @@ export default function SWMM5CodeViewer() {
             display: "flex", gap: 12, justifyContent: "center", flexWrap: "wrap", marginBottom: 20,
           }}>
             {languages.map((lang) => (
-              <span key={lang.id} style={{
+              <span key={lang.id} title={lang.desc} style={{
                 display: "flex", alignItems: "center", gap: 5,
                 padding: "4px 12px", borderRadius: 6,
                 background: t.panelHeader, border: `1px solid ${t.border}`,
                 fontSize: 12, color: t.text,
                 fontFamily: "'JetBrains Mono', monospace",
+                cursor: "default",
               }}>
                 <span style={{
                   width: 8, height: 8, borderRadius: "50%",
@@ -1367,6 +1368,7 @@ export default function SWMM5CodeViewer() {
                 key={lang.id}
                 className={`lang-tab ${leftLang === lang.id ? "active" : ""}`}
                 onClick={() => setLeftLang(lang.id)}
+                title={lang.desc}
               >
                 <div style={{
                   width: 7, height: 7, borderRadius: "50%",
@@ -1391,6 +1393,7 @@ export default function SWMM5CodeViewer() {
                 key={lang.id}
                 className={`lang-tab ${rightLang === lang.id ? "active" : ""}`}
                 onClick={() => setRightLang(lang.id)}
+                title={lang.desc}
               >
                 <div style={{
                   width: 7, height: 7, borderRadius: "50%",
