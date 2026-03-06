@@ -58,7 +58,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
   - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
   - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
-  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: upload .inp files, run EPA SWMM5 simulations, view/download .rpt reports
+  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 6 engine options (1 live EPA C engine + 5 concept engines: Rust, Julia, CUDA, MATLAB, JS/TypeScript, WASM), upload .inp files, run simulations, view/download .rpt reports; concept engines show full code previews with effort/impact estimates
   - `server.js` — Express backend API for running SWMM5 simulations via Python swmm-toolkit
   - `run_swmm.py` — Python script that executes SWMM5 simulations using swmm-toolkit solver
   - `public/sample.inp` — Sample 3-node SWMM5 model for testing
