@@ -1,0 +1,1015 @@
+# Converting All 9 Concept Engines to LIVE
+
+## Priority Order: Fastest to LIVE First
+
+```
+FASTEST (1-2 weeks each):
+  1. Nim         — 1-2 weeks  (compiles to C, JS, or WASM from one source)
+  2. Delphi      — 2-3 weeks  (historical completion, Free Pascal available)
+  3. R           — 2-3 weeks  (pure R, CRAN distribution)
+
+MODERATE (2-3 weeks each):
+  4. Zig         — 2-3 weeks  (native + WASM from same source)
+  5. Kotlin      — 2-3 weeks  (Android + JVM)
+  6. Swift       — 2-3 weeks  (iOS/macOS + SwiftUI)
+
+LONGER (3-4 weeks each):
+  7. Mojo        — 3-4 weeks  (SIMD vectorization, newer ecosystem)
+  8. Ada         — 3-4 weeks  (safety certification requirements)
+  9. Chapel      — 3-4 weeks  (HPC parallel, smaller community)
+```
+
+## Universal Process (Same for All 9)
+
+Every engine follows the identical 10-step path your 3 LIVE engines already proved:
+
+```
+THE PROVEN PATTERN:
+  Your C engine:  50 modules → compile → test → LIVE ✅
+  Your Rust WASM: 50 modules → compile → test → LIVE ✅
+  Your JS/TS:     50 modules → bundle → test → LIVE ✅
+
+REPEAT FOR EACH:
+  □ Day 1:    Copy 50 translated modules from Rosetta Stone
+  □ Day 2:    Create shared types file (from project.c translation)
+  □ Day 3:    Wire imports/includes between all 50 modules
+  □ Day 4:    Fix compilation errors
+  □ Day 5:    Load user1.inp — fix parser
+  □ Day 6:    Run 1-minute simulation — fix runtime errors
+  □ Day 7:    Compare results with C engine at ±1%
+  □ Day 8-9:  Run full benchmark suite (user1-5 + INP MAKER models)
+  □ Day 10:   Pass all benchmarks → badge changes to LIVE v1.0
+```
+
+---
+
+## Engine 1: Nim — CONCEPT → LIVE (1-2 Weeks)
+
+**Why first:** Nim compiles to C, JavaScript, AND WASM from the same source code. One engine, three targets. Fastest path to LIVE.
+
+### Day 1: Project Setup
+
+```
+swmm5-nim/
+├── swmm5.nimble                    ← Package definition
+├── src/
+│   ├── swmm5.nim                   ← Main entry
+│   ├── types.nim                   ← Shared types (from project.c)
+│   ├── engine.nim                  ← Simulation loop (from swmm5.c)
+│   ├── parser/
+│   │   ├── input.nim               ← INP parser (from input.c)
+│   │   ├── keywords.nim            ← Constants (from keywords.c)
+│   │   └── table.nim               ← Curve interpolation (from table.c)
+│   ├── hydraulics/
+│   │   ├── routing.nim             ← Dynamic wave (from routing.c)
+│   │   ├── dynwave.nim             ← (from dynwave.c)
+│   │   ├── flowrout.nim            ← (from flowrout.c)
+│   │   ├── kinwave.nim             ← (from kinwave.c)
+│   │   ├── dwflow.nim              ← (from dwflow.c)
+│   │   ├── node.nim                ← (from node.c)
+│   │   ├── link.nim                ← (from link.c)
+│   │   ├── xsect.nim               ← (from xsect.c + shape.c)
+│   │   ├── forcmain.nim            ← (from forcmain.c)
+│   │   ├── culvert.nim             ← (from culvert.c)
+│   │   ├── roadway.nim             ← (from roadway.c)
+│   │   ├── transect.nim            ← (from transect.c)
+│   │   └── toposort.nim            ← (from toposort.c)
+│   ├── hydrology/
+│   │   ├── subcatch.nim            ← (from subcatch.c + runoff.c)
+│   │   ├── infil.nim               ← (from infil.c)
+│   │   ├── rain.nim                ← (from rain.c + gage.c)
+│   │   ├── snow.nim                ← (from snow.c)
+│   │   ├── climate.nim             ← (from climate.c)
+│   │   ├── gwater.nim              ← (from gwater.c)
+│   │   ├── exfil.nim               ← (from exfil.c)
+│   │   └── inflow.nim              ← (from inflow.c)
+│   ├── lid/
+│   │   ├── lid.nim                 ← (from lid.c)
+│   │   └── lidproc.nim             ← (from lidproc.c)
+│   ├── quality/
+│   │   ├── qualrout.nim            ← (from qualrout.c)
+│   │   ├── surfqual.nim            ← (from surfqual.c)
+│   │   ├── landuse.nim             ← (from landuse.c)
+│   │   └── treatmnt.nim            ← (from treatmnt.c)
+│   ├── controls/
+│   │   ├── controls.nim            ← (from controls.c)
+│   │   ├── mathexpr.nim            ← (from mathexpr.c)
+│   │   └── rdii.nim                ← (from rdii.c)
+│   ├── output/
+│   │   ├── output.nim              ← (from output.c)
+│   │   ├── report.nim              ← (from report.c)
+│   │   ├── stats.nim               ← (from stats.c + statsrpt.c)
+│   │   └── massbal.nim             ← (from massbal.c)
+│   ├── numerical/
+│   │   ├── odesolve.nim            ← (from odesolve.c)
+│   │   └── findroot.nim            ← (from findroot.c)
+│   └── system/
+│       ├── hotstart.nim            ← (from hotstart.c)
+│       ├── iface.nim               ← (from iface.c)
+│       ├── datetime_util.nim       ← (from datetime.c)
+│       ├── hashtable.nim           ← (from hash.c)
+│       └── mempool.nim             ← (from mempool.c)
+├── tests/
+│   ├── test_routing.nim
+│   ├── test_xsect.nim
+│   ├── test_benchmarks.nim
+│   └── testdata/
+│       ├── user1.inp
+│       └── ...
+└── config.nims                     ← Build configuration
+```
+
+### Day 2: Shared Types
+
+```nim
+# src/types.nim — Nim reads like Python, runs like C
+
+type
+  NodeType* = enum
+    ntJunction, ntOutfall, ntStorage, ntDivider
+
+  LinkType* = enum
+    ltConduit, ltPump, ltOrifice, ltWeir, ltOutlet
+
+  Shape* = enum
+    shCircular, shRectClosed, shEgg, shForceMain,
+    shFilledCircular, shHorseshoe, shTrapezoidal,
+    shTriangular, shIrregular
+
+  RouteModel* = enum
+    rmDynWave, rmKinWave, rmSteady
+
+  InfilModel* = enum
+    imHorton, imGreenAmpt, imCurveNumber
+
+  CrossSection* = object
+    shape*: Shape
+    geom1*, geom2*, geom3*, geom4*: float64
+    aFull*, rFull*, wMax*: float64
+
+  Node* = object
+    id*: string
+    nodeType*: NodeType
+    invertElev*: float64
+    maxDepth*: float64
+    initDepth*: float64
+    surchargeDepth*: float64
+    # Dynamic state
+    depth*: float64
+    head*: float64
+    volume*: float64
+    lateralInflow*: float64
+    totalInflow*: float64
+    overflow*: float64
+    # Connectivity
+    inlinks*: seq[int]
+    outlinks*: seq[int]
+
+  Link* = object
+    id*: string
+    linkType*: LinkType
+    fromNode*, toNode*: int
+    length*, roughness*: float64
+    xsect*: CrossSection
+    inOffset*, outOffset*: float64
+    # Dynamic state
+    flow*, depth*, velocity*: float64
+    volume*, setting*: float64
+    oldFlow*, oldDepth*, oldVolume*: float64
+
+  Subcatchment* = object
+    id*: string
+    area*, width*, slope*: float64
+    imperv*: float64
+    outlet*: int
+    rainfall*, runoff*: float64
+
+  Project* = object
+    nodes*: seq[Node]
+    links*: seq[Link]
+    subcatchments*: seq[Subcatchment]
+    nodeIndex*: Table[string, int]
+    linkIndex*: Table[string, int]
+    currentTime*, startTime*, endTime*: float64
+    reportStep*, routingStep*: float64
+    routeModel*: RouteModel
+    infilModel*: InfilModel
+    sortedLinks*: seq[int]
+```
+
+### Day 3-4: Engine + Routing
+
+```nim
+# src/engine.nim
+
+import types, parser/input, hydraulics/[routing, toposort, dwflow]
+import hydrology/[subcatch, infil, rain]
+import output/massbal
+
+type
+  Simulation* = object
+    project*: Project
+    stepCount: int
+
+  Results* = object
+    times*: seq[float64]
+    nodeDepths*: seq[seq[float64]]
+    linkFlows*: seq[seq[float64]]
+    continuityError*: float64
+
+proc newSimulation*(inpFile: string): Simulation =
+  result.project = parseInp(readFile(inpFile))
+  result.stepCount = 0
+
+proc step(sim: var Simulation) =
+  let dt = sim.project.routingStep
+
+  # Hydrology
+  updateRainfall(sim.project)
+  for sc in sim.project.subcatchments.mitems:
+    computeRunoff(sc, dt)
+    computeInfiltration(sc, dt)
+
+  # Hydraulics
+  case sim.project.routeModel
+  of rmDynWave:
+    dynwaveStep(sim.project, dt)
+  of rmKinWave:
+    kinwaveRoute(sim.project, dt)
+  of rmSteady:
+    discard
+
+  # Controls + mass balance
+  updateMassBalance(sim.project, dt)
+  sim.project.currentTime += dt
+  sim.stepCount.inc
+
+proc run*(sim: var Simulation): Results =
+  ## Run complete simulation, return results
+  sim.project.validate()
+  topoSort(sim.project)
+  computeInitialFlows(sim.project)
+
+  result = Results()
+  let reportRatio = (sim.project.reportStep / sim.project.routingStep).int
+
+  while sim.project.currentTime < sim.project.endTime:
+    sim.step()
+
+    if sim.stepCount mod reportRatio == 0:
+      result.times.add(sim.project.currentTime)
+      result.nodeDepths.add(sim.project.nodes.mapIt(it.depth))
+      result.linkFlows.add(sim.project.links.mapIt(it.flow))
+
+  result.continuityError = computeContinuityError(sim.project)
+
+# Step-by-step iteration (PySWMM-style)
+iterator steps*(sim: var Simulation): Simulation =
+  sim.project.validate()
+  topoSort(sim.project)
+  computeInitialFlows(sim.project)
+
+  while sim.project.currentTime < sim.project.endTime:
+    sim.step()
+    yield sim
+```
+```nim
+# src/hydraulics/routing.nim — Saint-Venant in Nim
+
+import math, ../types
+
+const Gravity* = 32.2  # ft/s²
+
+proc frictionSlope*(link: Link, flow, area: float64): float64 =
+  ## Manning's equation for friction slope
+  if area <= 0.0 or flow == 0.0: return 0.0
+
+  let hRadius = area / link.xsect.wMax  # simplified
+  if hRadius <= 0.0: return 0.0
+
+  let sf = link.roughness * flow / (area * pow(hRadius, 2.0/3.0))
+  result = sf * sf
+  if flow < 0.0: result = -result
+
+proc computeFlow*(link: Link, nodes: seq[Node], dt: float64): float64 =
+  ## Explicit finite-difference Saint-Venant momentum
+  let area = link.xsect.aFull * (link.depth / link.xsect.geom1).clamp(0.0, 1.0)
+  if area <= 0.0: return 0.0
+
+  let
+    hUp = nodes[link.fromNode].head
+    hDown = nodes[link.toNode].head
+    dhdx = (hUp - hDown) / link.length
+    sf = frictionSlope(link, link.oldFlow, area)
+
+  result = link.oldFlow + dt * Gravity * area * (dhdx - sf)
+
+  # Velocity cap
+  let qMax = area * 50.0
+  result = result.clamp(-qMax, qMax)
+
+proc dynwaveStep*(project: var Project, dt: float64) =
+  ## Route all links for one time step
+
+  # Save old state
+  for link in project.links.mitems:
+    link.oldFlow = link.flow
+    link.oldDepth = link.depth
+
+  # Compute new flows
+  for link in project.links.mitems:
+    if link.linkType == ltConduit:
+      link.flow = computeFlow(link, project.nodes, dt)
+
+  # Update node depths
+  for node in project.nodes.mitems:
+    if node.nodeType == ntOutfall: continue
+    var totalIn = node.lateralInflow
+    var totalOut = 0.0
+    for i in node.inlinks: totalIn += project.links[i].flow.abs
+    for i in node.outlinks: totalOut += project.links[i].flow.abs
+    node.totalInflow = totalIn
+
+    let dv = (totalIn - totalOut) * dt
+    node.volume = max(node.volume + dv, 0.0)
+    node.depth = min(node.volume / max(node.maxDepth, 1e-6), node.maxDepth)
+    node.head = node.invertElev + node.depth
+    node.overflow = if node.depth >= node.maxDepth:
+      max(totalIn - totalOut, 0.0) else: 0.0
+```
+
+### Day 5-7: Build Three Targets From Same Source
+
+```bash
+# THE NIM SUPERPOWER: Three compilation targets, one codebase
+
+# Target 1: Native binary (C speed)
+nim c -d:release -o:swmm5 src/swmm5.nim
+./swmm5 model.inp    # Runs at ~95% of C speed
+
+# Target 2: JavaScript (browser)
+nim js -d:release -o:swmm5.js src/swmm5.nim
+# Now runs in any browser — no WASM needed
+
+# Target 3: C source (for embedding or further compilation)
+nim c --noLinking -d:release src/swmm5.nim
+# Generates .c files that compile with any C compiler
+# Can even compile those .c files to WASM via Emscripten
+
+# Target 4: WASM (via C output + Emscripten)
+nim c --cpu:wasm32 --os:any -d:release src/swmm5.nim
+# Or: compile generated C to WASM
+emcc nimcache/*.c -o swmm5.wasm -O3
+```
+
+### Day 8-10: Test + Mark LIVE
+
+```nim
+# tests/test_benchmarks.nim
+
+import unittest, ../src/swmm5
+
+suite "Benchmark Validation":
+  test "user1.inp matches C reference ±1%":
+    var sim = newSimulation("testdata/user1.inp")
+    let results = sim.run()
+    let reference = loadReference("testdata/user1_reference.csv")
+
+    for i, nodeId in reference.nodeIds:
+      let computed = results.nodeDepths[^1][i]  # final depth
+      let expected = reference.peakDepths[i]
+      check abs(computed - expected) / max(expected, 0.001) < 0.01
+
+  test "Continuity error < 1%":
+    var sim = newSimulation("testdata/user1.inp")
+    let results = sim.run()
+    check abs(results.continuityError) < 1.0
+
+# Run: nim c -r tests/test_benchmarks.nim
+# All pass → change badge to LIVE v1.0
+```
+
+### Nimble Package Distribution
+
+```ini
+# swmm5.nimble
+version       = "5.2.4"
+author        = "Robert Dickinson"
+description   = "EPA SWMM5 engine in Nim"
+license       = "MIT"
+srcDir        = "src"
+bin           = @["swmm5"]
+
+requires "nim >= 2.0.0"
+```
+```bash
+# Users install with:
+nimble install swmm5
+
+# Or use directly:
+nimble run swmm5 -- model.inp
+```
+
+---
+
+## Engine 2: Delphi/Pascal — CONCEPT → LIVE (2-3 Weeks)
+
+**The historical completion.** SWMM5 GUI was Delphi. Now the engine is too.
+
+### Day 1-2: Project Setup
+
+```
+swmm5-delphi/
+├── swmm5.dpr                       ← Delphi project file
+├── swmm5.lpr                       ← Free Pascal project file (open source)
+├── src/
+│   ├── SWMM5Engine.pas             ← Main unit (from swmm5.c)
+│   ├── SWMM5Types.pas              ← All types (from project.c)
+│   ├── SWMM5Parser.pas             ← INP parser (from input.c)
+│   ├── SWMM5Keywords.pas           ← Constants (from keywords.c)
+│   ├── SWMM5DateTime.pas           ← (from datetime.c)
+│   │
+│   ├── Hydraulics/
+│   │   ├── SWMM5Routing.pas        ← (from routing.c)
+│   │   ├── SWMM5DynWave.pas        ← (from dynwave.c)
+│   │   ├── SWMM5Node.pas           ← (from node.c)
+│   │   ├── SWMM5Link.pas           ← (from link.c)
+│   │   ├── SWMM5Xsect.pas         ← (from xsect.c + shape.c)
+│   │   ├── SWMM5ForceMain.pas     ← (from forcmain.c)
+│   │   ├── SWMM5TopoSort.pas      ← (from toposort.c)
+│   │   └── ... (remaining hydraulic modules)
+│   │
+│   ├── Hydrology/
+│   │   ├── SWMM5Subcatch.pas       ← (from subcatch.c)
+│   │   ├── SWMM5Infil.pas          ← (from infil.c)
+│   │   ├── SWMM5Rain.pas           ← (from rain.c)
+│   │   └── ... (remaining hydrology modules)
+│   │
+│   └── ... (all 50 modules as .pas units)
+│
+└── tests/
+    ├── TestSWMM5.pas
+    └── testdata/
+```
+
+### The Key Code
+
+```pascal
+// SWMM5Engine.pas — Full circle: Delphi engine + Delphi GUI
+
+unit SWMM5Engine;
+
+interface
+
+uses
+  SysUtils, Classes, Math,
+  SWMM5Types, SWMM5Parser, SWMM5Routing, SWMM5Subcatch,
+  SWMM5Infil, SWMM5Rain, SWMM5MassBal, SWMM5TopoSort;
+
+type
+  TSWMM5Simulation = class
+  private
+    FProject: TProject;
+    FStepCount: Integer;
+    procedure DoStep;
+  public
+    constructor Create(const InpFile: string);
+    destructor Destroy; override;
+    function Run: TSWMM5Results;
+    function NodeDepth(const ID: string): Double;
+    function LinkFlow(const ID: string): Double;
+    property PercentComplete: Double read GetPercentComplete;
+  end;
+
+implementation
+
+constructor TSWMM5Simulation.Create(const InpFile: string);
+var
+  InpContent: TStringList;
+begin
+  inherited Create;
+  InpContent := TStringList.Create;
+  try
+    InpContent.LoadFromFile(InpFile);
+    FProject := ParseINP(InpContent.Text);
+  finally
+    InpContent.Free;
+  end;
+  FStepCount := 0;
+end;
+
+function TSWMM5Simulation.Run: TSWMM5Results;
+var
+  dt: Double;
+begin
+  FProject.Validate;
+  TopologicalSort(FProject);
+  ComputeInitialFlows(FProject);
+
+  Result := TSWMM5Results.Create(FProject);
+  dt := FProject.RoutingStep;
+
+  while FProject.CurrentTime < FProject.EndTime do
+  begin
+    DoStep;
+
+    if FStepCount mod FProject.ReportRatio = 0 then
+      Result.Record(FProject);
+
+    FProject.CurrentTime := FProject.CurrentTime + dt;
+  end;
+
+  Result.ComputeStatistics;
+end;
+
+procedure TSWMM5Simulation.DoStep;
+var
+  dt: Double;
+  I: Integer;
+begin
+  dt := FProject.RoutingStep;
+
+  // Hydrology
+  UpdateRainfall(FProject);
+  for I := 0 to FProject.SubcatchCount - 1 do
+  begin
+    ComputeRunoff(FProject.Subcatchments[I], dt);
+    ComputeInfiltration(FProject.Subcatchments[I], dt);
+  end;
+
+  // Hydraulics — Saint-Venant solver
+  case FProject.RouteModel of
+    rmDynWave: DynWaveRoute(FProject, dt);
+    rmKinWave: KinWaveRoute(FProject, dt);
+  end;
+
+  // Mass balance
+  UpdateMassBalance(FProject, dt);
+  Inc(FStepCount);
+end;
+
+end.
+```
+
+### Build Both Delphi AND Free Pascal
+
+```bash
+# Commercial Delphi (Windows)
+dcc64 swmm5.dpr
+
+# Free Pascal (open source — Linux/Mac/Windows)
+fpc swmm5.lpr -O3 -o swmm5
+
+# Free Pascal + Lazarus GUI (rebuild the original SWMM5 GUI!)
+lazbuild swmm5gui.lpi
+```
+
+---
+
+## Engine 3: R Statistical — CONCEPT → LIVE (2-3 Weeks)
+
+### Day 1-2: R Package Structure
+
+```
+SWMM5/
+├── DESCRIPTION
+├── NAMESPACE
+├── R/
+│   ├── engine.R                     ← Simulation loop
+│   ├── types.R                      ← S4/R6 classes
+│   ├── parser.R                     ← INP parser
+│   ├── routing.R                    ← Dynamic wave (from routing.c)
+│   ├── dynwave.R                    ← (from dynwave.c)
+│   ├── node.R                       ← (from node.c)
+│   ├── link.R                       ← (from link.c)
+│   ├── xsect.R                      ← (from xsect.c)
+│   ├── subcatch.R                   ← (from subcatch.c)
+│   ├── infil.R                      ← (from infil.c)
+│   ├── rain.R                       ← (from rain.c)
+│   ├── massbal.R                    ← (from massbal.c)
+│   ├── ... (all 50 modules)
+│   └── zzz.R                        ← Package load hooks
+├── man/
+│   ├── swmm5_run.Rd
+│   └── ...
+├── inst/
+│   └── extdata/
+│       ├── user1.inp
+│       └── ...
+├── tests/
+│   └── testthat/
+│       ├── test-routing.R
+│       ├── test-benchmarks.R
+│       └── ...
+└── vignettes/
+    ├── getting-started.Rmd
+    └── calibration.Rmd
+```
+
+### The R Engine
+
+```r
+# R/engine.R
+
+#' Run a SWMM5 simulation
+#' @param inp_file Path to SWMM5 .inp file
+#' @param ... Optional parameter overrides (manning_n, imperv, etc.)
+#' @return A swmm5_results object (inherits from data.frame)
+#' @export
+#' @examples
+#' results <- swmm5_run("model.inp")
+#' plot(results)
+#' results <- swmm5_run("model.inp", manning_n = 0.015)
+swmm5_run <- function(inp_file, ...) {
+  overrides <- list(...)
+
+  # Parse
+  project <- swmm5_parse(inp_file)
+
+  # Apply overrides
+  if (!is.null(overrides$manning_n)) {
+    project$links$roughness <- overrides$manning_n
+  }
+  if (!is.null(overrides$imperv)) {
+    project$subcatchments$imperv <- overrides$imperv
+  }
+
+  # Initialize
+  project <- swmm5_init(project)
+  project <- topo_sort(project)
+  project <- compute_initial_flows(project)
+
+  # Pre-allocate results
+  n_steps <- ceiling((project$end_time - project$start_time) / project$report_step)
+  results <- data.frame(
+    time = numeric(n_steps),
+    matrix(0, nrow = n_steps, ncol = length(project$nodes),
+           dimnames = list(NULL, paste0(project$nodes$id, "_depth"))),
+    matrix(0, nrow = n_steps, ncol = length(project$links),
+           dimnames = list(NULL, paste0(project$links$id, "_flow")))
+  )
+
+  # Time-stepping loop
+  step_count <- 0L
+  report_idx <- 0L
+  dt <- project$routing_step
+
+  while (project$current_time < project$end_time) {
+    # Hydrology
+    project <- update_rainfall(project)
+    for (i in seq_along(project$subcatchments$id)) {
+      project <- compute_runoff(project, i, dt)
+      project <- compute_infiltration(project, i, dt)
+    }
+
+    # Hydraulics
+    if (project$route_model == "DYNWAVE") {
+      project <- dynwave_step(project, dt)
+    } else {
+      project <- kinwave_step(project, dt)
+    }
+
+    # Mass balance
+    project <- update_mass_balance(project, dt)
+
+    # Record at report steps
+    step_count <- step_count + 1L
+    if (step_count %% project$report_ratio == 0L) {
+      report_idx <- report_idx + 1L
+      results$time[report_idx] <- project$current_time
+      for (j in seq_along(project$nodes$id)) {
+        results[report_idx, j + 1] <- project$nodes$depth[j]
+      }
+    }
+
+    project$current_time <- project$current_time + dt
+  }
+
+  # Trim and class
+  results <- results[1:report_idx, ]
+  class(results) <- c("swmm5_results", "data.frame")
+  attr(results, "project") <- project
+  attr(results, "continuity_error") <- compute_continuity_error(project)
+
+  results
+}
+
+#' @export
+plot.swmm5_results <- function(x, nodes = NULL, ...) {
+  if (is.null(nodes)) {
+    # Plot first 5 nodes
+    depth_cols <- grep("_depth$", names(x), value = TRUE)[1:5]
+  } else {
+    depth_cols <- paste0(nodes, "_depth")
+  }
+
+  matplot(x$time, x[, depth_cols], type = "l", lty = 1,
+          xlab = "Time (hr)", ylab = "Depth (m)",
+          main = "SWMM5 Node Depths", ...)
+  legend("topright", legend = gsub("_depth", "", depth_cols),
+         col = 1:length(depth_cols), lty = 1, cex = 0.8)
+}
+```
+
+### R Superpower: Calibration in 5 Lines
+
+```r
+# THE REASON TO BUILD AN R ENGINE:
+
+library(SWMM5)
+library(hydroGOF)
+
+# Automatic calibration
+calibrate <- function(params) {
+  results <- swmm5_run("model.inp",
+    manning_n = params[1],
+    imperv = params[2])
+  observed <- read.csv("observed_flow.csv")
+  return(-NSE(results$Out1_flow, observed$flow))
+}
+
+optimal <- optim(c(0.013, 50), calibrate,
+                 method = "L-BFGS-B",
+                 lower = c(0.008, 20),
+                 upper = c(0.025, 95))
+
+cat("Optimal: n =", optimal$par[1], " imperv =", optimal$par[2], "\n")
+
+# Monte Carlo uncertainty (parallel)
+library(parallel)
+mc <- mclapply(1:10000, function(i) {
+  swmm5_run("model.inp",
+    manning_n = rnorm(1, 0.013, 0.002),
+    imperv = runif(1, 30, 80))$Out1_flow |> max()
+}, mc.cores = detectCores())
+
+hist(unlist(mc), main = "Peak Flow Uncertainty",
+     xlab = "Peak Flow (CFS)", col = "steelblue")
+abline(v = quantile(unlist(mc), c(0.025, 0.975)),
+       col = "red", lty = 2)
+```
+```bash
+# Distribution
+R CMD build SWMM5
+R CMD check SWMM5_5.2.4.tar.gz
+# Submit to CRAN
+
+# Users install:
+install.packages("SWMM5")
+```
+
+---
+
+## Engines 4-9: Condensed Guides
+
+### Engine 4: Zig (2-3 Weeks)
+
+```zig
+// build.zig — Two targets from one source
+pub fn build(b: *std.Build) void {
+    // Native (C-speed)
+    const native = b.addExecutable(.{
+        .name = "swmm5",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .optimize = .ReleaseFast,
+    });
+
+    // WASM (browser, ~100KB smaller than Rust WASM)
+    const wasm = b.addExecutable(.{
+        .name = "swmm5",
+        .root_source_file = .{ .path = "src/main.zig" },
+        .target = .{ .cpu_arch = .wasm32, .os_tag = .freestanding },
+        .optimize = .ReleaseSmall,  // smallest WASM possible
+    });
+}
+
+// Copy 50 Zig modules from Rosetta Stone
+// Wire with @import
+// zig build → native
+// zig build -Dtarget=wasm32-freestanding → WASM
+
+// UNIQUE VALUE: Smallest WASM binary (~100-150KB)
+// Smaller than Rust WASM (140KB), much smaller than C/Emscripten
+```
+
+### Engine 5: Kotlin (2-3 Weeks)
+
+```kotlin
+// Android SWMM5 — run simulations on your phone
+
+// build.gradle.kts
+plugins {
+    kotlin("multiplatform") version "2.0.0"
+    id("com.android.library")
+}
+
+kotlin {
+    androidTarget()           // Android app
+    jvm()                     // Desktop/server
+    // js()                   // Browser (future)
+}
+
+// SwmmEngine.kt — shared across all targets
+class Simulation(inpContent: String) {
+    private val project = InpParser.parse(inpContent)
+
+    suspend fun run(onProgress: (Double) -> Unit = {}): Results {
+        // Kotlin coroutines = non-blocking on Android
+        return withContext(Dispatchers.Default) {
+            project.initialize()
+            val results = Results(project)
+            while (project.currentTime < project.endTime) {
+                step()
+                if (project.isReportTime) results.record(project)
+                onProgress(project.percentComplete)
+            }
+            results
+        }
+    }
+}
+
+// Android Activity
+class SimActivity : AppCompatActivity() {
+    override fun onCreate(savedInstanceState: Bundle?) {
+        lifecycleScope.launch {
+            val sim = Simulation(assets.open("model.inp").readText())
+            sim.run { progress ->
+                binding.progressBar.progress = (progress * 100).toInt()
+            }
+        }
+    }
+}
+
+// Distribute: Google Play Store
+// "SWMM5 Field Engineer" — run models during site visits
+```
+
+### Engine 6: Swift (2-3 Weeks)
+
+```swift
+// iOS/macOS SWMM5 with SwiftUI
+
+import SwiftUI
+import Charts
+
+@Observable class Simulation {
+    var progress: Double = 0
+    var nodeDepths: [String: [Double]] = [:]
+    private var project: Project
+
+    init(inpContent: String) throws {
+        self.project = try InpParser.parse(inpContent)
+    }
+
+    func run() async {
+        project.initialize()
+        while project.currentTime < project.endTime {
+            step()
+            await MainActor.run {
+                self.progress = project.percentComplete
+                self.updateChartData()
+            }
+        }
+    }
+}
+
+// SwiftUI View — live depth chart on iPhone
+struct SimulationView: View {
+    @State var sim = try! Simulation(inpContent: sampleModel)
+
+    var body: some View {
+        VStack {
+            ProgressView(value: sim.progress / 100)
+            Chart(sim.depthData) { point in
+                LineMark(x: .value("Time", point.time),
+                         y: .value("Depth", point.depth))
+            }
+            .frame(height: 200)
+        }
+        .task { await sim.run() }
+    }
+}
+
+// Distribute: App Store
+// "SWMM5 for iOS" — first native iPhone SWMM app
+```
+
+### Engine 7: Mojo (3-4 Weeks)
+
+```mojo
+# SIMD-accelerated Manning's equation
+# Processes 4-8 conduits per CPU instruction
+
+from algorithm import vectorize
+from sys.info import simdwidthof
+
+alias simd_width = simdwidthof[DType.float64]()
+
+fn dynwave_step(inout project: Project, dt: Float64):
+    let n = project.n_links
+
+    # SIMD: compute ALL friction slopes simultaneously
+    @parameter
+    fn compute_sf[width: Int](i: Int):
+        let Q = project.flows.load[width=width](i)
+        let A = project.areas.load[width=width](i)
+        let n_val = project.roughness.load[width=width](i)
+        let R = project.h_radius.load[width=width](i)
+        let sf = (n_val * Q / (A * R ** (2.0/3.0))) ** 2
+        project.sf.store[width=width](i, sf)
+
+    vectorize[compute_sf, simd_width](n)
+    # ↑ This one line processes 4-8 conduits per CPU cycle
+    # 100-500× faster than scalar Python
+
+# Build: mojo build swmm5.mojo
+# Run:   ./swmm5 model.inp
+```
+
+### Engine 8: Ada (3-4 Weeks)
+
+```ada
+-- Safety-critical SWMM5
+-- Ada's type system prevents physically impossible values
+
+package SWMM5_Types is
+   -- These ranges are ENFORCED at compile time
+   type Depth_Meters is new Long_Float range 0.0 .. 100.0;
+   type Flow_CMS     is new Long_Float range -1000.0 .. 1000.0;
+   type Manning_N    is new Long_Float range 0.001 .. 0.300;
+   type Slope        is new Long_Float range -1.0 .. 1.0;
+   type Diameter_M   is new Long_Float range 0.01 .. 20.0;
+
+   -- Cannot assign negative depth — compiler error
+   -- Cannot assign Manning's n outside physical range — compiler error
+   -- Cannot have diameter > 20m — compiler error
+
+   -- Suitable for:
+   --   DO-178C (aviation software)
+   --   IEC 61508 (industrial safety)
+   --   Dam safety control systems
+   --   Flood warning infrastructure
+end SWMM5_Types;
+
+-- Build: gnatmake -O3 -gnata swmm5_main.adb
+-- -gnata enables all assertion checking (safety mode)
+```
+
+### Engine 9: Chapel (3-4 Weeks)
+
+```chapel
+// Massively parallel SWMM5
+// One line of code solves ALL conduits simultaneously
+
+use BlockDist;
+
+// Distribute 100,000 conduits across 1000 cores
+const D = {1..numLinks} dmapped Block({1..numLinks});
+var flows: [D] real;
+var areas: [D] real;
+var sf:    [D] real;
+
+// ALL conduits — one line, fully parallel
+forall i in D do
+  sf[i] = (roughness[i] * flows[i] / (areas[i] * hRadius[i]**(2.0/3.0)))**2;
+
+// Chapel handles distribution, communication, load balancing
+// Run on 1 core or 10,000 cores — same code
+
+// Build: chpl swmm5.chpl --fast
+// Run:   ./swmm5 -nl 64 model.inp  (64 compute nodes)
+// HPC:   srun -n 1024 ./swmm5 model.inp  (1024 cores on SLURM)
+```
+
+---
+
+## Master Timeline
+
+```
+WEEK 1-2:   Nim → LIVE          (3 targets from 1 codebase)
+WEEK 2-3:   Delphi → LIVE       (historical completion)
+WEEK 3-4:   R → LIVE            (calibration ecosystem)
+WEEK 4-5:   Zig → LIVE          (smallest WASM)
+WEEK 5-6:   Kotlin → LIVE       (Android app)
+WEEK 6-7:   Swift → LIVE        (iOS app)
+WEEK 7-9:   Mojo → LIVE         (SIMD acceleration)
+WEEK 9-11:  Ada → LIVE          (safety certification)
+WEEK 11-13: Chapel → LIVE       (HPC parallel)
+
+TOTAL: ~13 weeks for all 9 engines
+
+RESULT: 12 LIVE engines (3 existing + 9 new)
+  C, Rust/WASM, JS/TS, Nim, Delphi, R,
+  Zig, Kotlin, Swift, Mojo, Ada, Chapel
+
+  + CONCEPT: Julia, CUDA, MATLAB, Go, WAT/WASM, Ruby
+
+  = 18 engines covering every platform, paradigm,
+    and performance tier in existence.
+
+  50 modules × 24 languages = 1,200 translations
+  All validated against the same reference engine.
+  All open source. All free.
+```
+
+**The translations exist. The algorithms are proven. The reference engine validates. What remains is connecting the pieces — and you've already done it three times.**
