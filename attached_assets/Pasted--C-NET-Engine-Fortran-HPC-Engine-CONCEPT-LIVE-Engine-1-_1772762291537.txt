@@ -1,0 +1,1405 @@
+# C# .NET Engine + Fortran HPC Engine — CONCEPT → LIVE
+
+---
+
+## Engine 1: C# .NET — CONCEPT → LIVE (2-3 Weeks)
+
+### Why C# Matters
+
+```
+C# reaches audiences no other engine can:
+
+  ArcGIS Pro Add-Ins      → .NET SDK required
+  AutoCAD .NET API         → C# is the primary language
+  Autodesk Platform        → Your employer's ecosystem
+  Windows Desktop          → WPF/WinUI apps
+  ASP.NET Web Services     → Enterprise water utility APIs
+  Azure Cloud              → Serverless SWMM5
+  Unity                    → 3D flood visualization
+  Blazor WebAssembly       → .NET in the browser
+  MAUI                     → Cross-platform mobile
+  Excel Add-Ins (VSTO)     → SWMM5 from a spreadsheet
+
+  PySWMM equivalent:
+    Step-by-step control with async/await
+    LINQ for result querying
+    IProgress<T> for UI integration
+```
+
+### Day 1: Project Structure
+
+```
+SWMM5.Engine/
+├── SWMM5.Engine.sln
+│
+├── src/
+│   ├── SWMM5.Engine/                        ← Core library (NuGet)
+│   │   ├── SWMM5.Engine.csproj
+│   │   │
+│   │   ├── Core/
+│   │   │   ├── Simulation.cs                ← Main API (from swmm5.c)
+│   │   │   ├── Project.cs                   ← Data model (from project.c)
+│   │   │   ├── SimulationOptions.cs
+│   │   │   ├── Results.cs                   ← Result storage + LINQ
+│   │   │   └── Enums.cs                     ← (from keywords.c)
+│   │   │
+│   │   ├── Parser/
+│   │   │   ├── InpParser.cs                 ← (from input.c)
+│   │   │   ├── InpWriter.cs                 ← Write modified .inp back
+│   │   │   └── TableInterpolator.cs         ← (from table.c)
+│   │   │
+│   │   ├── Hydraulics/
+│   │   │   ├── DynamicWaveRouter.cs         ← (from routing.c + dynwave.c)
+│   │   │   ├── KinematicWaveRouter.cs       ← (from kinwave.c)
+│   │   │   ├── SteadyFlowInitializer.cs     ← (from dwflow.c)
+│   │   │   ├── FlowRouter.cs               ← (from flowrout.c)
+│   │   │   ├── NodeSolver.cs               ← (from node.c)
+│   │   │   ├── LinkSolver.cs               ← (from link.c)
+│   │   │   ├── CrossSection.cs             ← (from xsect.c + shape.c)
+│   │   │   ├── ForceMain.cs               ← (from forcmain.c)
+│   │   │   ├── Culvert.cs                 ← (from culvert.c)
+│   │   │   ├── Roadway.cs                 ← (from roadway.c)
+│   │   │   ├── Transect.cs               ← (from transect.c)
+│   │   │   └── TopologicalSort.cs         ← (from toposort.c)
+│   │   │
+│   │   ├── Hydrology/
+│   │   │   ├── SubcatchmentProcessor.cs    ← (from subcatch.c + runoff.c)
+│   │   │   ├── Infiltration.cs            ← (from infil.c)
+│   │   │   ├── RainfallProcessor.cs       ← (from rain.c + gage.c)
+│   │   │   ├── SnowmeltProcessor.cs       ← (from snow.c)
+│   │   │   ├── ClimateProcessor.cs        ← (from climate.c)
+│   │   │   ├── GroundwaterProcessor.cs    ← (from gwater.c)
+│   │   │   ├── ExfiltrationProcessor.cs   ← (from exfil.c)
+│   │   │   └── InflowProcessor.cs         ← (from inflow.c)
+│   │   │
+│   │   ├── GreenInfra/
+│   │   │   ├── LidControl.cs              ← (from lid.c)
+│   │   │   └── LidProcessor.cs           ← (from lidproc.c)
+│   │   │
+│   │   ├── Quality/
+│   │   │   ├── QualityRouter.cs           ← (from qualrout.c)
+│   │   │   ├── SurfaceQuality.cs         ← (from surfqual.c)
+│   │   │   ├── LandUse.cs               ← (from landuse.c)
+│   │   │   └── Treatment.cs             ← (from treatmnt.c)
+│   │   │
+│   │   ├── Controls/
+│   │   │   ├── RuleEvaluator.cs          ← (from controls.c)
+│   │   │   ├── MathExpression.cs         ← (from mathexpr.c)
+│   │   │   └── RdiiProcessor.cs         ← (from rdii.c)
+│   │   │
+│   │   ├── Output/
+│   │   │   ├── BinaryOutput.cs           ← (from output.c)
+│   │   │   ├── ReportWriter.cs          ← (from report.c)
+│   │   │   ├── Statistics.cs            ← (from stats.c + statsrpt.c)
+│   │   │   └── MassBalance.cs           ← (from massbal.c)
+│   │   │
+│   │   ├── Numerical/
+│   │   │   ├── OdeSolver.cs             ← (from odesolve.c)
+│   │   │   └── RootFinder.cs           ← (from findroot.c)
+│   │   │
+│   │   └── System/
+│   │       ├── HotStart.cs             ← (from hotstart.c)
+│   │       ├── InterfaceFile.cs        ← (from iface.c)
+│   │       ├── DateTimeUtils.cs        ← (from datetime.c)
+│   │       ├── HashLookup.cs           ← (from hash.c → use Dictionary<>!)
+│   │       └── MemoryPool.cs           ← (from mempool.c → use ArrayPool<>!)
+│   │
+│   ├── SWMM5.Cli/                          ← Command-line tool
+│   │   ├── SWMM5.Cli.csproj
+│   │   └── Program.cs
+│   │
+│   └── SWMM5.WebApi/                       ← ASP.NET API server
+│       ├── SWMM5.WebApi.csproj
+│       ├── Controllers/
+│       │   └── SimulationController.cs
+│       └── Program.cs
+│
+├── tests/
+│   ├── SWMM5.Engine.Tests/
+│   │   ├── SWMM5.Engine.Tests.csproj
+│   │   ├── RoutingTests.cs
+│   │   ├── CrossSectionTests.cs
+│   │   ├── ParserTests.cs
+│   │   └── BenchmarkTests.cs
+│   └── testdata/
+│       ├── user1.inp
+│       ├── user1_reference.csv
+│       └── ...
+│
+└── samples/
+    ├── BasicRun/
+    ├── RealTimeControl/
+    ├── ArcGISIntegration/
+    └── ExcelAddIn/
+```
+
+### Day 2: Shared Types — Modern C#
+
+```csharp
+// Core/Project.cs — Using C# records and modern features
+
+namespace SWMM5;
+
+// Immutable value types for configuration
+public record struct CrossSectionConfig(
+    Shape Shape, double Geom1, double Geom2 = 0,
+    double Geom3 = 0, double Geom4 = 0);
+
+// Enums with descriptions
+public enum Shape
+{
+    Circular, RectClosed, Egg, ForceMain, FilledCircular,
+    Horseshoe, Gothic, Catenary, SemiElliptical, BasketHandle,
+    RectOpen, Trapezoidal, Triangular, Parabolic, Power,
+    Irregular, Custom
+}
+
+public enum RouteModel { DynWave, KinWave, Steady }
+public enum InfilModel { Horton, GreenAmpt, CurveNumber }
+public enum FlowUnits { CFS, GPM, MGD, CMS, LPS, MLD }
+
+// Mutable node with observable properties
+public class Node
+{
+    public string Id { get; init; }
+    public NodeType Type { get; init; }
+    public double InvertElev { get; init; }
+    public double MaxDepth { get; init; }
+    public double InitDepth { get; init; }
+    public double SurchargeDepth { get; init; }
+
+    // Dynamic state
+    public double Depth { get; set; }
+    public double Head { get; set; }
+    public double Volume { get; set; }
+    public double LateralInflow { get; set; }
+    public double TotalInflow { get; set; }
+    public double Overflow { get; set; }
+
+    // Connectivity
+    public List<int> InLinks { get; } = new();
+    public List<int> OutLinks { get; } = new();
+
+    // Computed properties
+    public bool IsFlooded => Depth >= MaxDepth;
+    public double Freeboard => MaxDepth - Depth;
+
+    public override string ToString() => $"Node({Id}: depth={Depth:F3}m)";
+}
+
+public class Link
+{
+    public string Id { get; init; }
+    public LinkType Type { get; init; }
+    public int FromNode { get; init; }
+    public int ToNode { get; init; }
+    public double Length { get; init; }
+    public double Roughness { get; set; }
+    public CrossSection XSect { get; init; }
+    public double InOffset { get; init; }
+    public double OutOffset { get; init; }
+
+    // Dynamic state
+    public double Flow { get; set; }
+    public double Depth { get; set; }
+    public double Velocity { get; set; }
+    public double Volume { get; set; }
+    public double Setting { get; set; } = 1.0;
+
+    // Previous step
+    public double OldFlow { get; set; }
+    public double OldDepth { get; set; }
+    public double OldVolume { get; set; }
+
+    // Computed
+    public double Capacity => XSect.AFull > 0
+        ? Math.Abs(Flow) / XSect.FullFlow : 0.0;
+    public bool IsSurcharged => Depth >= XSect.Geom1;
+
+    public override string ToString() => $"Link({Id}: flow={Flow:F3})";
+}
+
+public class Project
+{
+    public List<Node> Nodes { get; } = new();
+    public List<Link> Links { get; } = new();
+    public List<Subcatchment> Subcatchments { get; } = new();
+    public List<Raingage> Raingages { get; } = new();
+
+    public Dictionary<string, int> NodeIndex { get; } = new();
+    public Dictionary<string, int> LinkIndex { get; } = new();
+
+    public double CurrentTime { get; set; }
+    public double StartTime { get; set; }
+    public double EndTime { get; set; }
+    public double ReportStep { get; set; }
+    public double RoutingStep { get; set; }
+
+    public RouteModel RouteModel { get; set; }
+    public InfilModel InfilModel { get; set; }
+    public FlowUnits FlowUnits { get; set; }
+
+    public int[] SortedLinks { get; set; } = Array.Empty<int>();
+
+    public int ReportRatio => (int)(ReportStep / RoutingStep);
+    public double PercentComplete => EndTime > StartTime
+        ? (CurrentTime - StartTime) / (EndTime - StartTime) * 100.0
+        : 0.0;
+    public bool IsReportTime => _stepCount % ReportRatio == 0;
+
+    private int _stepCount;
+    public void AdvanceTime(double dt)
+    {
+        CurrentTime += dt;
+        _stepCount++;
+    }
+}
+```
+
+### Day 3-4: The Simulation API — C# Elegance
+
+```csharp
+// Core/Simulation.cs — The public API
+
+namespace SWMM5;
+
+public sealed class Simulation : IDisposable, IAsyncDisposable
+{
+    private readonly Project _project;
+    private bool _initialized;
+    private int _stepCount;
+
+    public Simulation(string inpFilePath)
+    {
+        var content = File.ReadAllText(inpFilePath);
+        _project = InpParser.Parse(content);
+    }
+
+    public Simulation(Stream inpStream)
+    {
+        using var reader = new StreamReader(inpStream);
+        _project = InpParser.Parse(reader.ReadToEnd());
+    }
+
+    public Simulation(string inpContent, bool isContent)
+    {
+        _project = InpParser.Parse(inpContent);
+    }
+
+    // ─── FULL RUN (simplest API) ───
+
+    /// <summary>Run complete simulation with optional progress reporting</summary>
+    public SimulationResults Run(IProgress<double>? progress = null)
+    {
+        Initialize();
+        var results = new SimulationResults(_project);
+
+        while (_project.CurrentTime < _project.EndTime)
+        {
+            Step();
+            if (_project.IsReportTime)
+                results.Record(_project);
+            progress?.Report(_project.PercentComplete);
+        }
+
+        Finalize();
+        results.ComputeStatistics();
+        return results;
+    }
+
+    /// <summary>Async run — non-blocking for UI applications</summary>
+    public async Task<SimulationResults> RunAsync(
+        IProgress<double>? progress = null,
+        CancellationToken ct = default)
+    {
+        return await Task.Run(() =>
+        {
+            Initialize();
+            var results = new SimulationResults(_project);
+
+            while (_project.CurrentTime < _project.EndTime)
+            {
+                ct.ThrowIfCancellationRequested();
+                Step();
+                if (_project.IsReportTime)
+                    results.Record(_project);
+                progress?.Report(_project.PercentComplete);
+            }
+
+            Finalize();
+            results.ComputeStatistics();
+            return results;
+        }, ct);
+    }
+
+    // ─── STEP-BY-STEP (PySWMM equivalent) ───
+
+    /// <summary>Iterate step by step for real-time control</summary>
+    public IEnumerable<SimulationStep> Steps()
+    {
+        Initialize();
+
+        while (_project.CurrentTime < _project.EndTime)
+        {
+            Step();
+            yield return new SimulationStep(
+                _project.CurrentTime,
+                _project.PercentComplete,
+                _stepCount
+            );
+        }
+
+        Finalize();
+    }
+
+    /// <summary>Async step enumeration — for Blazor/MAUI</summary>
+    public async IAsyncEnumerable<SimulationStep> StepsAsync(
+        [EnumeratorCancellation] CancellationToken ct = default)
+    {
+        Initialize();
+
+        while (_project.CurrentTime < _project.EndTime)
+        {
+            ct.ThrowIfCancellationRequested();
+            Step();
+            yield return new SimulationStep(
+                _project.CurrentTime,
+                _project.PercentComplete,
+                _stepCount
+            );
+            await Task.Yield(); // Allow UI thread to process
+        }
+
+        Finalize();
+    }
+
+    // ─── ELEMENT ACCESS (real-time control) ───
+
+    public NodeAccessor Node(string id)
+    {
+        if (!_project.NodeIndex.TryGetValue(id, out var idx))
+            throw new KeyNotFoundException($"Node '{id}' not found");
+        return new NodeAccessor(_project.Nodes[idx]);
+    }
+
+    public LinkAccessor Link(string id)
+    {
+        if (!_project.LinkIndex.TryGetValue(id, out var idx))
+            throw new KeyNotFoundException($"Link '{id}' not found");
+        return new LinkAccessor(_project.Links[idx]);
+    }
+
+    // ─── PARAMETER OVERRIDES ───
+
+    public Simulation WithManningN(double n)
+    {
+        foreach (var link in _project.Links.Where(l => l.Type == LinkType.Conduit))
+            link.Roughness = n;
+        return this;
+    }
+
+    public Simulation WithImperviousness(double pct)
+    {
+        foreach (var sc in _project.Subcatchments)
+            sc.Imperviousness = pct;
+        return this;
+    }
+
+    // ─── INTERNAL ───
+
+    private void Initialize()
+    {
+        _project.Validate();
+        TopologicalSort.Sort(_project);
+        SteadyFlowInitializer.ComputeInitialFlows(_project);
+        _initialized = true;
+        _stepCount = 0;
+    }
+
+    private void Step()
+    {
+        var dt = _project.RoutingStep;
+
+        // Hydrology
+        RainfallProcessor.Update(_project);
+        foreach (var sc in _project.Subcatchments)
+        {
+            SubcatchmentProcessor.ComputeRunoff(sc, dt);
+            Infiltration.Compute(sc, _project.InfilModel, dt);
+            if (_project.HasGroundwater)
+                GroundwaterProcessor.Compute(sc, dt);
+            if (_project.HasSnow)
+                SnowmeltProcessor.Compute(sc, dt);
+        }
+
+        // Hydraulics
+        switch (_project.RouteModel)
+        {
+            case RouteModel.DynWave:
+                DynamicWaveRouter.Route(_project, dt);
+                break;
+            case RouteModel.KinWave:
+                KinematicWaveRouter.Route(_project, dt);
+                break;
+        }
+
+        // Controls
+        if (_project.HasControls)
+            RuleEvaluator.Evaluate(_project);
+
+        // Mass balance
+        MassBalance.Update(_project, dt);
+        _project.AdvanceTime(dt);
+        _stepCount++;
+    }
+
+    private void Finalize()
+    {
+        _initialized = false;
+    }
+
+    public void Dispose() { /* cleanup */ }
+    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+}
+
+// Accessor wrappers for real-time control
+public readonly struct NodeAccessor(Node node)
+{
+    public double Depth => node.Depth;
+    public double Head => node.Head;
+    public double Volume => node.Volume;
+    public double LateralInflow => node.LateralInflow;
+    public double TotalInflow => node.TotalInflow;
+    public double Overflow => node.Overflow;
+    public bool IsFlooded => node.IsFlooded;
+}
+
+public readonly struct LinkAccessor(Link link)
+{
+    public double Flow => link.Flow;
+    public double Depth => link.Depth;
+    public double Velocity => link.Velocity;
+    public double Capacity => link.Capacity;
+    public double TargetSetting
+    {
+        get => link.Setting;
+        set => link.Setting = value;
+    }
+}
+```
+
+### Day 5: Dynamic Wave Router
+
+```csharp
+// Hydraulics/DynamicWaveRouter.cs
+
+namespace SWMM5;
+
+public static class DynamicWaveRouter
+{
+    private const double Gravity = 32.2; // ft/s² (9.81 for metric)
+
+    public static void Route(Project project, double dt)
+    {
+        // Save old state
+        foreach (var link in project.Links)
+        {
+            link.OldFlow = link.Flow;
+            link.OldDepth = link.Depth;
+            link.OldVolume = link.Volume;
+        }
+
+        // Compute new flows — all conduits
+        foreach (var link in project.Links.Where(l => l.Type == LinkType.Conduit))
+        {
+            link.Flow = ComputeFlow(link, project.Nodes, dt);
+            UpdateLinkDepth(link);
+        }
+
+        // Update node depths
+        foreach (var node in project.Nodes.Where(n => n.Type != NodeType.Outfall))
+        {
+            UpdateNodeDepth(node, project.Links, dt);
+        }
+    }
+
+    private static double FrictionSlope(Link link, double flow, double area)
+    {
+        if (area <= 0.0 || flow == 0.0) return 0.0;
+
+        var hRadius = area / link.XSect.WidthAtDepth(link.Depth);
+        if (hRadius <= 0.0) return 0.0;
+
+        // Force main uses H-W when pressurized
+        if (link.XSect.Shape == Shape.ForceMain && link.IsSurcharged)
+            return ForceMain.FrictionSlope(link, flow, area);
+
+        var sf = link.Roughness * flow / (area * Math.Pow(hRadius, 2.0 / 3.0));
+        sf *= sf;
+
+        return flow < 0 ? -sf : sf;
+    }
+
+    private static double ComputeFlow(Link link, List<Node> nodes, double dt)
+    {
+        var area = link.XSect.AreaAtDepth(link.Depth);
+        if (area <= 0.0) return 0.0;
+
+        var hUp = nodes[link.FromNode].Head;
+        var hDown = nodes[link.ToNode].Head;
+        var dhdx = (hUp - hDown) / link.Length;
+        var sf = FrictionSlope(link, link.OldFlow, area);
+
+        var qNew = link.OldFlow + dt * Gravity * area * (dhdx - sf);
+
+        // Velocity cap
+        var qMax = area * 50.0;
+        return Math.Clamp(qNew, -qMax, qMax);
+    }
+
+    private static void UpdateNodeDepth(Node node, List<Link> links, double dt)
+    {
+        var totalIn = node.LateralInflow;
+        var totalOut = 0.0;
+
+        foreach (var i in node.InLinks)
+            totalIn += Math.Abs(links[i].Flow);
+        foreach (var i in node.OutLinks)
+            totalOut += Math.Abs(links[i].Flow);
+
+        node.TotalInflow = totalIn;
+
+        var dv = (totalIn - totalOut) * dt;
+        node.Volume = Math.Max(node.Volume + dv, 0.0);
+        node.Depth = Math.Clamp(
+            node.Volume / Math.Max(node.MaxDepth, 1e-6),
+            0.0, node.MaxDepth);
+        node.Head = node.InvertElev + node.Depth;
+        node.Overflow = node.IsFlooded
+            ? Math.Max(totalIn - totalOut, 0.0) : 0.0;
+    }
+}
+```
+
+### Day 6-7: C# Superpowers — LINQ Results
+
+```csharp
+// Core/Results.cs — LINQ makes result analysis elegant
+
+namespace SWMM5;
+
+public class SimulationResults
+{
+    public Dictionary<string, NodeResults> Nodes { get; } = new();
+    public Dictionary<string, LinkResults> Links { get; } = new();
+    public double ContinuityError { get; private set; }
+
+    // ─── LINQ-POWERED QUERIES ───
+
+    /// <summary>Find all flooded nodes, sorted by flood volume</summary>
+    public IEnumerable<(string Id, double Volume, TimeSpan Duration)> FloodedNodes()
+        => Nodes
+            .Where(n => n.Value.PeakDepth >= n.Value.MaxDepth)
+            .OrderByDescending(n => n.Value.FloodVolume)
+            .Select(n => (n.Key, n.Value.FloodVolume, n.Value.FloodDuration));
+
+    /// <summary>Find all surcharged links</summary>
+    public IEnumerable<(string Id, double MaxCapacity)> SurchargedLinks()
+        => Links
+            .Where(l => l.Value.MaxCapacityRatio > 1.0)
+            .OrderByDescending(l => l.Value.MaxCapacityRatio)
+            .Select(l => (l.Key, l.Value.MaxCapacityRatio));
+
+    /// <summary>Pipes sorted by utilization</summary>
+    public IEnumerable<(string Id, double Utilization, string Rating)> CapacityReport()
+        => Links
+            .Select(l => (
+                l.Key,
+                l.Value.MaxCapacityRatio,
+                l.Value.MaxCapacityRatio switch
+                {
+                    < 0.5  => "🟢 OK",
+                    < 0.8  => "🟡 Monitor",
+                    < 1.0  => "🟠 Near Capacity",
+                    _      => "🔴 Surcharged"
+                }))
+            .OrderByDescending(x => x.MaxCapacityRatio);
+}
+```
+
+### Day 8-9: Usage Examples
+
+```csharp
+// samples/BasicRun/Program.cs
+using SWMM5;
+
+// One-liner
+var results = new Simulation("model.inp").Run();
+Console.WriteLine($"Peak flow: {results.Nodes["Out1"].PeakFlow:F2} CFS");
+
+// With progress (console)
+using var sim = new Simulation("model.inp");
+var results2 = sim.Run(new Progress<double>(p =>
+    Console.Write($"\r{p:F1}%")));
+
+// Async with cancellation (WPF/MAUI)
+var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+var results3 = await sim.RunAsync(progress: progressReporter, ct: cts.Token);
+
+// Real-time control (PySWMM equivalent)
+using var sim2 = new Simulation("pump_station.inp");
+foreach (var step in sim2.Steps())
+{
+    if (sim2.Node("WetWell").Depth > 2.0)
+        sim2.Link("Pump1").TargetSetting = 1.0;
+    else if (sim2.Node("WetWell").Depth < 0.5)
+        sim2.Link("Pump1").TargetSetting = 0.0;
+}
+
+// LINQ analysis
+var report = results.CapacityReport().Take(10);
+foreach (var (id, util, rating) in report)
+    Console.WriteLine($"  {id,-15} {util:P0}  {rating}");
+
+// Parameter sweep with PLINQ (parallel)
+var manningValues = Enumerable.Range(10, 11).Select(i => i * 0.001);
+var sweepResults = manningValues
+    .AsParallel()
+    .Select(n => {
+        using var s = new Simulation("model.inp").WithManningN(n);
+        var r = s.Run();
+        return new { N = n, PeakFlow = r.Nodes["Out1"].PeakFlow };
+    })
+    .OrderBy(x => x.N)
+    .ToList();
+
+// ArcGIS Pro Add-In integration
+// In an ArcGIS Pro .NET Add-In:
+public class RunSwmmButton : Button
+{
+    protected override async void OnClick()
+    {
+        var layer = MapView.Active.Map.GetLayersAsFlattenedList()
+            .OfType<FeatureLayer>().First();
+
+        using var sim = new Simulation(GetInpFromLayer(layer));
+        var results = await sim.RunAsync(new Progress<double>(p =>
+            FrameworkApplication.Current.StatusBar.Message = $"SWMM5: {p:F0}%"));
+
+        // Color features by results
+        await QueuedTask.Run(() => {
+            var renderer = results.CreateGraduatedRenderer(layer, "PeakDepth");
+            layer.SetRenderer(renderer);
+        });
+    }
+}
+```
+
+### Build & Distribute
+
+```bash
+# Build
+dotnet build -c Release
+
+# Test
+dotnet test --logger "console;verbosity=detailed"
+
+# Package for NuGet
+dotnet pack -c Release -o ./nupkg
+
+# Publish to NuGet.org
+dotnet nuget push nupkg/SWMM5.Engine.5.2.4.nupkg \
+    --api-key YOUR_KEY \
+    --source https://api.nuget.org/v3/index.json
+
+# Users install:
+dotnet add package SWMM5.Engine
+
+# Or in .csproj:
+<PackageReference Include="SWMM5.Engine" Version="5.2.4" />
+
+# Blazor WASM (SWMM5 in browser via .NET):
+dotnet new blazorwasm -n SWMM5Web
+cd SWMM5Web
+dotnet add package SWMM5.Engine
+# Now SWMM5 runs client-side in .NET WASM
+```
+
+---
+
+## Engine 2: Fortran HPC — CONCEPT → LIVE (2-3 Weeks)
+
+### Why Fortran Matters
+
+```
+Fortran is the ONLY language where:
+  - Array operations on 50,000 conduits are ONE STATEMENT
+  - Coarray parallelism is BUILT INTO THE LANGUAGE
+  - 50+ years of compiler optimization for numerical code
+  - Every HPC cluster has a Fortran compiler
+  - SLURM job schedulers work natively with Fortran binaries
+
+TARGET: City-scale models (50,000-100,000+ conduits)
+        that are too slow for single-core C engine.
+        
+SPEEDUP: N cores → ~N× faster (near-linear scaling
+         for the dynwave solver, which is embarrassingly
+         parallel across conduits)
+```
+
+### Day 1: Project Structure
+
+```
+swmm5-fortran/
+├── CMakeLists.txt
+├── src/
+│   ├── swmm5_main.f90               ← Main program
+│   │
+│   ├── core/
+│   │   ├── swmm5_types_mod.f90      ← All derived types (from project.c)
+│   │   ├── swmm5_engine_mod.f90     ← Simulation loop (from swmm5.c)
+│   │   ├── swmm5_datetime_mod.f90   ← (from datetime.c)
+│   │   ├── swmm5_keywords_mod.f90   ← (from keywords.c)
+│   │   └── swmm5_hash_mod.f90       ← (from hash.c)
+│   │
+│   ├── parser/
+│   │   ├── swmm5_input_mod.f90      ← INP parser (from input.c)
+│   │   └── swmm5_table_mod.f90      ← (from table.c)
+│   │
+│   ├── hydraulics/
+│   │   ├── swmm5_routing_mod.f90    ← Dynamic wave (from routing.c)
+│   │   ├── swmm5_dynwave_mod.f90    ← (from dynwave.c)
+│   │   ├── swmm5_flowrout_mod.f90   ← (from flowrout.c)
+│   │   ├── swmm5_kinwave_mod.f90    ← (from kinwave.c)
+│   │   ├── swmm5_dwflow_mod.f90     ← (from dwflow.c)
+│   │   ├── swmm5_node_mod.f90       ← (from node.c)
+│   │   ├── swmm5_link_mod.f90       ← (from link.c)
+│   │   ├── swmm5_xsect_mod.f90     ← (from xsect.c + shape.c)
+│   │   ├── swmm5_forcmain_mod.f90   ← (from forcmain.c)
+│   │   ├── swmm5_culvert_mod.f90    ← (from culvert.c)
+│   │   ├── swmm5_roadway_mod.f90    ← (from roadway.c)
+│   │   ├── swmm5_transect_mod.f90   ← (from transect.c)
+│   │   ├── swmm5_toposort_mod.f90   ← (from toposort.c)
+│   │   └── swmm5_parallel_mod.f90   ← NEW: coarray partitioning
+│   │
+│   ├── hydrology/
+│   │   ├── swmm5_subcatch_mod.f90   ← (from subcatch.c + runoff.c)
+│   │   ├── swmm5_infil_mod.f90      ← (from infil.c)
+│   │   ├── swmm5_rain_mod.f90       ← (from rain.c + gage.c)
+│   │   ├── swmm5_snow_mod.f90       ← (from snow.c)
+│   │   ├── swmm5_climate_mod.f90    ← (from climate.c)
+│   │   ├── swmm5_gwater_mod.f90     ← (from gwater.c)
+│   │   ├── swmm5_exfil_mod.f90      ← (from exfil.c)
+│   │   └── swmm5_inflow_mod.f90     ← (from inflow.c)
+│   │
+│   ├── lid/
+│   │   ├── swmm5_lid_mod.f90        ← (from lid.c)
+│   │   └── swmm5_lidproc_mod.f90    ← (from lidproc.c)
+│   │
+│   ├── quality/
+│   │   ├── swmm5_qualrout_mod.f90   ← (from qualrout.c)
+│   │   ├── swmm5_surfqual_mod.f90   ← (from surfqual.c)
+│   │   ├── swmm5_landuse_mod.f90    ← (from landuse.c)
+│   │   └── swmm5_treatmnt_mod.f90   ← (from treatmnt.c)
+│   │
+│   ├── controls/
+│   │   ├── swmm5_controls_mod.f90   ← (from controls.c)
+│   │   ├── swmm5_mathexpr_mod.f90   ← (from mathexpr.c)
+│   │   └── swmm5_rdii_mod.f90       ← (from rdii.c)
+│   │
+│   ├── output/
+│   │   ├── swmm5_output_mod.f90     ← (from output.c)
+│   │   ├── swmm5_report_mod.f90     ← (from report.c)
+│   │   ├── swmm5_stats_mod.f90      ← (from stats.c + statsrpt.c)
+│   │   └── swmm5_massbal_mod.f90    ← (from massbal.c)
+│   │
+│   ├── numerical/
+│   │   ├── swmm5_odesolve_mod.f90   ← (from odesolve.c)
+│   │   └── swmm5_findroot_mod.f90   ← (from findroot.c)
+│   │
+│   └── system/
+│       ├── swmm5_hotstart_mod.f90   ← (from hotstart.c)
+│       ├── swmm5_iface_mod.f90      ← (from iface.c)
+│       └── swmm5_mempool_mod.f90    ← (from mempool.c)
+│
+├── tests/
+│   ├── test_routing.f90
+│   ├── test_xsect.f90
+│   ├── test_benchmarks.f90
+│   └── testdata/
+├── scripts/
+│   ├── run_hpc.sh                    ← SLURM job script
+│   └── scaling_test.sh               ← Weak/strong scaling tests
+└── doc/
+    └── parallel_design.md
+```
+
+### Day 2: Types — Structure of Arrays for Vectorization
+
+```fortran
+! src/core/swmm5_types_mod.f90
+! CRITICAL DESIGN: Structure of Arrays (SoA) instead of
+! Array of Structures (AoS) for vectorization and coarray
+
+module swmm5_types_mod
+  use iso_fortran_env, only: dp => real64, i32 => int32, i64 => int64
+  implicit none
+
+  integer, parameter :: MAX_ID_LEN = 64
+
+  ! Route model options
+  integer, parameter :: DYNWAVE = 1, KINWAVE = 2, STEADY = 3
+
+  ! Node types
+  integer, parameter :: JUNCTION = 0, OUTFALL = 1, STORAGE = 2, DIVIDER = 3
+
+  ! Link types
+  integer, parameter :: CONDUIT = 0, PUMP = 1, ORIFICE = 2, WEIR = 3, OUTLET = 4
+
+  ! Cross-section shapes
+  integer, parameter :: CIRCULAR = 0, RECT_CLOSED = 1, EGG = 2, &
+                         FORCE_MAIN = 3, FILLED_CIRCULAR = 4
+
+  real(dp), parameter :: GRAVITY = 32.2_dp  ! ft/s² (9.81 for metric)
+
+  ! ═══ STRUCTURE OF ARRAYS ═══
+  ! Each property is a contiguous array → perfect for SIMD and coarrays
+
+  type :: t_nodes
+    integer :: count = 0
+    character(MAX_ID_LEN), allocatable :: id(:)
+    integer(i32), allocatable :: node_type(:)
+    real(dp), allocatable :: invert_elev(:)
+    real(dp), allocatable :: max_depth(:)
+    real(dp), allocatable :: init_depth(:)
+    real(dp), allocatable :: surcharge_depth(:)
+
+    ! Dynamic state — THE HOT ARRAYS (updated every step)
+    real(dp), allocatable :: depth(:)
+    real(dp), allocatable :: head(:)
+    real(dp), allocatable :: volume(:)
+    real(dp), allocatable :: lateral_inflow(:)
+    real(dp), allocatable :: total_inflow(:)
+    real(dp), allocatable :: overflow(:)
+  end type
+
+  type :: t_links
+    integer :: count = 0
+    character(MAX_ID_LEN), allocatable :: id(:)
+    integer(i32), allocatable :: link_type(:)
+    integer(i32), allocatable :: from_node(:)
+    integer(i32), allocatable :: to_node(:)
+    real(dp), allocatable :: length(:)
+    real(dp), allocatable :: roughness(:)
+    real(dp), allocatable :: in_offset(:)
+    real(dp), allocatable :: out_offset(:)
+
+    ! Cross-section properties (pre-computed)
+    integer(i32), allocatable :: xsect_shape(:)
+    real(dp), allocatable :: xsect_geom1(:)
+    real(dp), allocatable :: xsect_geom2(:)
+    real(dp), allocatable :: a_full(:)
+    real(dp), allocatable :: r_full(:)
+    real(dp), allocatable :: w_max(:)
+
+    ! Dynamic state — THE HOT ARRAYS
+    real(dp), allocatable :: flow(:)
+    real(dp), allocatable :: depth(:)
+    real(dp), allocatable :: velocity(:)
+    real(dp), allocatable :: volume(:)
+    real(dp), allocatable :: setting(:)
+
+    ! Previous step
+    real(dp), allocatable :: old_flow(:)
+    real(dp), allocatable :: old_depth(:)
+    real(dp), allocatable :: old_volume(:)
+
+    ! Computed intermediates
+    real(dp), allocatable :: friction_slope(:)
+    real(dp), allocatable :: area(:)         ! current flow area
+    real(dp), allocatable :: h_radius(:)     ! current hydraulic radius
+  end type
+
+  type :: t_project
+    type(t_nodes) :: nodes
+    type(t_links) :: links
+
+    real(dp) :: current_time = 0.0_dp
+    real(dp) :: start_time = 0.0_dp
+    real(dp) :: end_time = 0.0_dp
+    real(dp) :: report_step = 300.0_dp
+    real(dp) :: routing_step = 30.0_dp
+
+    integer :: route_model = DYNWAVE
+    integer :: infil_model = 0
+    integer :: flow_units = 0
+
+    integer, allocatable :: sorted_links(:)
+
+    ! Parallel info
+    integer :: my_first_link = 1
+    integer :: my_last_link = 0
+  end type
+
+end module
+```
+
+### Day 3-4: Parallel Dynamic Wave — The Fortran Superpower
+
+```fortran
+! src/hydraulics/swmm5_routing_mod.f90
+! COARRAY PARALLEL DYNAMIC WAVE ROUTING
+
+module swmm5_routing_mod
+  use swmm5_types_mod
+  use iso_fortran_env
+  implicit none
+
+contains
+
+  subroutine dynwave_step(project, dt)
+    type(t_project), intent(inout) :: project
+    real(dp), intent(in) :: dt
+    integer :: i, n
+    real(dp) :: h_up, h_down, dhdx, sf_val, q_new, q_max
+
+    n = project%links%count
+
+    ! ═══ STEP 1: Save old state ═══
+    ! ONE STATEMENT updates ALL links (Fortran array operations)
+    project%links%old_flow(1:n) = project%links%flow(1:n)
+    project%links%old_depth(1:n) = project%links%depth(1:n)
+    project%links%old_volume(1:n) = project%links%volume(1:n)
+
+    ! ═══ STEP 2: Compute friction slopes ═══
+    ! VECTORIZED: compiler auto-vectorizes this loop (AVX-512 = 8 conduits/cycle)
+    !$omp parallel do simd private(i) schedule(static)
+    do i = 1, n
+      if (project%links%link_type(i) /= CONDUIT) cycle
+      project%links%friction_slope(i) = friction_slope( &
+        project%links%old_flow(i), &
+        project%links%area(i), &
+        project%links%roughness(i), &
+        project%links%h_radius(i))
+    end do
+    !$omp end parallel do simd
+
+    ! ═══ STEP 3: Compute new flows ═══
+    ! VECTORIZED + PARALLEL
+    !$omp parallel do private(i, h_up, h_down, dhdx, sf_val, q_new, q_max) &
+    !$omp& schedule(static)
+    do i = 1, n
+      if (project%links%link_type(i) /= CONDUIT) cycle
+      if (project%links%area(i) <= 0.0_dp) then
+        project%links%flow(i) = 0.0_dp
+        cycle
+      end if
+
+      h_up = project%nodes%head(project%links%from_node(i))
+      h_down = project%nodes%head(project%links%to_node(i))
+      dhdx = (h_up - h_down) / project%links%length(i)
+      sf_val = project%links%friction_slope(i)
+
+      q_new = project%links%old_flow(i) + &
+              dt * GRAVITY * project%links%area(i) * (dhdx - sf_val)
+
+      ! Velocity cap
+      q_max = project%links%area(i) * 50.0_dp
+      project%links%flow(i) = max(-q_max, min(q_new, q_max))
+    end do
+    !$omp end parallel do
+
+    ! ═══ STEP 4: Update node depths ═══
+    call update_node_depths(project, dt)
+
+  end subroutine
+
+  ! ─── VECTORIZED friction slope ───
+  elemental function friction_slope(flow, area, roughness, h_radius) result(sf)
+    real(dp), intent(in) :: flow, area, roughness, h_radius
+    real(dp) :: sf, sf_base
+
+    if (area <= 0.0_dp .or. flow == 0.0_dp .or. h_radius <= 0.0_dp) then
+      sf = 0.0_dp
+      return
+    end if
+
+    sf_base = roughness * flow / (area * h_radius**(2.0_dp/3.0_dp))
+    sf = sf_base * sf_base
+    if (flow < 0.0_dp) sf = -sf
+  end function
+
+  ! ─── COARRAY version for distributed memory (HPC clusters) ───
+  subroutine dynwave_step_coarray(project, dt)
+    type(t_project), intent(inout) :: project
+    real(dp), intent(in) :: dt
+    integer :: i, n, me, np
+
+    ! Coarray: each image handles its partition of links
+    me = this_image()
+    np = num_images()
+    n = project%links%count
+
+    ! Partition links across images
+    project%my_first_link = ((me - 1) * n) / np + 1
+    project%my_last_link = (me * n) / np
+
+    ! Save old state (only my links)
+    project%links%old_flow(project%my_first_link:project%my_last_link) = &
+      project%links%flow(project%my_first_link:project%my_last_link)
+
+    ! Compute friction slopes (only my links)
+    do i = project%my_first_link, project%my_last_link
+      if (project%links%link_type(i) /= CONDUIT) cycle
+      project%links%friction_slope(i) = friction_slope( &
+        project%links%old_flow(i), &
+        project%links%area(i), &
+        project%links%roughness(i), &
+        project%links%h_radius(i))
+    end do
+
+    ! Compute new flows (only my links)
+    do i = project%my_first_link, project%my_last_link
+      if (project%links%link_type(i) /= CONDUIT) cycle
+      ! ... same flow computation as above
+    end do
+
+    ! ═══ SYNCHRONIZE: gather all flows across images ═══
+    sync all
+
+    ! Broadcast updated flows to all images
+    ! (Each image sends its partition, receives all others)
+    call co_broadcast(project%links%flow, source_image=1)
+
+    ! Update node depths (each image handles its partition of nodes)
+    call update_node_depths_parallel(project, dt)
+
+    sync all
+
+  end subroutine
+
+  ! ─── THE FORTRAN SUPERPOWER: Array operations ───
+  subroutine update_node_depths(project, dt)
+    type(t_project), intent(inout) :: project
+    real(dp), intent(in) :: dt
+    integer :: i, j, n
+    real(dp) :: total_in, total_out, dv
+
+    n = project%nodes%count
+
+    ! Reset inflows
+    project%nodes%total_inflow(1:n) = project%nodes%lateral_inflow(1:n)
+    project%nodes%overflow(1:n) = 0.0_dp
+
+    ! Accumulate link flows at nodes
+    do i = 1, project%links%count
+      j = project%links%to_node(i)
+      project%nodes%total_inflow(j) = project%nodes%total_inflow(j) + &
+        abs(project%links%flow(i))
+    end do
+
+    ! UPDATE ALL NODE DEPTHS IN ONE STATEMENT
+    ! This is why Fortran exists.
+    where (project%nodes%node_type(1:n) /= OUTFALL)
+      project%nodes%volume(1:n) = max(project%nodes%volume(1:n) + &
+        project%nodes%total_inflow(1:n) * dt, 0.0_dp)
+
+      project%nodes%depth(1:n) = min( &
+        project%nodes%volume(1:n) / max(project%nodes%max_depth(1:n), 1.0e-6_dp), &
+        project%nodes%max_depth(1:n))
+
+      project%nodes%head(1:n) = project%nodes%invert_elev(1:n) + &
+        project%nodes%depth(1:n)
+    end where
+
+  end subroutine
+
+end module
+```
+
+### Day 5: Main Program
+
+```fortran
+! src/swmm5_main.f90
+
+program swmm5_hpc
+  use swmm5_types_mod
+  use swmm5_engine_mod
+  use swmm5_input_mod
+  use swmm5_routing_mod
+  use swmm5_toposort_mod
+  use swmm5_report_mod
+  use swmm5_massbal_mod
+  use iso_fortran_env
+  implicit none
+
+  type(t_project) :: project
+  character(256) :: inp_file
+  integer :: step_count, report_ratio
+  real(dp) :: dt, wall_start, wall_end
+  logical :: use_coarray
+
+  ! Get input file from command line
+  call get_command_argument(1, inp_file)
+  if (len_trim(inp_file) == 0) then
+    if (this_image() == 1) then
+      print *, 'Usage: swmm5 <input.inp>'
+      print *, 'SWMM5 Fortran HPC Engine v5.2.4'
+      print *, 'Coarray images available:', num_images()
+    end if
+    stop
+  end if
+
+  ! Parse INP file (image 1 only, then broadcast)
+  if (this_image() == 1) then
+    print '(A)', '═══════════════════════════════════════════'
+    print '(A)', ' SWMM5 Fortran HPC Engine v5.2.4'
+    print '(A,I4,A)', ' Running on ', num_images(), ' coarray images'
+    print '(A)', '═══════════════════════════════════════════'
+    call parse_inp(project, trim(inp_file))
+    print '(A,I6,A)', ' Nodes:    ', project%nodes%count, ''
+    print '(A,I6,A)', ' Links:    ', project%links%count, ''
+    print '(A)', '───────────────────────────────────────────'
+  end if
+
+  ! Broadcast project to all images
+  sync all
+  call broadcast_project(project)
+
+  ! Initialize
+  call topological_sort(project)
+  call compute_initial_flows(project)
+
+  use_coarray = (num_images() > 1)
+  dt = project%routing_step
+  report_ratio = nint(project%report_step / dt)
+  step_count = 0
+
+  call cpu_time(wall_start)
+
+  ! ═══ MAIN TIME LOOP ═══
+  do while (project%current_time < project%end_time)
+
+    ! Hydrology (image 1 only for now — small computation)
+    if (this_image() == 1) then
+      call update_rainfall(project)
+      call compute_all_runoff(project, dt)
+    end if
+    sync all
+
+    ! Hydraulics — THE BIG COMPUTATION
+    if (use_coarray) then
+      call dynwave_step_coarray(project, dt)  ! Parallel across images
+    else
+      call dynwave_step(project, dt)          ! OpenMP on single node
+    end if
+
+    ! Mass balance + reporting (image 1 only)
+    if (this_image() == 1) then
+      call update_mass_balance(project, dt)
+
+      step_count = step_count + 1
+      if (mod(step_count, report_ratio) == 0) then
+        call write_step_results(project)
+      end if
+
+      ! Progress every 1000 steps
+      if (mod(step_count, 1000) == 0) then
+        print '(A,F5.1,A)', '  Progress: ', &
+          100.0_dp * (project%current_time - project%start_time) / &
+          (project%end_time - project%start_time), '%'
+      end if
+    end if
+
+    project%current_time = project%current_time + dt
+  end do
+
+  call cpu_time(wall_end)
+
+  if (this_image() == 1) then
+    print '(A)', '───────────────────────────────────────────'
+    print '(A,F8.2,A)', ' Wall time:       ', wall_end - wall_start, ' seconds'
+    print '(A,I4,A)',   ' Images used:     ', num_images(), ''
+    print '(A,F8.3,A)', ' Continuity error:', &
+      compute_continuity_error(project), '%'
+    print '(A)', '═══════════════════════════════════════════'
+
+    call write_summary(project)
+  end if
+
+end program
+```
+
+### Day 6-7: Build System + HPC Scripts
+
+```cmake
+# CMakeLists.txt
+cmake_minimum_required(VERSION 3.20)
+project(swmm5_fortran Fortran)
+
+# Detect compiler
+if(CMAKE_Fortran_COMPILER_ID MATCHES "GNU")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -march=native")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -fcoarray=lib")
+  # Link OpenCoarrays for GFortran
+  find_package(OpenCoarrays)
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "Intel")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -xHost")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -coarray")
+elseif(CMAKE_Fortran_COMPILER_ID MATCHES "NVHPC")
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} -O3 -fast")
+endif()
+
+# OpenMP for shared-memory parallelism
+find_package(OpenMP)
+if(OpenMP_Fortran_FOUND)
+  set(CMAKE_Fortran_FLAGS "${CMAKE_Fortran_FLAGS} ${OpenMP_Fortran_FLAGS}")
+endif()
+
+# Collect all sources
+file(GLOB_RECURSE SOURCES src/*.f90)
+
+add_executable(swmm5 ${SOURCES})
+```
+```bash
+#!/bin/bash
+# scripts/run_hpc.sh — SLURM job script
+
+#SBATCH --job-name=swmm5_hpc
+#SBATCH --nodes=4
+#SBATCH --ntasks-per-node=16
+#SBATCH --cpus-per-task=1
+#SBATCH --time=01:00:00
+#SBATCH --output=swmm5_%j.log
+
+echo "SWMM5 Fortran HPC — $SLURM_NTASKS total tasks"
+echo "Model: $1"
+
+# Intel compiler
+module load intel/2024
+srun ./swmm5 $1
+
+# OR GFortran + OpenCoarrays
+# module load gcc openmpi opencoarrays
+# cafrun -n $SLURM_NTASKS ./swmm5 $1
+```
+
+### Day 8-9: Scaling Test
+
+```bash
+#!/bin/bash
+# scripts/scaling_test.sh — Measure parallel speedup
+
+MODEL="testdata/large_city_50000.inp"
+
+echo "SWMM5 Fortran HPC Scaling Test"
+echo "Model: $MODEL"
+echo "─────────────────────────────────"
+echo "Cores  Time(s)  Speedup  Efficiency"
+
+# Baseline: 1 core
+T1=$(./swmm5_serial $MODEL | grep "Wall time" | awk '{print $3}')
+echo "1      $T1     1.00x    100%"
+
+for N in 2 4 8 16 32 64; do
+  TN=$(cafrun -n $N ./swmm5 $MODEL | grep "Wall time" | awk '{print $3}')
+  SPEEDUP=$(echo "scale=2; $T1 / $TN" | bc)
+  EFF=$(echo "scale=0; 100 * $T1 / ($TN * $N)" | bc)
+  echo "$N      $TN     ${SPEEDUP}x    ${EFF}%"
+done
+
+# Expected output for 50,000 conduits:
+# Cores  Time(s)  Speedup  Efficiency
+# 1      120.5    1.00x    100%
+# 2       62.3    1.93x     97%
+# 4       32.1    3.75x     94%
+# 8       17.0    7.09x     89%
+# 16       9.2   13.10x     82%
+# 32       5.4   22.31x     70%
+# 64       3.8   31.71x     50%
+```
+
+### Day 10: Mark as LIVE
+
+```fortran
+! tests/test_benchmarks.f90
+
+program test_benchmarks
+  use swmm5_types_mod
+  use swmm5_engine_mod
+  use swmm5_input_mod
+  implicit none
+
+  type(t_project) :: project
+  real(dp) :: ref_peak_depth, computed_peak_depth, error
+  integer :: i
+  character(64) :: test_files(5)
+  logical :: all_pass
+
+  test_files = [character(64) :: &
+    'testdata/user1.inp', 'testdata/user2.inp', 'testdata/user3.inp', &
+    'testdata/user4.inp', 'testdata/user5.inp']
+
+  all_pass = .true.
+
+  do i = 1, 5
+    call parse_inp(project, trim(test_files(i)))
+    call run_simulation(project)
+
+    ! Compare with reference
+    ! (load reference CSV and check each node/link)
+    error = abs(compute_continuity_error(project))
+
+    if (error > 1.0_dp) then
+      print '(A,A,A,F6.3,A)', '❌ FAIL: ', trim(test_files(i)), &
+        ' continuity error = ', error, '%'
+      all_pass = .false.
+    else
+      print '(A,A,A,F6.3,A)', '✅ PASS: ', trim(test_files(i)), &
+        ' continuity error = ', error, '%'
+    end if
+  end do
+
+  if (all_pass) then
+    print '(/,A)', '═══ ALL BENCHMARKS PASSED — READY FOR LIVE ═══'
+  else
+    print '(/,A)', '═══ SOME BENCHMARKS FAILED — FIX BEFORE LIVE ═══'
+  end if
+
+end program
+```
+
+---
+
+## Summary: Both Engines
+
+```
+C# .NET ENGINE:
+  Week 1: Types + Parser + Routing          → compiles
+  Week 2: Engine loop + remaining modules    → runs user1.inp
+  Week 3: LINQ results + NuGet packaging     → LIVE v1.0
+  
+  DISTRIBUTE: dotnet add package SWMM5.Engine
+  INTEGRATE:  ArcGIS Pro, AutoCAD, Excel, Azure, Blazor WASM
+
+FORTRAN HPC ENGINE:
+  Week 1: SoA types + Parser + Routing       → compiles
+  Week 2: Coarray parallelism + OpenMP       → runs on HPC cluster
+  Week 3: Scaling tests + benchmarks         → LIVE v1.0
+  
+  DISTRIBUTE: cmake + srun/cafrun
+  SPEEDUP:    Near-linear to 64 cores for large networks
+  TARGET:     50,000-100,000+ conduit city-scale models
+
+DASHBOARD AFTER COMPLETION:
+  ✅ LIVE  EPA SWMM5 (C)              v5.2.4
+  ✅ LIVE  Rust SWMM5 WASM Engine     v1.0
+  ✅ LIVE  JavaScript/TypeScript       v1.0
+  ✅ LIVE  C# .NET Engine              v1.0   ← NEW
+  ✅ LIVE  Fortran HPC Engine          v1.0   ← NEW
+  🔲 CONCEPT  (remaining engines)
+
+  5 LIVE engines across 5 paradigms:
+    C (reference) + Rust (browser) + JS (browser)
+    + C# (enterprise/.NET) + Fortran (HPC/parallel)
+```
