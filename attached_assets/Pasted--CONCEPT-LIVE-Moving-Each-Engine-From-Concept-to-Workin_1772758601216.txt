@@ -1,0 +1,955 @@
+# CONCEPT → LIVE: Moving Each Engine From Concept to Working
+
+You already have **3 LIVE engines** proving the pattern works. The path for each CONCEPT engine follows the same proven steps — just in a different language.
+
+---
+
+## What Your 3 LIVE Engines Prove
+
+```
+EPA SWMM5 (C)           → The reference. All others validate against this.
+Rust WASM Engine         → 50 modules compile, link, and produce correct results.
+JavaScript/TypeScript    → Parses .inp, runs dynwave, generates .rpt. All client-side.
+
+THE PATTERN THAT WORKS:
+  Step 1: Connect the 50 translated modules (imports/dependencies)
+  Step 2: Wire the main loop (swmm5.c translation calls other modules)
+  Step 3: Test against user1.inp → compare with C engine output
+  Step 4: Fix discrepancies until results match ±1%
+  Step 5: Mark as LIVE
+
+You've done this three times. The remaining five are the same job.
+```
+
+---
+
+## Engine 1: Julia — CONCEPT → LIVE
+
+**Current state:** 50 modules translated to Julia. Not connected.
+**Effort shown:** 1-2 weeks
+**Blocker:** Module wiring + type system adaptation
+
+### Day-by-Day Plan
+
+```
+DAY 1: Project skeleton
+  
+  mkdir SWMM5.jl
+  
+  SWMM5.jl/
+  ├── Project.toml          ← Julia package definition
+  ├── src/
+  │   ├── SWMM5.jl          ← Main module (entry point)
+  │   ├── Types.jl           ← All structs (from project.c translation)
+  │   ├── Engine.jl          ← Simulation loop (from swmm5.c)
+  │   └── modules/
+  │       ├── Input.jl       ← Copy from Rosetta Stone Julia input.c
+  │       ├── Routing.jl     ← Copy from Rosetta Stone Julia routing.c
+  │       ├── DynWave.jl     ← Copy from Rosetta Stone Julia dynwave.c
+  │       └── ... (all 50)
+  └── test/
+      ├── runtests.jl
+      └── testdata/
+          └── user1.inp
+
+  ACTION:
+    1. Copy all 50 Julia files from Rosetta Stone into src/modules/
+    2. Create src/SWMM5.jl that includes all modules
+    3. Create Project.toml with dependencies (if any)
+```
+```julia
+# DAY 1 deliverable: src/SWMM5.jl
+
+module SWMM5
+
+# Types first (everything depends on these)
+include("Types.jl")
+
+# Infrastructure modules
+include("modules/DateTime.jl")
+include("modules/Keywords.jl")
+include("modules/Hash.jl")
+include("modules/MemPool.jl")
+include("modules/Table.jl")
+include("modules/MathExpr.jl")
+
+# Numerical methods
+include("modules/OdeSolve.jl")
+include("modules/FindRoot.jl")
+
+# Parser
+include("modules/Input.jl")
+
+# Geometry
+include("modules/Xsect.jl")
+include("modules/Shape.jl")
+include("modules/Transect.jl")
+include("modules/TopoSort.jl")
+
+# Hydrology
+include("modules/Rain.jl")
+include("modules/Gage.jl")
+include("modules/Climate.jl")
+include("modules/Snow.jl")
+include("modules/Infil.jl")
+include("modules/Runoff.jl")
+include("modules/Subcatch.jl")
+include("modules/GWater.jl")
+include("modules/Exfil.jl")
+include("modules/Inflow.jl")
+
+# Hydraulics
+include("modules/Node.jl")
+include("modules/Link.jl")
+include("modules/ForcMain.jl")
+include("modules/Culvert.jl")
+include("modules/Roadway.jl")
+include("modules/DwFlow.jl")
+include("modules/KinWave.jl")
+include("modules/DynWave.jl")
+include("modules/Routing.jl")
+include("modules/FlowRout.jl")
+
+# LID
+include("modules/Lid.jl")
+include("modules/LidProc.jl")
+
+# Water Quality
+include("modules/LandUse.jl")
+include("modules/SurfQual.jl")
+include("modules/QualRout.jl")
+include("modules/Treatmnt.jl")
+
+# Controls
+include("modules/Controls.jl")
+include("modules/Rdii.jl")
+
+# Output
+include("modules/MassBal.jl")
+include("modules/Stats.jl")
+include("modules/StatsRpt.jl")
+include("modules/Output.jl")
+include("modules/Report.jl")
+
+# System
+include("modules/HotStart.jl")
+include("modules/Iface.jl")
+
+# Main engine loop
+include("Engine.jl")
+
+# Public API
+export Simulation, run!, step!, node_depth, link_flow, results
+
+end # module
+```
+```
+DAY 2: Fix the Types
+
+  PROBLEM: Each Rosetta Stone module defines its own local structs.
+           A real engine needs SHARED types across all modules.
+
+  ACTION:
+    1. Open project.c Julia translation
+    2. Extract ALL struct definitions into Types.jl
+    3. Make them mutable (mutable struct in Julia)
+    4. Add type annotations for performance
+
+  COMMON ISSUES:
+    - Rosetta Stone module uses local struct → change to shared type
+    - Float64 vs Float32 → standardize on Float64
+    - Array indexing → Julia is 1-based, C is 0-based
+      THIS IS THE #1 SOURCE OF BUGS. Every array index needs +1.
+```
+```julia
+# DAY 2 deliverable: src/Types.jl
+
+# Core element types
+mutable struct TNode
+    id::String
+    node_type::Int32        # JUNCTION, OUTFALL, STORAGE, DIVIDER
+    invert_elev::Float64
+    max_depth::Float64
+    init_depth::Float64
+    surcharge_depth::Float64
+    
+    # Dynamic state
+    depth::Float64
+    head::Float64
+    volume::Float64
+    lateral_inflow::Float64
+    total_inflow::Float64
+    overflow::Float64
+    
+    # Connectivity (1-based indices!)
+    inlinks::Vector{Int}
+    outlinks::Vector{Int}
+end
+
+mutable struct TLink
+    id::String
+    link_type::Int32
+    from_node::Int          # 1-based index
+    to_node::Int            # 1-based index
+    length::Float64
+    roughness::Float64
+    xsect::TCrossSection
+    in_offset::Float64
+    out_offset::Float64
+    
+    # Dynamic state
+    flow::Float64
+    depth::Float64
+    velocity::Float64
+    volume::Float64
+    setting::Float64
+    
+    # Previous step
+    old_flow::Float64
+    old_depth::Float64
+end
+
+mutable struct TProject
+    nodes::Vector{TNode}
+    links::Vector{TLink}
+    subcatchments::Vector{TSubcatch}
+    raingages::Vector{TRaingage}
+    
+    node_index::Dict{String, Int}   # name → 1-based index
+    link_index::Dict{String, Int}
+    
+    current_time::Float64
+    start_time::Float64
+    end_time::Float64
+    report_step::Float64
+    routing_step::Float64
+    
+    route_model::Int32      # DYNWAVE, KINWAVE
+    infil_model::Int32      # HORTON, GREEN_AMPT, CURVE_NUMBER
+    flow_units::Int32
+    
+    sorted_links::Vector{Int}
+end
+```
+```
+DAY 3-4: Wire the Engine Loop
+
+  ACTION:
+    1. Open swmm5.c Julia translation from Rosetta Stone
+    2. Modify it to call the OTHER modules' functions
+    3. The Rosetta Stone's swmm5.c already has the loop structure
+    4. Replace standalone function calls with module-qualified calls
+
+  KEY CHANGES:
+    - Standalone: dynamic_wave_route(project, dt)
+    - Module-qualified: Routing.dynamic_wave_route(project, dt)
+    
+    OR in Julia, just ensure the functions are imported via include()
+```
+```julia
+# DAY 3-4 deliverable: src/Engine.jl
+
+function run!(sim::Simulation)::Results
+    p = sim.project
+    
+    # Initialize (calls functions from multiple modules)
+    Input.validate(p)
+    TopoSort.sort_network!(p)
+    DwFlow.compute_initial_flows!(p)
+    
+    results = Results(p)
+    
+    while p.current_time < p.end_time
+        dt = p.routing_step
+        
+        # Hydrology (each function from its own module)
+        Rain.update!(p)
+        for sc in p.subcatchments
+            Runoff.compute!(sc, dt)
+            Infil.compute!(sc, dt)
+            if p.has_groundwater
+                GWater.compute!(sc, dt)
+            end
+            if p.has_snow
+                Snow.compute!(sc, dt)
+            end
+        end
+        
+        # Hydraulics
+        if p.route_model == DYNWAVE
+            Routing.dynwave_route!(p, dt)
+        else
+            KinWave.route!(p, dt)
+        end
+        
+        # Controls
+        Controls.evaluate!(p)
+        
+        # Mass balance
+        MassBal.update!(p, dt)
+        
+        # Record
+        if is_report_time(p)
+            record!(results, p)
+        end
+        
+        p.current_time += dt
+    end
+    
+    Stats.compute!(results)
+    return results
+end
+```
+```
+DAY 5-6: First Test Run
+
+  ACTION:
+    1. Load user1.inp (simplest EPA test model)
+    2. Run simulation
+    3. Compare output with C engine results
+    4. Fix bugs (expect 10-20 issues)
+
+  COMMON BUGS TO EXPECT:
+    ❌ Off-by-one errors (1-based vs 0-based indexing)
+       FIX: Add +1 to every array index from C translation
+    
+    ❌ Division by zero in xsect geometry at depth=0
+       FIX: Add max(depth, 1e-6) guard
+    
+    ❌ Negative depths from numerical instability
+       FIX: Add max(depth, 0.0) clamp after each step
+    
+    ❌ Wrong sign on friction slope for reverse flow
+       FIX: Check the if(Q < 0) sf = -sf logic
+    
+    ❌ Time step units mismatch (seconds vs hours)
+       FIX: Ensure all modules use consistent units
+    
+    ❌ INP parser doesn't handle all comment styles
+       FIX: Strip ;; comments and blank lines
+```
+```julia
+# DAY 5 test script: test/runtests.jl
+
+using SWMM5
+using Test
+
+@testset "Benchmark: user1.inp" begin
+    sim = Simulation("testdata/user1.inp")
+    results = run!(sim)
+    
+    # Compare with C engine reference results
+    ref = load_reference("testdata/user1_reference.csv")
+    
+    for node_id in keys(ref.nodes)
+        computed = results.node(node_id).peak_depth
+        expected = ref.nodes[node_id].peak_depth
+        
+        @test isapprox(computed, expected, rtol=0.01)  # 1% tolerance
+    end
+    
+    for link_id in keys(ref.links)
+        computed = results.link(link_id).peak_flow
+        expected = ref.links[link_id].peak_flow
+        
+        @test isapprox(computed, expected, rtol=0.01)
+    end
+    
+    # Continuity error must be small
+    @test abs(results.continuity_error) < 1.0  # < 1%
+end
+```
+```
+DAY 7: Generate Reference Results
+
+  HOW TO CREATE REFERENCE DATA:
+    1. Run user1.inp through your LIVE C engine
+    2. Extract node depths and link flows at each report step
+    3. Save as CSV: testdata/user1_reference.csv
+    
+    OR: Run through your LIVE Rust WASM engine
+    OR: Run through your LIVE JS/TS engine
+    
+    You have THREE reference engines to validate against.
+
+DAY 8-9: Fix Remaining Discrepancies
+
+  Run all 5 EPA test models (user1-user5)
+  Plus 5 of your INP MAKER presets
+  Compare each against reference
+  Fix until all pass at ±1%
+
+DAY 10: Mark as LIVE
+  
+  1. Update dashboard card: CONCEPT → LIVE v1.0
+  2. Add to package registry: Julia General registry
+  3. Write 1-paragraph announcement
+  4. Users install with: using Pkg; Pkg.add("SWMM5")
+```
+
+### Julia-Specific Superpower: Built-in UQ
+
+```julia
+# Once LIVE, uncertainty quantification is trivial:
+
+using Distributions, SWMM5
+
+function monte_carlo(inp_file, n_samples=10000)
+    results = Vector{Float64}(undef, n_samples)
+    
+    Threads.@threads for i in 1:n_samples
+        sim = Simulation(inp_file,
+            manning_n = rand(Normal(0.013, 0.002)),
+            imperv = rand(Uniform(30, 80))
+        )
+        r = run!(sim)
+        results[i] = r.node("Out1").peak_flow
+    end
+    
+    return results
+end
+
+# 10,000 Monte Carlo runs using all CPU cores
+# Julia's JIT + threading makes this fast enough to be practical
+peak_flows = monte_carlo("model.inp")
+println("95% CI: ", quantile(peak_flows, [0.025, 0.975]))
+```
+
+---
+
+## Engine 2: CUDA GPU — CONCEPT → LIVE
+
+**Current state:** 50 modules translated to CUDA C++. Not connected.
+**Effort shown:** 3-4 weeks
+**Blocker:** GPU memory management + kernel design
+
+### The Key Insight: Only the Inner Loop Goes on GPU
+
+```
+DON'T port all 50 modules to GPU. Only the HOT LOOP:
+
+  CPU handles:                    GPU handles:
+  ├── INP parsing                 ├── Dynamic wave routing
+  ├── Initialization              │   ├── All conduit flows (parallel)
+  ├── Rainfall updates            │   ├── All node depths (parallel)
+  ├── Control rule evaluation     │   └── Friction slope computation
+  ├── Output writing              │
+  ├── Mass balance                └── (That's it. 3 kernels.)
+  └── Everything else             
+  
+  The dynwave step is 90%+ of runtime for large models.
+  GPU-accelerate ONLY that and get 90% of the speedup.
+```
+
+### Day-by-Day Plan
+
+```
+DAY 1-2: Project structure + CPU framework
+
+  swmm5-cuda/
+  ├── CMakeLists.txt
+  ├── src/
+  │   ├── main.cpp                   ← Host entry point
+  │   ├── engine.cpp                 ← Simulation loop (CPU)
+  │   ├── engine.h
+  │   ├── project.cpp                ← Data structures (CPU)
+  │   ├── project.h
+  │   ├── parser/
+  │   │   ├── input.cpp              ← INP parser (CPU)
+  │   │   └── input.h
+  │   ├── cpu_modules/               ← All non-GPU modules (from Rosetta Stone C++)
+  │   │   ├── subcatch.cpp
+  │   │   ├── infil.cpp
+  │   │   ├── rain.cpp
+  │   │   ├── controls.cpp
+  │   │   ├── massbal.cpp
+  │   │   ├── output.cpp
+  │   │   ├── report.cpp
+  │   │   └── ... (40+ modules stay on CPU)
+  │   └── gpu_kernels/               ← GPU-accelerated modules
+  │       ├── dynwave_kernels.cu     ← THE critical kernels
+  │       ├── node_kernels.cu
+  │       └── xsect_kernels.cu
+  └── tests/
+
+  ACTION:
+    1. Copy ALL C++ translations from Rosetta Stone into cpu_modules/
+    2. These compile and run on CPU — your baseline
+    3. Verify CPU-only version matches C reference engine
+```
+```
+DAY 3-5: GPU memory layout
+
+  THE CRITICAL DESIGN DECISION:
+  
+  CPU memory (Array of Structs):
+    links[0] = {flow=5.2, depth=1.3, area=2.1, roughness=0.013, ...}
+    links[1] = {flow=3.8, depth=0.9, area=1.5, roughness=0.015, ...}
+    links[2] = {flow=7.1, depth=1.8, area=3.2, roughness=0.013, ...}
+  
+  GPU memory (Struct of Arrays — MUCH faster for GPU):
+    flows     = [5.2, 3.8, 7.1, ...]    ← contiguous memory
+    depths    = [1.3, 0.9, 1.8, ...]    ← contiguous memory
+    areas     = [2.1, 1.5, 3.2, ...]    ← contiguous memory
+    roughness = [0.013, 0.015, 0.013, ...] ← contiguous memory
+  
+  GPU reads entire array in ONE memory transaction.
+  This is why GPU SWMM5 can be 100-1000× faster.
+```
+```cpp
+// DAY 3 deliverable: gpu_kernels/dynwave_kernels.cu
+
+#include <cuda_runtime.h>
+
+// Device arrays (GPU memory)
+struct DeviceNetwork {
+    // Link arrays (Struct of Arrays layout)
+    double* d_link_flows;
+    double* d_link_old_flows;
+    double* d_link_areas;
+    double* d_link_depths;
+    double* d_link_roughness;
+    double* d_link_lengths;
+    double* d_link_widths;
+    int*    d_link_from_node;
+    int*    d_link_to_node;
+    int     n_links;
+    
+    // Node arrays
+    double* d_node_heads;
+    double* d_node_depths;
+    double* d_node_volumes;
+    double* d_node_inflows;
+    double* d_node_areas;      // surface area
+    int     n_nodes;
+};
+
+// Kernel 1: Compute friction slope for ALL conduits simultaneously
+__global__ void compute_friction_slopes(
+    const double* __restrict__ flows,
+    const double* __restrict__ areas,
+    const double* __restrict__ roughness,
+    const double* __restrict__ widths,
+    double* __restrict__ friction_slopes,
+    int n_links)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n_links) return;
+    
+    double Q = flows[i];
+    double A = areas[i];
+    
+    if (A <= 0.0 || Q == 0.0) {
+        friction_slopes[i] = 0.0;
+        return;
+    }
+    
+    double hRadius = A / widths[i];
+    double sf = roughness[i] * Q / (A * pow(hRadius, 2.0/3.0));
+    sf = sf * sf;
+    
+    friction_slopes[i] = (Q < 0.0) ? -sf : sf;
+}
+
+// Kernel 2: Update flows for ALL conduits simultaneously
+__global__ void update_link_flows(
+    const double* __restrict__ old_flows,
+    const double* __restrict__ areas,
+    const double* __restrict__ lengths,
+    const double* __restrict__ friction_slopes,
+    const double* __restrict__ node_heads,
+    const int* __restrict__ from_nodes,
+    const int* __restrict__ to_nodes,
+    double* __restrict__ new_flows,
+    double dt, double gravity,
+    int n_links)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n_links) return;
+    
+    double A = areas[i];
+    if (A <= 0.0) { new_flows[i] = 0.0; return; }
+    
+    double hUp = node_heads[from_nodes[i]];
+    double hDown = node_heads[to_nodes[i]];
+    double dhdx = (hUp - hDown) / lengths[i];
+    
+    double Qnew = old_flows[i] + dt * gravity * A * (dhdx - friction_slopes[i]);
+    
+    // Clamp
+    double Qmax = A * 50.0;
+    new_flows[i] = fmin(fmax(Qnew, -Qmax), Qmax);
+}
+
+// Kernel 3: Update node depths from link flows
+__global__ void update_node_depths(
+    double* __restrict__ depths,
+    double* __restrict__ heads,
+    double* __restrict__ volumes,
+    const double* __restrict__ inflows,
+    const double* __restrict__ surface_areas,
+    const double* __restrict__ invert_elevs,
+    const double* __restrict__ max_depths,
+    double dt, int n_nodes)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    if (i >= n_nodes) return;
+    
+    double dV = inflows[i] * dt;
+    volumes[i] += dV;
+    
+    double A_surf = fmax(surface_areas[i], 1e-6);
+    depths[i] = fmax(volumes[i] / A_surf, 0.0);
+    depths[i] = fmin(depths[i], max_depths[i]);
+    heads[i] = invert_elevs[i] + depths[i];
+}
+
+// Host function: one dynwave timestep
+void gpu_dynwave_step(DeviceNetwork& net, double dt) {
+    int block_size = 256;
+    int link_blocks = (net.n_links + block_size - 1) / block_size;
+    int node_blocks = (net.n_nodes + block_size - 1) / block_size;
+    
+    // Step 1: friction slopes (all links parallel)
+    compute_friction_slopes<<<link_blocks, block_size>>>(
+        net.d_link_flows, net.d_link_areas, 
+        net.d_link_roughness, net.d_link_widths,
+        net.d_friction_slopes, net.n_links);
+    
+    // Step 2: update flows (all links parallel)
+    update_link_flows<<<link_blocks, block_size>>>(
+        net.d_link_old_flows, net.d_link_areas,
+        net.d_link_lengths, net.d_friction_slopes,
+        net.d_node_heads, net.d_link_from_node,
+        net.d_link_to_node, net.d_link_flows,
+        dt, GRAVITY, net.n_links);
+    
+    // Step 3: accumulate link flows at nodes (needs atomic adds)
+    // ... (node inflow summation kernel)
+    
+    // Step 4: update node depths (all nodes parallel)  
+    update_node_depths<<<node_blocks, block_size>>>(
+        net.d_node_depths, net.d_node_heads,
+        net.d_node_volumes, net.d_node_inflows,
+        net.d_node_areas, net.d_invert_elevs,
+        net.d_max_depths, dt, net.n_nodes);
+}
+```
+```
+DAY 6-8: CPU↔GPU data transfer
+
+  THE SIMULATION LOOP:
+  
+  // Once at start:
+  upload_network_to_gpu(project, device_network);
+  
+  // Each timestep:
+  //   CPU: update rainfall, runoff (stays on CPU — small data)
+  //   CPU: accumulate subcatchment outflows → node lateral inflows
+  //   GPU←CPU: upload node lateral inflows (small transfer)
+  //   GPU: run 3 dynwave kernels (THE BIG COMPUTATION)
+  //   GPU→CPU: download node depths + link flows (for reporting only)
+  //   CPU: evaluate controls, mass balance, output
+  
+  // Once at end:
+  download_results_from_gpu(device_network, project);
+
+  CRITICAL: Minimize CPU↔GPU transfers!
+    Only upload: lateral inflows (n_nodes × 8 bytes per step)
+    Only download: depths + flows (at report steps only)
+    The network geometry STAYS on GPU the entire simulation.
+
+DAY 9-12: Testing + optimization
+
+  Performance targets:
+    1,000 conduits:    no GPU benefit (transfer overhead dominates)
+    10,000 conduits:   5-10× speedup over CPU
+    50,000 conduits:   50-100× speedup
+    100,000 conduits:  100-500× speedup
+    
+  If speedup < expected:
+    - Check memory coalescing (are arrays aligned?)
+    - Check occupancy (are enough threads running?)
+    - Use NVIDIA Nsight profiler to find bottlenecks
+    - Consider shared memory for node head lookups
+
+DAY 13-14: Mark as LIVE
+```
+
+---
+
+## Engine 3: MATLAB — CONCEPT → LIVE
+
+**Effort:** 2-3 weeks
+**Key insight:** MATLAB has no compilation step. Just make the functions callable.
+
+```
+DAY 1-2: Create MATLAB package structure
+
+  +swmm5/                      ← MATLAB package (+ prefix)
+  ├── swmm5_run.m              ← Main entry point
+  ├── swmm5_parse.m            ← INP parser (from input.c)
+  ├── swmm5_init.m             ← Initialize (from project.c + swmm5.c)
+  ├── swmm5_step.m             ← One timestep
+  ├── swmm5_close.m            ← Finalize
+  │
+  ├── +hydraulics/
+  │   ├── routing.m            ← (from routing.c)
+  │   ├── dynwave.m            ← (from dynwave.c)
+  │   ├── node_step.m          ← (from node.c)
+  │   ├── link_step.m          ← (from link.c)
+  │   ├── xsect_area.m         ← (from xsect.c)
+  │   ├── xsect_width.m        ← (from xsect.c)
+  │   ├── xsect_hrad.m         ← (from xsect.c)
+  │   ├── forcmain.m           ← (from forcmain.c)
+  │   └── toposort.m           ← (from toposort.c)
+  │
+  ├── +hydrology/
+  │   ├── subcatch.m           ← (from subcatch.c)
+  │   ├── runoff.m             ← (from runoff.c)
+  │   ├── infil_horton.m       ← (from infil.c)
+  │   ├── infil_greenampt.m    ← (from infil.c)
+  │   ├── rain_update.m        ← (from rain.c)
+  │   └── snow_melt.m          ← (from snow.c)
+  │
+  ├── +output/
+  │   ├── write_report.m       ← (from report.c)
+  │   ├── mass_balance.m       ← (from massbal.c)
+  │   └── statistics.m         ← (from stats.c)
+  │
+  └── examples/
+      ├── example_basic.m
+      ├── example_realtime_control.m
+      └── testdata/
+          ├── user1.inp
+          └── ...
+```
+```matlab
+% DAY 3-4 deliverable: swmm5_run.m
+
+function results = swmm5_run(inp_file, varargin)
+%SWMM5_RUN Run a complete SWMM5 simulation in MATLAB
+%   results = swmm5_run('model.inp')
+%   results = swmm5_run('model.inp', 'manning_n', 0.015)
+%
+%   Students: Set breakpoints INSIDE this engine.
+%   Step through the Saint-Venant solver line by line.
+%   THIS is how SWMM5 works.
+
+    % Parse optional parameter overrides
+    p = inputParser;
+    addParameter(p, 'manning_n', []);
+    addParameter(p, 'imperv', []);
+    parse(p, varargin{:});
+    
+    % Phase 1: Parse and initialize
+    fprintf('Parsing %s...\n', inp_file);
+    project = swmm5_parse(inp_file);
+    
+    % Apply parameter overrides
+    if ~isempty(p.Results.manning_n)
+        [project.links.roughness] = deal(p.Results.manning_n);
+    end
+    
+    project = swmm5_init(project);
+    
+    % Phase 2: Time-stepping loop
+    fprintf('Running simulation: %d nodes, %d links\n', ...
+        length(project.nodes), length(project.links));
+    
+    results = struct('time', [], 'node_depths', [], 'link_flows', []);
+    step_count = 0;
+    
+    while project.current_time < project.end_time
+        dt = project.routing_step;
+        
+        % Hydrology
+        project = hydrology.rain_update(project);
+        for i = 1:length(project.subcatchments)
+            project.subcatchments(i) = hydrology.runoff(...
+                project.subcatchments(i), dt);
+            project.subcatchments(i) = hydrology.infil_horton(...
+                project.subcatchments(i), dt);
+        end
+        
+        % Hydraulics (THE INTERESTING PART — set breakpoint here!)
+        if project.route_model == 1  % DYNWAVE
+            project = hydraulics.routing(project, dt);
+        else
+            project = hydraulics.kinwave(project, dt);
+        end
+        
+        % Record results at report steps
+        if mod(step_count, project.report_ratio) == 0
+            results.time(end+1) = project.current_time;
+            results.node_depths(end+1,:) = [project.nodes.depth];
+            results.link_flows(end+1,:) = [project.links.flow];
+        end
+        
+        % Progress
+        step_count = step_count + 1;
+        if mod(step_count, 100) == 0
+            fprintf('  %.1f%% complete\n', ...
+                100 * (project.current_time - project.start_time) / ...
+                (project.end_time - project.start_time));
+        end
+        
+        project.current_time = project.current_time + dt;
+    end
+    
+    % Phase 3: Finalize
+    results.stats = output.statistics(results, project);
+    results.mass_balance = output.mass_balance(project);
+    results.project = project;
+    
+    fprintf('Complete. Continuity error: %.3f%%\n', ...
+        results.mass_balance.continuity_error);
+end
+```
+```matlab
+% THE MATLAB SUPERPOWER: Native plotting + debugging
+
+% Run and plot in 3 lines
+results = swmm5_run('model.inp');
+plot(results.time, results.node_depths(:, 1))
+title('Node J1 Depth'); xlabel('Time (hr)'); ylabel('Depth (m)')
+
+% Set a breakpoint inside hydraulics.routing.m
+% Step through the Saint-Venant solver
+% Watch variables change in the Workspace panel
+% THIS is how students learn computational hydraulics
+
+% Parameter sweep in 5 lines
+for n = 0.010:0.002:0.020
+    r = swmm5_run('model.inp', 'manning_n', n);
+    plot(r.time, r.link_flows(:,end), 'DisplayName', sprintf('n=%.3f',n))
+    hold on
+end
+legend; title('Outfall Flow vs Manning''s n')
+```
+
+---
+
+## Engine 4: WebAssembly (WAT) — CONCEPT → LIVE
+
+```
+KEY INSIGHT: You already have the Rust WASM engine LIVE.
+             The WAT engine is a DIFFERENT approach:
+             Hand-written WAT (text format) vs compiled from Rust.
+
+WHAT MAKES WAT UNIQUE:
+  - Smallest possible binary (50-100 KB vs 140 KB for Rust WASM)
+  - No compiler toolchain needed — WAT assembles directly
+  - Maximum control over memory layout
+  - Educational: see exactly what WASM instructions do
+
+DAY 1-3: Assemble core modules from Rosetta Stone WAT translations
+
+  ;; swmm5.wat — Hand-assembled from 50 WAT module translations
+  (module
+    ;; Memory: 16 MB (256 pages × 64 KB)
+    (memory (export "memory") 256)
+    
+    ;; Import JavaScript callbacks
+    (import "env" "reportProgress" (func $reportProgress (param f64)))
+    (import "env" "reportStep" (func $reportStep (param f64 f64 f64)))
+    
+    ;; Include all module functions
+    ;; (Copy from Rosetta Stone WAT translations)
+    
+    ;; Export public API
+    (export "swmm_open" (func $swmm_open))
+    (export "swmm_start" (func $swmm_start))
+    (export "swmm_step" (func $swmm_step))
+    (export "swmm_end" (func $swmm_end))
+    (export "swmm_close" (func $swmm_close))
+    (export "swmm_getNodeResult" (func $swmm_getNodeResult))
+    (export "swmm_getLinkResult" (func $swmm_getLinkResult))
+  )
+
+DAY 4-5: Assemble and test
+  
+  # Assemble WAT → WASM binary
+  wat2wasm swmm5.wat -o swmm5.wasm
+  
+  # Check size
+  ls -la swmm5.wasm  # Target: < 100 KB
+  
+  # Load in browser
+  const { instance } = await WebAssembly.instantiateStreaming(
+    fetch('swmm5.wasm'), importObject
+  );
+  instance.exports.swmm_open(inpPtr, rptPtr, outPtr);
+  instance.exports.swmm_start(1);
+  while (instance.exports.swmm_step() > 0) { /* stepping */ }
+
+DAY 6-7: Test against Rust WASM engine (should produce identical results)
+```
+
+---
+
+## Engine 5: Go API Server — CONCEPT → LIVE
+
+```
+DAY 1-2: Copy 50 Go modules from Rosetta Stone + wire together
+DAY 3-4: Add HTTP handlers (see full guide above in earlier response)
+DAY 5: Test against reference models
+DAY 6-7: Docker + deploy
+
+DELIVERABLE:
+  # One command to deploy SWMM5 as a web service
+  docker run -p 8080:8080 swmm5/server
+  
+  # Any client, any language can now use SWMM5
+  curl -X POST http://localhost:8080/simulate \
+       -F "model=@city.inp" \
+       -H "Accept: application/json"
+```
+
+---
+
+## Universal Transition Checklist: CONCEPT → LIVE
+
+```
+For EVERY language, the same 10 steps:
+
+□ Step 1:  Create project structure for the language
+□ Step 2:  Copy all 50 translated modules from Rosetta Stone
+□ Step 3:  Create shared type definitions (from project.c translation)
+□ Step 4:  Add import/include/use statements connecting modules
+□ Step 5:  Compile/run — fix syntax errors from copy-paste
+□ Step 6:  Load user1.inp — fix parser issues
+□ Step 7:  Run 1-minute simulation — fix runtime errors
+□ Step 8:  Compare results with C reference — fix numerical issues
+□ Step 9:  Run full benchmark suite (user1-user5 + 5 INP MAKER models)
+□ Step 10: All benchmarks pass at ±1% → change badge to LIVE v1.0
+
+TIME PER ENGINE: 7-14 working days
+THE ALGORITHMS ARE ALREADY WRITTEN.
+THE WORK IS COMPILATION, NOT CREATION.
+```
+
+---
+
+## Priority Order for Maximum Impact
+
+```
+ALREADY LIVE:
+  ✅ EPA SWMM5 (C)         — The reference
+  ✅ Rust WASM              — Browser engine  
+  ✅ JavaScript/TypeScript   — Browser engine (no WASM)
+
+BUILD NEXT (highest impact per effort):
+  1️⃣ Go API Server          — 1 week  → SWMM5 as a microservice
+  2️⃣ Julia                  — 1 week  → Scientific computing + UQ
+  3️⃣ MATLAB                 — 2 weeks → Every university classroom
+  4️⃣ WAT/WASM              — 1 week  → Smallest possible engine
+  5️⃣ CUDA GPU              — 3 weeks → 100-1000× speedup for large models
+
+RESULT: 8 LIVE engines across 8 paradigms
+        Native, browser, server, GPU, scientific, educational
+        All validated against the same reference models
+        All open source, all free
+```
+
+**The 50-module translations are the hardest part, and they're done. What remains is carpentry — connecting pieces that already fit.**

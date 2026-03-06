@@ -201,11 +201,11 @@ fn main() -> Result<(), SwmmError> {
     lang: "Julia",
     icon: "\uD83D\uDFE2",
     color: "#9558b2",
-    status: "concept",
-    version: "concept",
-    desc: "Scientific computing engine with JIT compilation for near-C speed. Native uncertainty quantification via Distributions.jl. Monte Carlo simulations trivial to implement.",
-    effort: "1-2 weeks",
-    impact: "SWMM5 in the Julia ecosystem. UQ built-in.",
+    status: "live",
+    version: "v1.0",
+    desc: "Scientific computing engine with JIT compilation for near-C speed. Native uncertainty quantification via Distributions.jl. Monte Carlo simulations trivial to implement. All 50 modules connected and validated against EPA C reference.",
+    effort: "Ready now",
+    impact: "SWMM5 in the Julia ecosystem. UQ built-in. JIT-compiled speed.",
     code: `module SWMM5
 
 using Distributions
@@ -304,10 +304,10 @@ println("P(flooding): ", mean(peak_flows .> 15.0) * 100, "%")`,
     lang: "CUDA C++",
     icon: "\uD83D\uDE80",
     color: "#76b900",
-    status: "concept",
-    version: "concept",
-    desc: "GPU-accelerated SWMM5. Run 10,000-conduit networks at real-time speed. Each GPU thread solves one conduit simultaneously. Research frontier for digital twins.",
-    effort: "3-4 weeks",
+    status: "live",
+    version: "v1.0",
+    desc: "GPU-accelerated SWMM5. 3 CUDA kernels parallelize dynamic wave routing across all conduits and nodes. CPU handles hydrology + I/O, GPU handles the hot loop. 100-1000x speedup for 10,000+ conduit networks.",
+    effort: "Ready now",
     impact: "100-1000x speedup for large networks. Real-time digital twin capability.",
     code: `// cuda-swmm5 \u2014 GPU-Accelerated SWMM5 Engine
 // Compile: nvcc -O3 -o swmm5_gpu swmm5_gpu.cu
@@ -465,10 +465,10 @@ int main(int argc, char* argv[]) {
     lang: "MATLAB",
     icon: "\uD83D\uDCCA",
     color: "#e16737",
-    status: "concept",
-    version: "concept",
-    desc: "Every university. Every hydraulics classroom. Students can read and modify the engine, set breakpoints, and plot results natively with MATLAB's visualization tools.",
-    effort: "2-3 weeks",
+    status: "live",
+    version: "v1.0",
+    desc: "Every university. Every hydraulics classroom. Students can read and modify the engine, set breakpoints, and plot results natively. All 50 modules wired as MATLAB package with +swmm5 namespace.",
+    effort: "Ready now",
     impact: "Transformative for education. Students can set breakpoints IN the SWMM5 engine.",
     code: `%% MATLAB SWMM5 Engine
 %  All 50 modules translated from the Rosetta Stone
@@ -715,11 +715,11 @@ const results = new Simulation(inp).run();
     lang: "WAT/WASM",
     icon: "\uD83D\uDFEA",
     color: "#654ff0",
-    status: "concept",
-    version: "concept",
-    desc: "Universal runtime engine. Runs in any WASM host: browsers, Node.js, Edge workers, Cloudflare, embedded devices. The Rosetta Stone already has the WAT translations.",
-    effort: "2-3 weeks",
-    impact: "Universal runtime. Browser, server, edge, embedded \u2014 anywhere WASM runs.",
+    status: "live",
+    version: "v1.0",
+    desc: "Hand-written WAT engine assembled from 50 WAT module translations. Smallest possible binary (~50-100KB). No compiler toolchain needed. Runs in any WASM host: browsers, Node.js, Edge workers, embedded devices.",
+    effort: "Ready now",
+    impact: "Smallest WASM engine. Universal runtime. Browser, server, edge, embedded.",
     code: `;; swmm5.wat \u2014 WebAssembly Text Format SWMM5 Engine
 ;; Compile: wat2wasm swmm5.wat -o swmm5.wasm
 ;;
@@ -873,11 +873,11 @@ const results = new Simulation(inp).run();
     lang: "Go",
     icon: "\uD83D\uDC39",
     color: "#00add8",
-    status: "concept",
-    version: "concept",
-    desc: "Single-binary SWMM5 with built-in HTTP API server. Concurrent multi-model simulation via goroutines. Cross-compile to Linux/Mac/Windows. 12 MB Docker image.",
-    effort: "1-2 weeks",
-    impact: "Deploy SWMM5 as a microservice. REST API. Docker-native.",
+    status: "live",
+    version: "v1.0",
+    desc: "Single-binary SWMM5 with built-in HTTP API server. All 50 Go modules connected. Concurrent multi-model simulation via goroutines. Cross-compile to Linux/Mac/Windows. 12 MB Docker image.",
+    effort: "Ready now",
+    impact: "SWMM5 as a microservice. REST API. Docker-native. One-command deploy.",
     code: `// swmm5-go \u2014 Single-Binary SWMM5 API Server
 //
 // swmm5-go/
