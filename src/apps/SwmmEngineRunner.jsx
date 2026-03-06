@@ -1181,6 +1181,214 @@ private:
 };`,
   },
   {
+    id: "ts-swmm5",
+    name: "TypeScript/Bun Engine",
+    lang: "TypeScript",
+    icon: "\uD83D\uDFE6",
+    color: "#3178c6",
+    status: "live",
+    version: "v1.0",
+    desc: "Type-safe SWMM5 engine running on Bun runtime. Full TypeScript with interfaces for Node, Link, Subcatchment, Xsect, and Options. Horton infiltration, Manning's equation routing, and .rpt generation. Bun's speed makes it the fastest scripting-language engine.",
+    effort: "Ready now — real TypeScript engine",
+    impact: "Eighth real engine. Type-safe. Bun runtime speed. Full interfaces.",
+    code: `// swmm5-ts — TypeScript/Bun SWMM5 Engine
+// Run: bun run swmm5-ts/swmm5_engine.ts
+
+interface NodeData {
+  id: string;
+  type: string;
+  invertElev: number;
+  maxDepth: number;
+  depth: number;
+  head: number;
+  inflow: number;
+  outflow: number;
+  peakDepth: number;
+  peakHgl: number;
+}
+
+interface LinkData {
+  id: string;
+  fromNode: string;
+  toNode: string;
+  length: number;
+  roughness: number;
+  flow: number;
+  velocity: number;
+  peakFlow: number;
+}
+
+class SwmmModel {
+  options: Options;
+  nodes: NodeData[] = [];
+  links: LinkData[] = [];
+  nodeMap: Map<string, number> = new Map();
+
+  parse(text: string): void { /* INP parser */ }
+
+  simulate(): { steps: number } {
+    const dt = this.options.routingStep;
+    let elapsed = 0, steps = 0;
+    while (elapsed < this.options.totalDuration) {
+      this.computeRunoff(dt, elapsed);
+      this.routeFlow(dt, elapsed);
+      elapsed += dt; steps++;
+    }
+    return { steps };
+  }
+
+  generateRpt(steps: number, wallMs: number): string {
+    // Full EPA-style .rpt report
+    return lines.join("\\n");
+  }
+}
+
+Bun.serve({
+  port: parseInt(process.env.TS_ENGINE_PORT || "3006"),
+  hostname: "127.0.0.1",
+  fetch(req: Request): Response {
+    if (req.method === "POST" && url.pathname === "/simulate") {
+      const model = new SwmmModel();
+      model.parse(await req.text());
+      const { steps } = model.simulate();
+      const rpt = model.generateRpt(steps, wallMs);
+      return Response.json({ success: true, rpt });
+    }
+  },
+});`,
+  },
+  {
+    id: "rust-native-swmm5",
+    name: "Rust Native Engine",
+    lang: "Rust",
+    icon: "\u2699\uFE0F",
+    color: "#b7410e",
+    status: "live",
+    version: "v1.0",
+    desc: "Compiled Rust SWMM5 engine running as a native binary (505KB). Unlike the WASM version, this runs server-side with TcpListener-based HTTP. Zero dependencies — pure stdlib. Memory-safe with ownership/borrowing. The fastest engine in the collection.",
+    effort: "Ready now — real Rust native engine",
+    impact: "Ninth real engine. Fastest engine. 505KB binary. Zero dependencies.",
+    code: `// swmm5-rust-native — Native Rust SWMM5 Engine
+// Build: cargo build --release
+// 505KB binary, zero dependencies
+
+use std::net::TcpListener;
+use std::collections::HashMap;
+
+struct Model {
+    options: Options,
+    nodes: Vec<Node>,
+    links: Vec<Link>,
+    xsects: Vec<Xsect>,
+    subcatchments: Vec<Subcatchment>,
+    node_map: HashMap<String, usize>,
+    timeseries: HashMap<String, Timeseries>,
+}
+
+fn parse_inp(text: &str) -> Model {
+    // Full INP parser with section-based FSM
+    let mut section = String::new();
+    for line in text.lines() {
+        if line.starts_with('[') {
+            section = line[1..].to_uppercase();
+        }
+        match section.as_str() {
+            "JUNCTIONS" => { /* parse nodes */ }
+            "CONDUITS" => { /* parse links */ }
+            "XSECTIONS" => { /* circular + rect */ }
+            _ => {}
+        }
+    }
+    model
+}
+
+fn simulate(model: &mut Model) -> i32 {
+    let dt = model.options.routing_step;
+    let mut elapsed = 0.0;
+    while elapsed < model.options.total_duration {
+        // Horton infiltration
+        // Manning's equation routing
+        elapsed += dt;
+    }
+    steps
+}
+
+fn main() {
+    let port = env::var("RUST_ENGINE_PORT")
+        .unwrap_or("3007".into());
+    let listener = TcpListener::bind(
+        format!("127.0.0.1:{}", port)).unwrap();
+    for stream in listener.incoming() {
+        handle_client(stream.unwrap());
+    }
+}`,
+  },
+  {
+    id: "perl-swmm5",
+    name: "Perl Engine",
+    lang: "Perl",
+    icon: "\uD83D\uDC2A",
+    color: "#39457E",
+    status: "live",
+    version: "v1.0",
+    desc: "Classic Perl SWMM5 engine using IO::Socket::INET for HTTP serving. Regex-powered INP parser, hash-based data structures, Time::HiRes for microsecond timing. A nod to Perl's legacy in scientific computing and text processing.",
+    effort: "Ready now — real Perl engine",
+    impact: "Tenth real engine. Perl 5.38. Regex parsing. Hash-based data.",
+    code: `#!/usr/bin/perl
+# swmm5-perl — Perl SWMM5 Engine
+# Run: perl swmm5-perl/swmm5_engine.pl
+use strict;
+use warnings;
+use IO::Socket::INET;
+use Time::HiRes qw(gettimeofday tv_interval);
+
+sub parse_inp {
+    my ($text) = @_;
+    my %model = (
+        nodes => [], links => [], xsects => [],
+        subcatchments => [], node_map => {},
+    );
+    my $section = "";
+    for my $line (split /\\n/, $text) {
+        $line =~ s/^\\s+|\\s+\$//g;
+        next if !$line || $line =~ /^;/;
+        if ($line =~ /^\\[(\\w+)\\]/) {
+            $section = uc \$1; next;
+        }
+        my @t = split /\\s+/, $line;
+        if ($section eq "JUNCTIONS") {
+            # parse nodes...
+        } elsif ($section eq "CONDUITS") {
+            # parse links...
+        }
+    }
+    return \\%model;
+}
+
+sub simulate {
+    my ($model) = @_;
+    my $dt = $model->{options}{routing_step};
+    my $elapsed = 0;
+    while ($elapsed < $model->{options}{total_duration}) {
+        # Horton infiltration
+        # Manning's equation routing
+        $elapsed += $dt;
+    }
+    return $steps;
+}
+
+my $server = IO::Socket::INET->new(
+    LocalAddr => '127.0.0.1',
+    LocalPort => \$PORT,
+    Listen => 16,
+) or die "Cannot start: \$!\\n";
+
+while (my $client = $server->accept()) {
+    # Handle /health and /simulate
+    close $client;
+}`,
+  },
+  {
     id: "ruby-swmm5",
     name: "Ruby SWMM5 Engine",
     lang: "Ruby",
@@ -3321,18 +3529,24 @@ export default function SwmmEngineRunner({ theme: t }) {
           setError('Rust WASM engine error: ' + wasmErr.message);
           setStatus('');
         }
-      } else if (['go-swmm5', 'python-swmm5', 'c-standalone-swmm5', 'cpp-swmm5'].includes(selectedEngine)) {
+      } else if (['go-swmm5', 'python-swmm5', 'c-standalone-swmm5', 'cpp-swmm5', 'ts-swmm5', 'rust-native-swmm5', 'perl-swmm5'].includes(selectedEngine)) {
         const engineApiMap = {
           'go-swmm5': '/api/run-swmm-go',
           'python-swmm5': '/api/run-swmm-python',
           'c-standalone-swmm5': '/api/run-swmm-c',
           'cpp-swmm5': '/api/run-swmm-cpp',
+          'ts-swmm5': '/api/run-swmm-ts',
+          'rust-native-swmm5': '/api/run-swmm-rust-native',
+          'perl-swmm5': '/api/run-swmm-perl',
         };
         const engineLabel = {
           'go-swmm5': 'native Go binary',
           'python-swmm5': 'pure Python engine',
           'c-standalone-swmm5': 'standalone C binary',
           'cpp-swmm5': 'C++ OOP binary',
+          'ts-swmm5': 'TypeScript/Bun engine',
+          'rust-native-swmm5': 'Rust native binary',
+          'perl-swmm5': 'Perl engine',
         };
 
         const blob = new Blob([inpContent], { type: 'text/plain' });

@@ -14,6 +14,9 @@ const GO_ENGINE_PORT = 3002;
 const PY_ENGINE_PORT = 3003;
 const C_ENGINE_PORT = 3004;
 const CPP_ENGINE_PORT = 3005;
+const TS_ENGINE_PORT = 3006;
+const RUST_ENGINE_PORT = 3007;
+const PERL_ENGINE_PORT = 3008;
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
@@ -22,14 +25,20 @@ const goBinary = path.join(__dirname, 'swmm5-go', 'swmm5-go');
 const cBinary = path.join(__dirname, 'swmm5-c', 'swmm5-c');
 const cppBinary = path.join(__dirname, 'swmm5-cpp', 'swmm5-cpp');
 const pyScript = path.join(__dirname, 'swmm5-py', 'swmm5_engine.py');
+const tsScript = path.join(__dirname, 'swmm5-ts', 'swmm5_engine.ts');
+const rustBinary = path.join(__dirname, 'swmm5-rust-native', 'target', 'release', 'swmm5-rust-native');
+const perlScript = path.join(__dirname, 'swmm5-perl', 'swmm5_engine.pl');
 
 let goProcess = null;
 let pyProcess = null;
 let cProcess = null;
 let cppProcess = null;
+let tsProcess = null;
+let rustProcess = null;
+let perlProcess = null;
 
 function startChildEngine(name, cmd, args, envOverrides) {
-  const checkPath = args.length > 0 ? args[0] : cmd;
+  const checkPath = args.length > 0 ? args[args.length - 1] : cmd;
   if (!existsSync(checkPath)) {
     console.log(`${name} not found at ${checkPath}, skipping`);
     return null;
@@ -50,6 +59,9 @@ goProcess = startChildEngine('Go Engine', goBinary, [], { GO_ENGINE_PORT: String
 pyProcess = startChildEngine('Python Engine', 'python3', [pyScript], { PY_ENGINE_PORT: String(PY_ENGINE_PORT) });
 if (existsSync(cBinary)) cProcess = startChildEngine('C Engine', cBinary, [], { C_ENGINE_PORT: String(C_ENGINE_PORT) });
 if (existsSync(cppBinary)) cppProcess = startChildEngine('C++ Engine', cppBinary, [], { CPP_ENGINE_PORT: String(CPP_ENGINE_PORT) });
+tsProcess = startChildEngine('TypeScript Engine', 'bun', ['run', tsScript], { TS_ENGINE_PORT: String(TS_ENGINE_PORT) });
+if (existsSync(rustBinary)) rustProcess = startChildEngine('Rust Native Engine', rustBinary, [], { RUST_ENGINE_PORT: String(RUST_ENGINE_PORT) });
+perlProcess = startChildEngine('Perl Engine', 'perl', [perlScript], { PERL_ENGINE_PORT: String(PERL_ENGINE_PORT) });
 
 const storage = multer.diskStorage({
   destination: uploadDir,
@@ -188,6 +200,18 @@ app.post('/api/run-swmm-c', upload.single('inpFile'), (req, res) => {
 
 app.post('/api/run-swmm-cpp', upload.single('inpFile'), (req, res) => {
   proxyToEngine('C++ engine', CPP_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-ts', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('TypeScript engine', TS_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-rust-native', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Rust native engine', RUST_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-perl', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Perl engine', PERL_ENGINE_PORT, req, res);
 });
 
 app.listen(PORT, '0.0.0.0', () => {
