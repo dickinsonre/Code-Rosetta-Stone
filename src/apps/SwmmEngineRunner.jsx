@@ -2,7 +2,6 @@ import React, { useState, useRef, useCallback } from 'react';
 import { runSwmm5JS } from '../engines/swmm5-js.js';
 
 const SAMPLE_MODELS = [
-  { name: "Simple 3-Node Network", file: "/sample.inp", desc: "2 subcatchments, 3 junctions, 1 outfall — 6-hour storm with dynamic wave routing" },
   { name: "Greenville (All Features)", file: "/Greenville_all_SWMM5_Features.inp", desc: "Full-featured Greenville model with LID usage, Green-Ampt infiltration, dynamic wave routing — 14,000+ lines" },
 ];
 
