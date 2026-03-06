@@ -1,10 +1,10 @@
-modules = ["nodejs-20", "python-3.11", "rust-stable", "go-1.25"]
+modules = ["nodejs-20", "python-3.11", "rust-stable", "go-1.25", "ruby-3.2", "java-graalvm22.3", "lua-5.2"]
 [agent]
 expertMode = true
 
 [nix]
 channel = "stable-25_05"
-packages = ["wasm-pack"]
+packages = ["wasm-pack", "lua52Packages.luasocket"]
 
 [workflows]
 runButton = "Project"

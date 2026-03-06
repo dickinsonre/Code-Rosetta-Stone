@@ -17,6 +17,8 @@ const CPP_ENGINE_PORT = 3005;
 const TS_ENGINE_PORT = 3006;
 const RUST_ENGINE_PORT = 3007;
 const PERL_ENGINE_PORT = 3008;
+const RUBY_ENGINE_PORT = 3009;
+const JAVA_ENGINE_PORT = 3011;
 
 const uploadDir = path.join(__dirname, 'uploads');
 if (!existsSync(uploadDir)) mkdirSync(uploadDir, { recursive: true });
@@ -28,6 +30,9 @@ const pyScript = path.join(__dirname, 'swmm5-py', 'swmm5_engine.py');
 const tsScript = path.join(__dirname, 'swmm5-ts', 'swmm5_engine.ts');
 const rustBinary = path.join(__dirname, 'swmm5-rust-native', 'target', 'release', 'swmm5-rust-native');
 const perlScript = path.join(__dirname, 'swmm5-perl', 'swmm5_engine.pl');
+const rubyScript = path.join(__dirname, 'swmm5-ruby', 'swmm5_engine.rb');
+const luaScript = path.join(__dirname, 'swmm5-lua', 'swmm5_engine.lua');
+const javaDir = path.join(__dirname, 'swmm5-java');
 
 let goProcess = null;
 let pyProcess = null;
@@ -36,6 +41,8 @@ let cppProcess = null;
 let tsProcess = null;
 let rustProcess = null;
 let perlProcess = null;
+let rubyProcess = null;
+let javaProcess = null;
 
 function startChildEngine(name, cmd, args, envOverrides) {
   const checkPath = args.length > 0 ? args[args.length - 1] : cmd;
@@ -62,6 +69,17 @@ if (existsSync(cppBinary)) cppProcess = startChildEngine('C++ Engine', cppBinary
 tsProcess = startChildEngine('TypeScript Engine', 'bun', ['run', tsScript], { TS_ENGINE_PORT: String(TS_ENGINE_PORT) });
 if (existsSync(rustBinary)) rustProcess = startChildEngine('Rust Native Engine', rustBinary, [], { RUST_ENGINE_PORT: String(RUST_ENGINE_PORT) });
 perlProcess = startChildEngine('Perl Engine', 'perl', [perlScript], { PERL_ENGINE_PORT: String(PERL_ENGINE_PORT) });
+rubyProcess = startChildEngine('Ruby Engine', 'ruby', [rubyScript], { RUBY_ENGINE_PORT: String(RUBY_ENGINE_PORT) });
+if (existsSync(path.join(javaDir, 'SwmmEngine.class'))) {
+  const javaProc = spawn('java', ['-cp', javaDir, 'SwmmEngine'], {
+    env: { ...process.env, JAVA_ENGINE_PORT: String(JAVA_ENGINE_PORT) },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  javaProc.stdout.on('data', d => console.log('[Java Engine]', d.toString().trim()));
+  javaProc.stderr.on('data', d => console.error('[Java Engine ERR]', d.toString().trim()));
+  javaProc.on('exit', code => console.log(`Java Engine exited with code ${code}`));
+  javaProcess = javaProc;
+}
 
 const storage = multer.diskStorage({
   destination: uploadDir,
@@ -212,6 +230,69 @@ app.post('/api/run-swmm-rust-native', upload.single('inpFile'), (req, res) => {
 
 app.post('/api/run-swmm-perl', upload.single('inpFile'), (req, res) => {
   proxyToEngine('Perl engine', PERL_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-ruby', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Ruby engine', RUBY_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-java', upload.single('inpFile'), (req, res) => {
+  proxyToEngine('Java engine', JAVA_ENGINE_PORT, req, res);
+});
+
+app.post('/api/run-swmm-lua', upload.single('inpFile'), (req, res) => {
+  if (!req.file) {
+    return res.status(400).json({ error: 'No .inp file uploaded' });
+  }
+  const inpPath = req.file.path;
+  readFile(inpPath, 'utf8', (readErr, inpText) => {
+    try { unlink(inpPath, () => {}); } catch (e) {}
+    if (readErr) {
+      return res.status(500).json({ error: 'Could not read uploaded file' });
+    }
+    const proc = spawn('lua', [luaScript], { timeout: 60000 });
+    let stdout = '', stderr = '';
+    proc.stdout.on('data', d => { stdout += d; });
+    proc.stderr.on('data', d => { stderr += d; });
+    proc.on('close', (code) => {
+      if (code !== 0) {
+        return res.status(500).json({ error: 'Lua engine error: ' + stderr });
+      }
+      try {
+        const result = JSON.parse(stdout);
+        res.json(result);
+      } catch (e) {
+        res.status(500).json({ error: 'Invalid response from Lua engine' });
+      }
+    });
+    proc.stdin.write(inpText);
+    proc.stdin.end();
+  });
+});
+
+const sourceFileMap = {
+  'c': path.join(__dirname, 'swmm5-c', 'swmm5_engine.c'),
+  'cpp': path.join(__dirname, 'swmm5-cpp', 'swmm5_engine.cpp'),
+  'rust': path.join(__dirname, 'swmm5-rust-native', 'src', 'main.rs'),
+  'go': path.join(__dirname, 'swmm5-go', 'main.go'),
+  'python': path.join(__dirname, 'swmm5-py', 'swmm5_engine.py'),
+  'js': path.join(__dirname, 'src', 'engines', 'swmm5-js.js'),
+  'ts': path.join(__dirname, 'swmm5-ts', 'swmm5_engine.ts'),
+  'java': path.join(__dirname, 'swmm5-java', 'SwmmEngine.java'),
+  'ruby': path.join(__dirname, 'swmm5-ruby', 'swmm5_engine.rb'),
+  'perl': path.join(__dirname, 'swmm5-perl', 'swmm5_engine.pl'),
+  'lua': path.join(__dirname, 'swmm5-lua', 'swmm5_engine.lua'),
+};
+
+app.get('/api/engine-source/:lang', (req, res) => {
+  const filePath = sourceFileMap[req.params.lang];
+  if (!filePath || !existsSync(filePath)) {
+    return res.status(404).json({ error: 'Source not found' });
+  }
+  readFile(filePath, 'utf8', (err, data) => {
+    if (err) return res.status(500).json({ error: 'Could not read source' });
+    res.type('text/plain').send(data);
+  });
 });
 
 app.listen(PORT, '0.0.0.0', () => {

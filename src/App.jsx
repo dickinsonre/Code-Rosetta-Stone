@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { modules, languages, translationNotes } from "./modules.js";
 import AppShowcase from "./AppShowcase.jsx";
 import SwmmEngineRunner from "./apps/SwmmEngineRunner.jsx";
+import SwmmCodeViewer from "./apps/SwmmCodeViewer.jsx";
 
 const playgroundUrls = {
   c: "https://godbolt.org/",
@@ -932,6 +933,13 @@ export default function SWMM5CodeViewer() {
           SWMM5 Engines
         </button>
         <button
+          className={`app-tab ${activeTab === "code" ? "active" : ""}`}
+          onClick={() => setActiveTab("code")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDCBB"}</span>
+          SWMM5 Code
+        </button>
+        <button
           className={`app-tab ${activeTab === "swmmapps" ? "active" : ""}`}
           onClick={() => setActiveTab("swmmapps")}
         >
@@ -1026,6 +1034,9 @@ export default function SWMM5CodeViewer() {
 
       {/* SWMM5 Engines Tab */}
       {activeTab === "engine" && <SwmmEngineRunner theme={t} />}
+
+      {/* SWMM5 Code Tab */}
+      {activeTab === "code" && <SwmmCodeViewer theme={t} />}
 
       {/* PySWMM Tab */}
       {activeTab === "pyswmm" && (

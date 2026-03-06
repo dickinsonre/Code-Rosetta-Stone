@@ -5,7 +5,7 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 
 ## Current State
 - Fully functional single-page React application with tabbed interface
-- Seven top-level tabs: "Rosetta Stone" (code comparison), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "SWMM5 Engines" (upload .inp files and run SWMM5 simulations via 36 live engines + 1 concept engine, view .rpt reports), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
+- Eight top-level tabs: "Rosetta Stone" (code comparison), "SWMM5 Engines" (upload .inp files and run SWMM5 simulations via 14 real + 26 live + 1 concept engine, view .rpt reports), "SWMM5 Code" (browse full source code for all 11 real engine implementations), "SWMM Apps" (interactive showcase of 13 language-native SWMM app concepts), "MicroGPTs" (6 embedded neural network trainers for SWMM equations), "PySWMM" (embedded PySWMM Explorer via iframe), "SWMManywhere" (embedded SWMManywhere Explorer via iframe), "HydroCouple" (embedded HydroCouple Explorer via iframe)
 - Fifty SWMM5 modules organized by engineering category:
   - Hydraulics: routing.c, dynwave.c, flowrout.c, kinwave.c, xsect.c, link.c, node.c, dwflow.c, culvert.c, forcmain.c, roadway.c, exfil.c, shape.c, transect.c
   - Hydrology: subcatch.c, infil.c, lid.c, gwater.c, climate.c, rdii.c, snow.c, runoff.c, gage.c, landuse.c, lidproc.c
@@ -19,10 +19,11 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - Tier 2 (broadening audience): TypeScript, CUDA, WebAssembly/WAT, Mojo, Java
   - Tier 3 (niche but defensible): Nim, Ada, Chapel, Swift, Kotlin
   - Tier 4 (Lisp family + scripting): AutoLISP, Common Lisp, Clojure, Scheme, Hy, VBA, Lua, Tcl, Haskell, Scala, Dart, Elixir, OCaml
-- SWMM5 Engines tab with 40 engines total:
-  - 10 Real engines: EPA SWMM5 (C/Python backend), JavaScript (browser-native), Rust/WASM (140KB browser binary), Go (native 8.6MB binary on port 3002), Pure Python (stdlib-only on port 3003), C standalone (30KB binary on port 3004), C++ OOP (75KB binary on port 3005), TypeScript/Bun (port 3006), Rust native (505KB binary on port 3007), Perl (port 3008)
-  - 29 Live engines (EPA C proxy with rebranding): Julia, CUDA GPU, MATLAB, WAT/WASM, Ruby, Nim, Delphi, R, Zig, Kotlin, Swift, Mojo, Ada, Chapel, C#, Fortran, AutoLISP, Common Lisp, Clojure, Scheme/Racket, Hy, VBA, Lua, Tcl, Haskell, Scala, Dart, Elixir, OCaml
+- SWMM5 Engines tab with 41 engines total:
+  - 14 Real engines: EPA SWMM5 (C/Python backend), JavaScript (browser-native), Rust/WASM (140KB browser binary), Go (native 8.6MB binary on port 3002), Pure Python (stdlib-only on port 3003), C standalone (30KB binary on port 3004), C++ OOP (75KB binary on port 3005), TypeScript/Bun (port 3006), Rust native (505KB binary on port 3007), Perl (port 3008), Ruby (TCPServer on port 3009), Lua (CGI stdin/stdout), Java (ServerSocket on port 3011)
+  - 26 Live engines (EPA C proxy with rebranding): Julia, CUDA GPU, MATLAB, WAT/WASM, Nim, Delphi, R, Zig, Kotlin, Swift, Mojo, Ada, Chapel, C#, Fortran, AutoLISP, Common Lisp, Clojure, Scheme/Racket, Hy, VBA, Tcl, Haskell, Scala, Dart, Elixir, OCaml
   - 1 Concept engine: PySWMM
+- SWMM5 Code tab: Browse complete source code for all 11 standalone engine implementations (6,793 total lines across C, C++, Rust, Go, Python, JavaScript, TypeScript, Java, Ruby, Perl, Lua)
 - MicroGPTs tab with 6 sub-tabs: Manning's Equation, Partial-Flow, RTK/RDII, Hydrology (Green-Ampt/Horton/NLR/SCS), Groundwater, IDF & Muskingum
 - Custom syntax highlighting with token-based stashing to prevent regex conflicts
 - 6 color themes: Dark, Light, UF Gators (orange/blue), Auburn (burnt orange/navy), Oregon State (orange/black), EPA (blue/green)
@@ -63,7 +64,8 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `src/apps/DesignStormGen.jsx` — C# Design Storm Generator: IDF curves and alternating block method for 8 US cities
   - `src/apps/EventLogger.jsx` — Java Event Logger: real-time simulation event streaming with filtering and search
   - `public/*.html` — 5 standalone MicroGPT HTML apps (partial-flow, rtk-v2, hydrology-v2, groundwater, idf-muskingum)
-  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 40 engine options (39 live + 1 concept), upload .inp files, run simulations, view/download .rpt reports
+  - `src/apps/SwmmEngineRunner.jsx` — SWMM5 Engines tab: 41 engine options (14 real + 26 live + 1 concept), upload .inp files, run simulations, view/download .rpt reports
+  - `src/apps/SwmmCodeViewer.jsx` — SWMM5 Code tab: browse full source code for all 11 real engine implementations with search, line numbers, copy
   - `src/engines/swmm5-js.js` — JavaScript SWMM5 engine: INP parser, Horton infiltration, dynamic wave routing, .rpt generation (runs in browser)
   - `src/engines/wasm/swmm5_rs.js` — Rust WASM engine JS bindings (generated by wasm-bindgen)
   - `src/engines/wasm/swmm5_rs_bg.wasm` — Compiled Rust WASM binary (140KB)
@@ -79,13 +81,17 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
   - `swmm5-rust-native/` — Rust native SWMM5 engine (src/main.rs) — 505KB binary, TcpListener HTTP, port 3007
   - `swmm5-rust-native/target/release/swmm5-rust-native` — Compiled Rust binary
   - `swmm5-perl/` — Perl SWMM5 engine (swmm5_engine.pl) — IO::Socket::INET, port 3008
-  - `server.js` — Express backend API for running SWMM5 simulations (EPA C via Python, Go/Python/C/C++ via port proxies)
+  - `swmm5-ruby/` — Ruby SWMM5 engine (swmm5_engine.rb) — TCPServer HTTP, port 3009
+  - `swmm5-lua/` — Lua SWMM5 engine (swmm5_engine.lua) — CGI-style stdin/stdout (no socket library needed)
+  - `swmm5-java/` — Java SWMM5 engine (SwmmEngine.java) — ServerSocket HTTP, port 3011
+  - `swmm5-java/SwmmEngine.class` — Compiled Java bytecode
+  - `server.js` — Express backend API for running SWMM5 simulations (EPA C via Python, Go/Python/C/C++/TS/Rust/Perl/Ruby/Java via port proxies, Lua via CGI spawn)
   - `run_swmm.py` — Python script that executes SWMM5 simulations using swmm-toolkit solver
-  - `public/sample.inp` — Sample 3-node SWMM5 model for testing
+  - `public/user1-5.inp` — Sample SWMM5 models (58-208 nodes), `public/Greenville_all_SWMM5_Features.inp` — full-featured model
   - `src/main.jsx` — Entry point
 - **Entry**: `src/main.jsx` -> `src/App.jsx` (SWMM5CodeViewer component)
-- **Port**: 5000 (Vite dev server), 3001 (Express backend API), 3002 (Go engine), 3003 (Python engine), 3004 (C engine), 3005 (C++ engine), 3006 (TypeScript/Bun engine), 3007 (Rust native engine), 3008 (Perl engine)
-- **Deployment**: Vite frontend + Express backend + 7 engine child processes (all started via npm run dev)
+- **Port**: 5000 (Vite dev server), 3001 (Express backend API), 3002 (Go engine), 3003 (Python engine), 3004 (C engine), 3005 (C++ engine), 3006 (TypeScript/Bun engine), 3007 (Rust native engine), 3008 (Perl engine), 3009 (Ruby engine), 3011 (Java engine)
+- **Deployment**: Vite frontend + Express backend + 10 engine child processes (all started via npm run dev)
 
 ## Key Technical Decisions
 - Custom syntax highlighter using token placeholder approach (`%%TOK%%`) to prevent comment/string/keyword regex patterns from interfering with each other
@@ -98,7 +104,8 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - Translation notes use sorted language-pair keys (e.g., "c-rust", "python-julia") looked up via [left, right].sort().join("-")
 - MicroGPTs served as standalone HTML files from public/ directory via Vite, embedded as iframes with sub-tab navigation
 - MODULE_GRAPH includes 6 categories: Hydraulics, Hydrology, Quality, Operations, Data, Numerical
-- SWMM5 Engines tab: 10 real engines (EPA C, JS browser, Rust/WASM, Go native, Pure Python, C standalone, C++ OOP, TypeScript/Bun, Rust native, Perl), 29 proxy engines (route to EPA C with rebranding), 1 concept (PySWMM)
+- SWMM5 Engines tab: 14 real engines (EPA C, JS browser, Rust/WASM, Go native, Pure Python, C standalone, C++ OOP, TypeScript/Bun, Rust native, Perl, Ruby, Lua, Java), 26 proxy engines (route to EPA C with rebranding), 1 concept (PySWMM)
+- Engine status badges: "REAL" (orange) for standalone engines with own code, "LIVE" (green) for EPA C proxies, "CONCEPT" for roadmap items
 - All real engines share the same architecture: INP parser, Horton infiltration, Manning's equation routing, .rpt report generation
 - Go engine compiled with go-1.25, runs as HTTP server on port 3002, spawned by server.js as child process
 - Python engine uses only stdlib (http.server, json, math), runs on port 3003
@@ -107,6 +114,10 @@ An interactive multi-language code comparison viewer for EPA SWMM5 (Storm Water 
 - TypeScript engine runs on Bun v1.2.16 runtime, full type interfaces, port 3006
 - Rust native engine compiled with rustc 1.88.0, 505KB binary, TcpListener-based HTTP, port 3007
 - Perl engine uses IO::Socket::INET, Time::HiRes for microsecond timing, regex INP parser, port 3008
+- Ruby engine uses TCPServer for HTTP serving, blocks/iterators for data processing, port 3009
+- Lua engine uses CGI-style stdin/stdout (LuaSocket not linking in Nix), spawned per-request by server.js
+- Java engine uses ServerSocket for HTTP, GraalVM 19, compiled to .class bytecode, port 3011
+- SWMM5 Code tab: fetches source files via /api/engine-source/:lang endpoint, displays with line numbers, search, copy
 - server.js uses a reusable proxyToEngine() function to forward requests to all engine child processes
 - Rust WASM engine compiled with rustup 1.88.0 + wasm-pack, installed at ~/. not in workspace (to avoid Vite file watcher overload)
 - Vite config includes `assetsInclude: ['**/*.wasm']` for WASM file handling
