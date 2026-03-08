@@ -1,51 +1,67 @@
 # SWMM5 Rosetta Stone
 
 ## Overview
-The SWMM5 Rosetta Stone project is an interactive, multi-language code comparison viewer for the EPA Storm Water Management Model (SWMM5) and EPA EPANET engine algorithms. Its primary purpose is to provide a comprehensive resource for understanding how these water modeling algorithms are implemented across 37 programming languages for SWMM5 and 23 for EPANET. The project aims to consolidate and present a vast array of code implementations, interactive applications, and AI assistance in a single, accessible platform. This project serves as a valuable educational and development tool for environmental engineers, hydrologists, and software developers working with water infrastructure modeling.
+The SWMM5 Rosetta Stone is an interactive, multi-language code comparison viewer for the EPA Storm Water Management Model (SWMM5) and EPA EPANET 2.2 engine algorithms. It translates every core algorithm from both EPA engines into multiple programming languages (up to 37 for SWMM5 and 23 for EPANET). This project provides side-by-side code viewing with synchronized scrolling, syntax highlighting, and AI-powered assistance for 2,425 individual code translations (1,850 SWMM5 + 575 EPANET). Its purpose is to facilitate understanding and comparison of these critical water modeling algorithms across various programming paradigms, aiming to foster broader adoption and development within the water resources engineering community.
 
 ## User Preferences
-I prefer iterative development with clear, modular code. Please use functional programming patterns where appropriate. Before implementing major changes or new features, I would like to review the proposed approach. I appreciate detailed explanations of complex solutions.
+- Iterative development with clear, modular code.
+- Functional programming patterns where appropriate.
+- Review proposed approach before major changes or new features.
+- Detailed explanations of complex solutions.
 
 ## System Architecture
-The application is a single-page React application built with Vite. It features a tabbed interface for different functionalities, including code comparison ("Rosetta Stone", "EPANET"), engine execution ("SWMM5 Engines"), code browsing ("SWMM5 Code"), interactive applications ("SWMM Apps"), neural network trainers ("MicroGPTs"), and an AI assistant ("AI Chat").
 
-**UI/UX Decisions:**
-- **Layout:** Responsive mobile layout (panels stack vertically below 900px).
-- **Theming:** 6 color themes (Dark, Light, UF Gators, Auburn, Oregon State, EPA) with colors driven by theme tokens.
-- **Code Visualization:** Custom syntax highlighting, synchronized scrolling between code panels, line-by-line correspondence highlighting on hover, and code search with match highlighting.
-- **Navigation:** Module dependency diagrams (SVG graph), contextual navigation links to related apps.
+### Runtime Environment
+- **Frontend**: React 19 SPA served by Vite 7 on port **5000**.
+- **Backend**: Express.js 5 server on port **3001** handling API, engine process management, and AI chat proxy.
+- **Proxy**: Vite proxies `/api/*` requests to the backend.
+- **Development Setup**: `npm run dev` concurrently runs both frontend and backend.
+- **Replit Modules & Nix Packages**: Utilizes a wide array of language runtimes and compilers to support diverse engine implementations, including `nodejs-20`, `python-3.11`, `rust-stable`, `go-1.25`, `java-graalvm22.3`, `wasm-pack`, `gfortran`, `zig`, `nim`, `ghc`, `tcl`, `scala`, `kotlin`, `dart`, `elixir`, `ocaml`, `R`, `fpc`, `sbcl`, `racket`, `gnat`.
 
-**Technical Implementations & Feature Specifications:**
-- **Code Comparison:** Displays 50 SWMM5 modules across 37 languages and 25 EPANET modules across 23 languages. Modules are categorized (Hydraulics, Hydrology, Water Quality, Operations, Numerical, Data Processing). The EPANET tab uses the same horizontal layout as the Rosetta Stone tab with LEFT/RIGHT language selectors, synchronized scrolling, code search, and module dependency diagrams.
-- **SWMM5 Engines:** Provides an interface to run SWMM5 simulations using 41 different engine implementations (14 real, 26 live proxies, 1 concept). Users can upload `.inp` files and view `.rpt` reports. Real engines include implementations in C, Rust, Python, Go, JavaScript, C++, TypeScript, Perl, Ruby, Lua, and Java.
-- **SWMM5 Code Browser:** Allows browsing of full source code for 11 standalone engine implementations with search and line numbers.
-- **SWMM Apps:** Showcases 13 language-native SWMM app concepts with interactive components.
-- **MicroGPTs:** Integrates 6 embedded neural network trainers for various SWMM equations (e.g., Manning's Equation, Hydrology).
-- **AI Chat:** A Claude-powered AI assistant accessible via a floating icon in the bottom-right corner (available on all tabs). Opens as an overlay panel with streaming responses and markdown rendering.
-- **Module Information:** Enriched descriptions with category badges, difficulty ratings, equations, inputs/outputs, and ecosystem links.
-- **Search & Filter:** Functionality to find modules by concept, equation, tag, or description.
-- **Translation Notes:** Provides notes for over 300 language pairs.
+### Core Features and Design
+- **Multi-language Code Comparison**: Displays 50 SWMM5 and 25 EPANET modules, each translated into numerous languages, side-by-side with synchronized scrolling and line-hover highlighting.
+- **Interactive Module Information**: Each module includes a description, category, difficulty rating, equations, inputs, and outputs, with interactive dependency diagrams.
+- **SWMM5 Engine Runner**: Supports 41 engine implementations (14 real, 26 live proxies, 1 concept) allowing users to upload `.inp` files and receive `.rpt` reports.
+- **SWMM5 Code Browser**: Provides a viewer for the full source code of 11 standalone engine implementations with syntax highlighting and search.
+- **SWMM Apps Showcase**: A collection of 13 interactive application concepts demonstrating SWMM5 principles in various programming paradigms.
+- **MicroGPTs**: Six embedded neural network trainers focusing on specific SWMM5-related hydrological and hydraulic concepts.
+- **AI Chat Integration**: A floating AI chat component powered by Anthropic Claude, accessible across all tabs, offering real-time assistance.
+- **Theming**: Six distinct color themes (Dark, Light, UF Gators, Auburn, Oregon State, EPA) are available for UI customization.
+- **Responsive Design**: Adapts layout for desktop and mobile viewports, ensuring usability across devices.
+- **Custom Syntax Highlighting**: A custom `highlightCode` function supports all 37 languages, tokenizing code for keywords, strings, comments, numbers, and types.
+- **Engine Process Management**: The backend manages child processes for various engine implementations, handling compilation and execution.
+- **Data Structure**: Code translations and module metadata are stored in `src/modules.js` and `src/epanetModules.js`, which are large JavaScript objects containing code strings and descriptive data.
 
-**System Design Choices:**
-- **Data Structure:** Module data, including code samples and metadata, is managed in `src/modules.js` and `src/epanetModules.js`.
-- **Backend:** An Express.js backend (`server.js`) handles API requests, including running SWMM5 simulations, proxying requests to various language-specific engine processes, and managing the AI chat.
-- **Engine Execution:** Real engines are implemented as separate executables or scripts, spawned as child processes by the Express backend. These engines run on dedicated ports (e.g., Go on 3002, Python on 3003). Proxy engines leverage the EPA C engine.
-- **WASM Integration:** Rust engine compiled to WebAssembly for browser-native execution.
-- **Frontend Framework:** React with Vite for development and bundling.
+### Architectural Patterns
+- **SPA Architecture**: React frontend communicates with an Express.js backend via RESTful APIs.
+- **Proxy-based Engine Integration**: Many engines are exposed via dedicated HTTP servers, which the main Express backend proxies requests to.
+- **Direct Engine Execution**: Some engines, particularly those compiled or requiring specific interpreters, are run directly as child processes by the Express backend.
+- **WASM Integration**: A Rust-based SWMM5 engine compiled to WebAssembly allows for client-side execution within the browser.
+
+### API Routes
+A comprehensive set of API routes (`/api/run-swmm-*`) facilitates running simulations with various engine implementations, fetching engine source code (`/api/engine-source/:lang`), and interacting with the AI chat (`/api/chat`). All engine run routes handle `multipart/form-data` for `.inp` file uploads.
 
 ## External Dependencies
-- **Backend:**
-    - `express`: Web framework for Node.js.
-    - `multer`: Middleware for handling `multipart/form-data`, primarily for file uploads.
-    - `@anthropic-ai/sdk`: For interacting with Claude AI (via Replit AI Integrations).
-    - `openai`: For Replit AI Integrations.
-- **Python (for `swmm-toolkit` engine execution):**
-    - `swmm-toolkit`: Bindings for the EPA SWMM5 engine.
-- **Rust (for `swmm5-rs` WASM engine):**
-    - `wasm-bindgen`: For JavaScript interoperability.
-- **AI Services:**
-    - Claude (Anthropic): Used for the AI Chat functionality via Replit AI Integrations.
-- **Embedded Explorers:**
-    - PySWMM Explorer (via iframe)
-    - SWMManywhere Explorer (via iframe)
-    - HydroCouple Explorer (via iframe)
+
+### Node.js Packages
+- `react`, `react-dom`: UI development.
+- `vite`, `@vitejs/plugin-react`: Frontend tooling (dev server, bundler).
+- `express`, `multer`: Backend API and file uploads.
+- `@anthropic-ai/sdk`: Client for Anthropic Claude AI.
+- `openai`: Replit AI integrations.
+- `zod`, `drizzle-zod`, `zod-validation-error`: Schema validation.
+- `p-limit`, `p-retry`: Utility for concurrency control and retries.
+
+### Python Libraries
+- `swmm-toolkit`: Python bindings for the EPA SWMM5 C library, used for running the official EPA engine.
+
+### AI Integration
+- **Provider**: Anthropic Claude, accessed via Replit AI Integrations.
+- **Model**: `claude-sonnet-4-6`.
+- **Environment Variables**: `AI_INTEGRATIONS_ANTHROPIC_API_KEY`, `AI_INTEGRATIONS_ANTHROPIC_BASE_URL`.
+
+### External Web Services (iframes)
+- `micro-gpt-swmm.replit.app`: External MicroGPT trainer for Manning's Equation.
+- PySWMM Explorer: External PySWMM application.
+- SWMManywhere Explorer: External SWMManywhere application.
+- HydroCouple Explorer: External HydroCouple application.
