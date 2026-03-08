@@ -25,6 +25,11 @@ The SWMM5 Rosetta Stone is an interactive, multi-language code comparison viewer
 - **SWMM5 Code Browser**: Provides a viewer for the full source code of 11 standalone engine implementations with syntax highlighting and search.
 - **SWMM Apps Showcase**: A collection of 13 interactive application concepts demonstrating SWMM5 principles in various programming paradigms.
 - **MicroGPTs**: Six embedded neural network trainers focusing on specific SWMM5-related hydrological and hydraulic concepts.
+- **Engine Benchmark Dashboard**: Runs the same .inp file through all 11 real engine implementations, measuring execution time and parsing continuity errors for side-by-side comparison with bar chart visualizations.
+- **Language Leaderboard**: Ranks all 37 languages by conciseness (avg lines/module computed from real data), type safety ratings, and paradigm groupings with toggle views.
+- **Translation Difficulty Heatmap**: 50×37 color-coded grid showing translation difficulty relative to C reference, with hover tooltips and click-to-detail panels.
+- **Module Quiz**: 30 multiple-choice questions covering 18 SWMM5 modules with code snippets, explanations, score tracking, and module filtering.
+- **Engine Build Guide**: Step-by-step build instructions for all 26 engine directories with prerequisites, commands, binary sizes, and copy-to-clipboard functionality.
 - **AI Chat Integration**: A floating AI chat component powered by Anthropic Claude, accessible across all tabs, offering real-time assistance.
 - **Theming**: Six distinct color themes (Dark, Light, UF Gators, Auburn, Oregon State, EPA) are available for UI customization.
 - **Responsive Design**: Adapts layout for desktop and mobile viewports, ensuring usability across devices.

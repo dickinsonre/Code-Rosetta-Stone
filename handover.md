@@ -127,7 +127,12 @@ This runs `node server.js & vite --host 0.0.0.0 --port 5000` — the Express bac
 │   │   ├── UncertaintyLab.jsx       Uncertainty lab (208 lines)
 │   │   ├── WasmEngine.jsx           WASM engine UI (206 lines)
 │   │   ├── HpcSolver.jsx            HPC solver (173 lines)
-│   │   └── ApiServer.jsx            API server concept (115 lines)
+│   │   ├── ApiServer.jsx            API server concept (115 lines)
+│   │   ├── EngineBenchmark.jsx      Engine benchmark dashboard (434 lines)
+│   │   ├── LanguageLeaderboard.jsx  Language leaderboard (288 lines)
+│   │   ├── TranslationHeatmap.jsx   Translation difficulty heatmap (398 lines)
+│   │   ├── ModuleQuiz.jsx           Algorithm quiz (846 lines)
+│   │   └── EngineBuildGuide.jsx     Engine build instructions (617 lines)
 │   │
 │   └── engines/                     Browser-side engine assets
 │       ├── swmm5-js.js              JavaScript SWMM5 engine (runs in browser)
@@ -242,6 +247,11 @@ The app has 9 tabs rendered in `App.jsx`, plus a floating AI chat overlay:
 | SWMManywhere | `swmmanywhere` | Inline iframe | External SWMManywhere explorer |
 | HydroCouple | `hydrocouple` | Inline iframe | External HydroCouple explorer |
 | EPANET | `epanet` | `EpanetRosettaStone.jsx` | EPANET code comparison (25 modules × 23 langs) |
+| Benchmark | `benchmark` | `EngineBenchmark.jsx` | Run all engines on same .inp, compare time/accuracy |
+| Leaderboard | `leaderboard` | `LanguageLeaderboard.jsx` | Rank 37 languages by conciseness/type safety |
+| Heatmap | `heatmap` | `TranslationHeatmap.jsx` | 50×37 difficulty heatmap vs C reference |
+| Quiz | `quiz` | `ModuleQuiz.jsx` | 30 multiple-choice algorithm questions |
+| Build Guide | `buildguide` | `EngineBuildGuide.jsx` | Build instructions for all 26 engines |
 | AI Chat | (floating) | `AiChat.jsx` | Floating overlay, always accessible |
 
 ### Shared Components (`src/codeComponents.jsx`)

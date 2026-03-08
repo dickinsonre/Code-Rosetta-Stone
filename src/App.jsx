@@ -5,6 +5,11 @@ import SwmmEngineRunner from "./apps/SwmmEngineRunner.jsx";
 import SwmmCodeViewer from "./apps/SwmmCodeViewer.jsx";
 import AiChat from "./apps/AiChat.jsx";
 import EpanetRosettaStone from "./EpanetRosettaStone.jsx";
+import EngineBenchmark from "./apps/EngineBenchmark.jsx";
+import LanguageLeaderboard from "./apps/LanguageLeaderboard.jsx";
+import TranslationHeatmap from "./apps/TranslationHeatmap.jsx";
+import ModuleQuiz from "./apps/ModuleQuiz.jsx";
+import EngineBuildGuide from "./apps/EngineBuildGuide.jsx";
 export const playgroundUrls = {
   c: "https://godbolt.org/",
   rust: "https://play.rust-lang.org/",
@@ -993,6 +998,41 @@ export default function SWMM5CodeViewer() {
           }}>EN</span>
           EPANET
         </button>
+        <button
+          className={`app-tab ${activeTab === "benchmark" ? "active" : ""}`}
+          onClick={() => setActiveTab("benchmark")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDCCA"}</span>
+          Benchmark
+        </button>
+        <button
+          className={`app-tab ${activeTab === "leaderboard" ? "active" : ""}`}
+          onClick={() => setActiveTab("leaderboard")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83C\uDFC6"}</span>
+          Leaderboard
+        </button>
+        <button
+          className={`app-tab ${activeTab === "heatmap" ? "active" : ""}`}
+          onClick={() => setActiveTab("heatmap")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDFE9"}</span>
+          Heatmap
+        </button>
+        <button
+          className={`app-tab ${activeTab === "quiz" ? "active" : ""}`}
+          onClick={() => setActiveTab("quiz")}
+        >
+          <span style={{ fontSize: 15 }}>{"\u2753"}</span>
+          Quiz
+        </button>
+        <button
+          className={`app-tab ${activeTab === "buildguide" ? "active" : ""}`}
+          onClick={() => setActiveTab("buildguide")}
+        >
+          <span style={{ fontSize: 15 }}>{"\uD83D\uDD27"}</span>
+          Build Guide
+        </button>
         <div style={{ marginLeft: "auto", display: "flex", alignItems: "center", paddingRight: 12 }}>
           <button
             className="theme-toggle"
@@ -1110,6 +1150,21 @@ export default function SWMM5CodeViewer() {
 
       {/* EPANET Tab */}
       {activeTab === "epanet" && <EpanetRosettaStone theme={t} />}
+
+      {/* Benchmark Tab */}
+      {activeTab === "benchmark" && <EngineBenchmark theme={t} />}
+
+      {/* Leaderboard Tab */}
+      {activeTab === "leaderboard" && <LanguageLeaderboard theme={t} />}
+
+      {/* Heatmap Tab */}
+      {activeTab === "heatmap" && <TranslationHeatmap theme={t} />}
+
+      {/* Quiz Tab */}
+      {activeTab === "quiz" && <ModuleQuiz theme={t} />}
+
+      {/* Build Guide Tab */}
+      {activeTab === "buildguide" && <EngineBuildGuide theme={t} />}
 
       {/* Floating AI Chat */}
       {showChat && (
