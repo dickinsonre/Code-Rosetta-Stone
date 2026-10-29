@@ -65,7 +65,8 @@ export default function FullEngines({ theme: t }) {
                   const g = e.gate;
                   const res = g.status === "reference" ? "the reference"
                     : g.differ ? `${fmt(g.identical)} identical, ${fmt(g.differ)} differ`
-                    : `${fmt(g.identical)} of ${fmt(g.identical + g.notrun)} identical` + (g.notrun ? ` (${fmt(g.notrun)} not run)` : "");
+                    : g.notrun ? `${fmt(g.identical)} of ${fmt(g.identical)} run identical (${fmt(g.notrun)} not run)`
+                    : `${fmt(g.identical)} of ${fmt(g.identical)} identical`;
                   return [
                     <tr key={e.name} onClick={() => setOpen(open === e.name ? null : e.name)} style={{ cursor: "pointer" }}>
                       <td style={td}><div style={{ fontWeight: 700, color: t.textBright }}>{e.name}</div>
@@ -92,7 +93,9 @@ export default function FullEngines({ theme: t }) {
             </table>
           </div>
           <p style={{ fontSize: 12, color: t.textDim, margin: "10px 0 0" }}>Click a row for its build and run commands. {data.python_note} CPU ratios are medians over {data.bench_models} short benchmark models;
-            EPA against itself spans {data.noise ? data.noise[0].toFixed(2) + "x to " + data.noise[1].toFixed(2) + "x" : "-"}, so anything inside that band is a tie.</p>
+            EPA against itself spans {data.noise ? data.noise[0].toFixed(2) + "x to " + data.noise[1].toFixed(2) + "x" : "-"}, so anything inside that band is a tie.
+            {data.rust_noise && <> Rust was timed in a run of its own (EPA against itself there: {data.rust_noise[0].toFixed(2)}x to {data.rust_noise[1].toFixed(2)}x).</>}
+            {data.tsj_noise && <> TypeScript and Java were timed together in another ({data.tsj_reps} repetitions; EPA against itself: {data.tsj_noise[0].toFixed(2)}x to {data.tsj_noise[1].toFixed(2)}x).</>}</p>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 16 }}>
@@ -102,6 +105,10 @@ export default function FullEngines({ theme: t }) {
               A Fortran build allowed to fuse multiplies and adds (one rounding step changed, nothing else) differed from EPA on {data.controls.fma} models,
               so the gate does catch a change in the last bit where a model is sensitive to it.</p>
           </div>
+          {data.libm_note && <div style={card}>
+            <h3 style={{ margin: "0 0 8px", fontSize: 15, color: t.textBright }}>The math library comes along</h3>
+            <p style={{ fontSize: 13, color: t.textDim, lineHeight: 1.6, margin: 0 }}>{data.libm_note}</p>
+          </div>}
           <div style={card}>
             <h3 style={{ margin: "0 0 8px", fontSize: 15, color: t.textBright }}>What this does not show</h3>
             <p style={{ fontSize: 13, color: t.textDim, lineHeight: 1.6, margin: 0 }}>Identical to EPA means EPA's answers, right or wrong; no observed data enter anywhere.
@@ -110,8 +117,9 @@ export default function FullEngines({ theme: t }) {
           </div>
           <div style={card}>
             <h3 style={{ margin: "0 0 8px", fontSize: 15, color: t.textBright }}>AI use</h3>
-            <p style={{ fontSize: 13, color: t.textDim, lineHeight: 1.6, margin: 0 }}>The C++, Rust, Fortran, C# and Python engines, the translator behind the last three,
-              the gate, and this tab were made with Claude (Anthropic) at Robert Dickinson's direction. The checks are mechanical (byte comparison against EPA 5.2.4);
+            <p style={{ fontSize: 13, color: t.textDim, lineHeight: 1.6, margin: 0 }}>The C++, Rust, Fortran, C#, Python, TypeScript and Java engines, the translator behind the last five,
+              the translations of glibc's math routines that TypeScript and Java carry, the gate, and this tab were made with Claude (Anthropic) at Robert Dickinson's direction.
+              The checks are mechanical (byte comparison against EPA 5.2.4, and the math routines against the system library);
               no person has yet reviewed the engines line by line. Data exported {data.built}.</p>
           </div>
         </div>
