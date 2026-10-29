@@ -10,6 +10,7 @@ import LanguageLeaderboard from "./apps/LanguageLeaderboard.jsx";
 import TranslationHeatmap from "./apps/TranslationHeatmap.jsx";
 import ModuleQuiz from "./apps/ModuleQuiz.jsx";
 import EngineBuildGuide from "./apps/EngineBuildGuide.jsx";
+import FullEngines from "./apps/FullEngines.jsx";
 export const playgroundUrls = {
   c: "https://godbolt.org/",
   rust: "https://play.rust-lang.org/",
@@ -944,6 +945,13 @@ export default function SWMM5CodeViewer() {
           SWMM5 Engines
         </button>
         <button
+          className={`app-tab ${activeTab === "fullengines" ? "active" : ""}`}
+          onClick={() => setActiveTab("fullengines")}
+        >
+          <span style={{ fontSize: 15 }}>{"\u2705"}</span>
+          Full Engines
+        </button>
+        <button
           className={`app-tab ${activeTab === "code" ? "active" : ""}`}
           onClick={() => setActiveTab("code")}
         >
@@ -1093,6 +1101,9 @@ export default function SWMM5CodeViewer() {
 
       {/* SWMM5 Engines Tab */}
       {activeTab === "engine" && <SwmmEngineRunner theme={t} />}
+
+      {/* Full Engines Tab: complete, byte-identical translations of EPA SWMM 5.2.4 */}
+      {activeTab === "fullengines" && <FullEngines theme={t} />}
 
       {/* SWMM5 Code Tab */}
       {activeTab === "code" && <SwmmCodeViewer theme={t} />}
